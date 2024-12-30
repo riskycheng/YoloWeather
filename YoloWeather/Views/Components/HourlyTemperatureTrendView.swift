@@ -171,8 +171,6 @@ struct HourlyTemperatureTrendView: View {
         // 获取当前时间（本地时区）
         let currentDate = Date()
         let currentHour = calendar.component(.hour, from: currentDate)
-        let today = calendar.startOfDay(for: currentDate)
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
         
         print("\n=== 温度预报详细信息 ===")
         print("当前时间: \(currentDate), 当前小时: \(currentHour)")
@@ -185,17 +183,18 @@ struct HourlyTemperatureTrendView: View {
             
             let utcComponents = utcCalendar.dateComponents([.year, .month, .day, .hour], from: weather.date)
             
-            // 确保日期在今天或明天
+            // 转换为本地时间
             var localComponents = DateComponents()
-            localComponents.year = calendar.component(.year, from: today)
-            localComponents.month = calendar.component(.month, from: today)
-            localComponents.day = calendar.component(.day, from: today)
+            localComponents.year = calendar.component(.year, from: currentDate)
+            localComponents.month = calendar.component(.month, from: currentDate)
+            localComponents.day = calendar.component(.day, from: currentDate)
             localComponents.hour = utcComponents.hour
             
-            // 如果UTC时间比当前时间晚，说明是明天的数据
             let localDate = calendar.date(from: localComponents) ?? weather.date
-            let adjustedDate = localDate < currentDate ? 
-                calendar.date(byAdding: .day, value: 1, to: localDate) ?? localDate : 
+            
+            // 如果本地时间小于当前时间，说明是明天的数据
+            let adjustedDate = localDate < currentDate ?
+                calendar.date(byAdding: .day, value: 1, to: localDate) ?? localDate :
                 localDate
             
             return WeatherInfo(
@@ -206,37 +205,40 @@ struct HourlyTemperatureTrendView: View {
             )
         }.sorted { $0.date < $1.date }
         
-        print("\n原始预报数据（按本地时间排序）:")
-        let fullDateFormatter = DateFormatter()
-        fullDateFormatter.locale = Locale(identifier: "zh_CN")
-        fullDateFormatter.dateFormat = "yyyy-MM-dd"
-        
-        var lastPrintedDate = ""
+        // 打印原始数据
+        print("\n原始预报数据:")
         for weather in sortedForecast {
             let hour = calendar.component(.hour, from: weather.date)
-            let date = fullDateFormatter.string(from: weather.date)
-            
-            // 如果日期变化了，打印一个分隔行和新日期
-            if date != lastPrintedDate {
-                if !lastPrintedDate.isEmpty {
-                    print("------------------------")
-                }
-                print("\n\(date):")
-                lastPrintedDate = date
-            }
-            
-            print("\(hour)时: \(weather.temperature)°")
+            let isNextDay = !calendar.isDate(weather.date, inSameDayAs: currentDate)
+            print("\(isNextDay ? "明天" : "今天") \(hour)时: \(weather.temperature)°")
         }
         
         // 生成时间点序列
         var result: [WeatherInfo] = []
         
-        // 第一个点是当前时间
-        let currentTemp = sortedForecast.first { weather in
-            let weatherHour = calendar.component(.hour, from: weather.date)
-            return weatherHour == currentHour && calendar.isDateInToday(weather.date)
-        }?.temperature ?? sortedForecast.last { $0.date <= currentDate }?.temperature ?? 0
+        // 获取当前时间的温度
+        let currentTemp: Double
+        if let exactMatch = sortedForecast.first(where: { 
+            let weatherHour = calendar.component(.hour, from: $0.date)
+            return weatherHour == currentHour && calendar.isDateInToday($0.date)
+        }) {
+            currentTemp = exactMatch.temperature
+        } else {
+            // 如果找不到精确匹配，使用插值
+            let nearestBefore = sortedForecast.last { $0.date <= currentDate }
+            let nearestAfter = sortedForecast.first { $0.date > currentDate }
+            
+            if let before = nearestBefore, let after = nearestAfter {
+                let totalInterval = after.date.timeIntervalSince(before.date)
+                let progressInterval = currentDate.timeIntervalSince(before.date)
+                let progress = totalInterval > 0 ? progressInterval / totalInterval : 0
+                currentTemp = before.temperature + (after.temperature - before.temperature) * progress
+            } else {
+                currentTemp = nearestBefore?.temperature ?? nearestAfter?.temperature ?? 7.0 // 设置一个合理的默认值
+            }
+        }
         
+        // 添加当前时间点
         result.append(WeatherInfo(
             date: currentDate,
             temperature: currentTemp,
@@ -244,31 +246,21 @@ struct HourlyTemperatureTrendView: View {
             symbolName: "moon.stars.fill"
         ))
         
-        print("\n当前时间点: \(currentHour)时 - \(currentTemp)°")
-        
-        // 生成后续7个时间点，每隔3小时，总共覆盖24小时
-        print("\n生成后续时间点:")
+        // 生成后续7个时间点，每隔3小时
         for i in 1..<8 {
-            // 计算目标时间，直接从当前时间加上小时数
             let targetDate = calendar.date(byAdding: .hour, value: i * 3, to: currentDate) ?? currentDate
             let targetHour = calendar.component(.hour, from: targetDate)
             let isNextDay = !calendar.isDate(targetDate, inSameDayAs: currentDate)
             
-            print("\n目标时间点[\(i)]: \(isNextDay ? "明天" : "今天") \(targetHour)时")
-            
             // 在预报数据中查找对应时间点的温度
-            if let temp = sortedForecast.first(where: { weather in
+            let temp: Double
+            if let exactMatch = sortedForecast.first(where: { weather in
                 let weatherHour = calendar.component(.hour, from: weather.date)
-                let isWeatherNextDay = !calendar.isDate(weather.date, inSameDayAs: currentDate)
-                return weatherHour == targetHour && isWeatherNextDay == isNextDay
-            })?.temperature {
-                print("找到匹配的温度: \(temp)°")
-                result.append(WeatherInfo(
-                    date: targetDate,
-                    temperature: temp,
-                    condition: "未知",
-                    symbolName: "moon.stars.fill"
-                ))
+                let weatherIsNextDay = !calendar.isDate(weather.date, inSameDayAs: currentDate)
+                return weatherHour == targetHour && weatherIsNextDay == isNextDay
+            }) {
+                // 找到精确匹配的时间点
+                temp = exactMatch.temperature
             } else {
                 // 如果找不到精确匹配，使用插值
                 let nearestBefore = sortedForecast.last { $0.date <= targetDate }
@@ -278,35 +270,28 @@ struct HourlyTemperatureTrendView: View {
                     let totalInterval = after.date.timeIntervalSince(before.date)
                     let progressInterval = targetDate.timeIntervalSince(before.date)
                     let progress = totalInterval > 0 ? progressInterval / totalInterval : 0
-                    let interpolatedTemp = before.temperature + (after.temperature - before.temperature) * progress
-                    
-                    print("插值计算: \(interpolatedTemp)° (前: \(before.temperature)°, 后: \(after.temperature)°)")
-                    
-                    result.append(WeatherInfo(
-                        date: targetDate,
-                        temperature: interpolatedTemp,
-                        condition: "未知",
-                        symbolName: "moon.stars.fill"
-                    ))
-                } else if let nearest = nearestBefore ?? nearestAfter {
-                    print("使用最近的温度: \(nearest.temperature)°")
-                    result.append(WeatherInfo(
-                        date: targetDate,
-                        temperature: nearest.temperature,
-                        condition: "未知",
-                        symbolName: "moon.stars.fill"
-                    ))
+                    temp = before.temperature + (after.temperature - before.temperature) * progress
+                } else {
+                    // 使用最近的温度
+                    temp = nearestBefore?.temperature ?? nearestAfter?.temperature ?? currentTemp
                 }
             }
+            
+            result.append(WeatherInfo(
+                date: targetDate,
+                temperature: temp,
+                condition: "未知",
+                symbolName: "moon.stars.fill"
+            ))
         }
         
+        // 打印最终结果
         print("\n最终生成的时间点:")
-        for (index, point) in result.enumerated() {
+        for point in result {
             let hour = calendar.component(.hour, from: point.date)
             let isNextDay = !calendar.isDate(point.date, inSameDayAs: currentDate)
-            print("[\(index)]: \(isNextDay ? "明天" : "今天") \(hour)时 - \(point.temperature)°")
+            print("\(isNextDay ? "明天" : "今天") \(hour)时: \(point.temperature)°")
         }
-        print("=== 温度预报信息结束 ===\n")
         
         return result
     }
