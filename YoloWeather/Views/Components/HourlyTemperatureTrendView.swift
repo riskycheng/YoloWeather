@@ -85,6 +85,84 @@ struct HourlyTemperatureTrendView: View {
     private let feedbackGenerator = UIImpactFeedbackGenerator(style: .rigid)
     private let keyTimePoints = 8 // 固定显示8个时间点
     
+    private func printKeyTimeTemperatures(forecast: [WeatherInfo]) {
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone.current
+        
+        let today = calendar.startOfDay(for: Date())
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
+        
+        let keyHours = [0, 1, 4, 7, 10, 13, 16, 19, 22]
+        
+        print("\n今天和明天的关键时间点温度：")
+        print("今天:")
+        for hour in keyHours {
+            if let temp = forecast.first(where: { calendar.component(.hour, from: $0.date) == hour && calendar.isDate($0.date, inSameDayAs: today) })?.temperature {
+                print("\(hour)时: \(temp)°")
+            }
+        }
+        
+        print("\n明天:")
+        for hour in keyHours {
+            if let temp = forecast.first(where: { calendar.component(.hour, from: $0.date) == hour && calendar.isDate($0.date, inSameDayAs: tomorrow) })?.temperature {
+                print("\(hour)时: \(temp)°")
+            }
+        }
+        print("------------------------")
+    }
+    
+    private func printNext24HoursTemperature(forecast: [WeatherInfo]) {
+        var calendar = Calendar.current
+        calendar.timeZone = TimeZone.current
+        
+        let currentDate = Date()
+        let dateFormatter = DateFormatter()
+        dateFormatter.locale = Locale(identifier: "zh_CN")
+        dateFormatter.dateFormat = "MM月dd日"
+        
+        print("\n=== 未来24小时气温预报 ===")
+        print("当前时间: \(dateFormatter.string(from: currentDate)) \(calendar.component(.hour, from: currentDate))时")
+        
+        // 按时间排序并过滤出未来24小时的数据
+        let next24Hours = forecast
+            .map { weather in
+                // 将UTC时间转换为本地时区
+                var utcCalendar = Calendar(identifier: .gregorian)
+                utcCalendar.timeZone = TimeZone(identifier: "UTC")!
+                let components = utcCalendar.dateComponents([.year, .month, .day, .hour], from: weather.date)
+                var localCalendar = Calendar(identifier: .gregorian)
+                localCalendar.timeZone = TimeZone.current
+                let localDate = localCalendar.date(from: components) ?? weather.date
+                
+                return WeatherInfo(
+                    date: localDate,
+                    temperature: weather.temperature,
+                    condition: weather.condition,
+                    symbolName: weather.symbolName
+                )
+            }
+            .filter { $0.date >= currentDate && $0.date <= calendar.date(byAdding: .hour, value: 24, to: currentDate)! }
+            .sorted { $0.date < $1.date }
+        
+        var lastPrintedDate = ""
+        for weather in next24Hours {
+            let date = dateFormatter.string(from: weather.date)
+            let hour = calendar.component(.hour, from: weather.date)
+            
+            // 如果日期变化了，打印一个分隔行
+            if date != lastPrintedDate {
+                if !lastPrintedDate.isEmpty {
+                    print("------------------------")
+                }
+                print("\n\(date):")
+                lastPrintedDate = date
+            }
+            
+            print("\(hour)时: \(weather.temperature)°")
+        }
+        print("========================\n")
+    }
+    
     private func generateKeyTimePoints() -> [WeatherInfo] {
         // 使用本地时区的日历
         var calendar = Calendar.current
@@ -93,7 +171,10 @@ struct HourlyTemperatureTrendView: View {
         // 获取当前时间（本地时区）
         let currentDate = Date()
         let currentHour = calendar.component(.hour, from: currentDate)
+        let today = calendar.startOfDay(for: currentDate)
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today)!
         
+        print("\n=== 温度预报详细信息 ===")
         print("当前时间: \(currentDate), 当前小时: \(currentHour)")
         
         // 按时间排序预报数据并转换为本地时区
@@ -102,98 +183,131 @@ struct HourlyTemperatureTrendView: View {
             var utcCalendar = Calendar(identifier: .gregorian)
             utcCalendar.timeZone = TimeZone(identifier: "UTC")!
             
-            let components = utcCalendar.dateComponents([.year, .month, .day, .hour], from: weather.date)
-            let localDate = calendar.date(from: components) ?? weather.date
+            let utcComponents = utcCalendar.dateComponents([.year, .month, .day, .hour], from: weather.date)
+            
+            // 确保日期在今天或明天
+            var localComponents = DateComponents()
+            localComponents.year = calendar.component(.year, from: today)
+            localComponents.month = calendar.component(.month, from: today)
+            localComponents.day = calendar.component(.day, from: today)
+            localComponents.hour = utcComponents.hour
+            
+            // 如果UTC时间比当前时间晚，说明是明天的数据
+            let localDate = calendar.date(from: localComponents) ?? weather.date
+            let adjustedDate = localDate < currentDate ? 
+                calendar.date(byAdding: .day, value: 1, to: localDate) ?? localDate : 
+                localDate
             
             return WeatherInfo(
-                date: localDate,
+                date: adjustedDate,
                 temperature: weather.temperature,
                 condition: weather.condition,
                 symbolName: weather.symbolName
             )
         }.sorted { $0.date < $1.date }
         
-        print("预报数据: \(sortedForecast.map { "\($0.date): \($0.temperature)°" }.joined(separator: "\n"))")
+        print("\n原始预报数据（按本地时间排序）:")
+        let fullDateFormatter = DateFormatter()
+        fullDateFormatter.locale = Locale(identifier: "zh_CN")
+        fullDateFormatter.dateFormat = "yyyy-MM-dd"
+        
+        var lastPrintedDate = ""
+        for weather in sortedForecast {
+            let hour = calendar.component(.hour, from: weather.date)
+            let date = fullDateFormatter.string(from: weather.date)
+            
+            // 如果日期变化了，打印一个分隔行和新日期
+            if date != lastPrintedDate {
+                if !lastPrintedDate.isEmpty {
+                    print("------------------------")
+                }
+                print("\n\(date):")
+                lastPrintedDate = date
+            }
+            
+            print("\(hour)时: \(weather.temperature)°")
+        }
         
         // 生成时间点序列
         var result: [WeatherInfo] = []
         
         // 第一个点是当前时间
-        if let currentPoint = sortedForecast.first(where: { calendar.isDate($0.date, equalTo: currentDate, toGranularity: .hour) }) {
-            result.append(currentPoint)
-        } else {
-            // 如果找不到精确匹配，使用插值
-            let nearestBefore = sortedForecast.last { $0.date <= currentDate }
-            let nearestAfter = sortedForecast.first { $0.date > currentDate }
+        let currentTemp = sortedForecast.first { weather in
+            let weatherHour = calendar.component(.hour, from: weather.date)
+            return weatherHour == currentHour && calendar.isDateInToday(weather.date)
+        }?.temperature ?? sortedForecast.last { $0.date <= currentDate }?.temperature ?? 0
+        
+        result.append(WeatherInfo(
+            date: currentDate,
+            temperature: currentTemp,
+            condition: "未知",
+            symbolName: "moon.stars.fill"
+        ))
+        
+        print("\n当前时间点: \(currentHour)时 - \(currentTemp)°")
+        
+        // 生成后续7个时间点，每隔3小时，总共覆盖24小时
+        print("\n生成后续时间点:")
+        for i in 1..<8 {
+            // 计算目标时间，直接从当前时间加上小时数
+            let targetDate = calendar.date(byAdding: .hour, value: i * 3, to: currentDate) ?? currentDate
+            let targetHour = calendar.component(.hour, from: targetDate)
+            let isNextDay = !calendar.isDate(targetDate, inSameDayAs: currentDate)
             
-            if let before = nearestBefore, let after = nearestAfter {
-                let totalInterval = after.date.timeIntervalSince(before.date)
-                let progressInterval = currentDate.timeIntervalSince(before.date)
-                let progress = totalInterval > 0 ? progressInterval / totalInterval : 0
-                let interpolatedTemp = before.temperature + (after.temperature - before.temperature) * progress
-                
+            print("\n目标时间点[\(i)]: \(isNextDay ? "明天" : "今天") \(targetHour)时")
+            
+            // 在预报数据中查找对应时间点的温度
+            if let temp = sortedForecast.first(where: { weather in
+                let weatherHour = calendar.component(.hour, from: weather.date)
+                let isWeatherNextDay = !calendar.isDate(weather.date, inSameDayAs: currentDate)
+                return weatherHour == targetHour && isWeatherNextDay == isNextDay
+            })?.temperature {
+                print("找到匹配的温度: \(temp)°")
                 result.append(WeatherInfo(
-                    date: currentDate,
-                    temperature: interpolatedTemp,
-                    condition: before.condition,
-                    symbolName: before.symbolName
+                    date: targetDate,
+                    temperature: temp,
+                    condition: "未知",
+                    symbolName: "moon.stars.fill"
                 ))
             } else {
-                result.append(WeatherInfo(
-                    date: currentDate,
-                    temperature: nearestBefore?.temperature ?? nearestAfter?.temperature ?? 0,
-                    condition: "未知",
-                    symbolName: "questionmark"
-                ))
+                // 如果找不到精确匹配，使用插值
+                let nearestBefore = sortedForecast.last { $0.date <= targetDate }
+                let nearestAfter = sortedForecast.first { $0.date > targetDate }
+                
+                if let before = nearestBefore, let after = nearestAfter {
+                    let totalInterval = after.date.timeIntervalSince(before.date)
+                    let progressInterval = targetDate.timeIntervalSince(before.date)
+                    let progress = totalInterval > 0 ? progressInterval / totalInterval : 0
+                    let interpolatedTemp = before.temperature + (after.temperature - before.temperature) * progress
+                    
+                    print("插值计算: \(interpolatedTemp)° (前: \(before.temperature)°, 后: \(after.temperature)°)")
+                    
+                    result.append(WeatherInfo(
+                        date: targetDate,
+                        temperature: interpolatedTemp,
+                        condition: "未知",
+                        symbolName: "moon.stars.fill"
+                    ))
+                } else if let nearest = nearestBefore ?? nearestAfter {
+                    print("使用最近的温度: \(nearest.temperature)°")
+                    result.append(WeatherInfo(
+                        date: targetDate,
+                        temperature: nearest.temperature,
+                        condition: "未知",
+                        symbolName: "moon.stars.fill"
+                    ))
+                }
             }
         }
         
-        // 计算下一个3小时整点
-        let nextThreeHour = ((currentHour + 2) / 3 * 3 + 3) % 24
-        
-        // 生成后续7个时间点，每隔3小时
-        for i in 0..<7 {
-            let targetHour = (nextThreeHour + i * 3) % 24
-            let daysToAdd = (nextThreeHour + i * 3) / 24
-            
-            var components = calendar.dateComponents([.year, .month, .day, .hour], from: currentDate)
-            components.hour = targetHour
-            components.day! += daysToAdd
-            
-            guard let targetDate = calendar.date(from: components) else { continue }
-            
-            print("目标时间点[\(i+1)]: \(targetDate), 小时: \(targetHour), 天数偏移: \(daysToAdd)")
-            
-            // 在预报数据中查找最接近的时间点
-            let nearestBefore = sortedForecast.last { $0.date <= targetDate }
-            let nearestAfter = sortedForecast.first { $0.date > targetDate }
-            
-            if let before = nearestBefore, let after = nearestAfter {
-                // 如果目标时间在两个预报点之间，进行插值计算
-                let totalInterval = after.date.timeIntervalSince(before.date)
-                let progressInterval = targetDate.timeIntervalSince(before.date)
-                let progress = totalInterval > 0 ? progressInterval / totalInterval : 0
-                
-                let interpolatedTemp = before.temperature + (after.temperature - before.temperature) * progress
-                print("插值计算: \(interpolatedTemp)° (前: \(before.temperature)°, 后: \(after.temperature)°)")
-                
-                result.append(WeatherInfo(
-                    date: targetDate,
-                    temperature: interpolatedTemp,
-                    condition: before.condition,
-                    symbolName: before.symbolName
-                ))
-            } else if let point = nearestBefore ?? nearestAfter {
-                result.append(WeatherInfo(
-                    date: targetDate,
-                    temperature: point.temperature,
-                    condition: point.condition,
-                    symbolName: point.symbolName
-                ))
-            }
+        print("\n最终生成的时间点:")
+        for (index, point) in result.enumerated() {
+            let hour = calendar.component(.hour, from: point.date)
+            let isNextDay = !calendar.isDate(point.date, inSameDayAs: currentDate)
+            print("[\(index)]: \(isNextDay ? "明天" : "今天") \(hour)时 - \(point.temperature)°")
         }
+        print("=== 温度预报信息结束 ===\n")
         
-        print("生成的时间点: \(result.map { "\(calendar.component(.hour, from: $0.date))时: \($0.temperature)°" }.joined(separator: ", "))")
         return result
     }
     
