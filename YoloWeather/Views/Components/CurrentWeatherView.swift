@@ -7,43 +7,34 @@ struct CurrentWeatherView: View {
     let dailyForecast: [DayWeatherInfo]
     
     var body: some View {
-        VStack(spacing: 10) {
-            // Location with animation
+        VStack(spacing: 20) {
+            // Location
             Text(location)
-                .font(.system(size: 44, weight: .light))
-                .opacity(isAnimating ? 1 : 0)
-                .offset(y: isAnimating ? 0 : 20)
+                .font(.system(size: 24, weight: .medium))
+                .foregroundStyle(.secondary)
             
-            // Weather icon with rotation animation
-            Image(systemName: weather.symbolName)
-                .symbolRenderingMode(.multicolor)
-                .font(.system(size: 120))
-                .rotationEffect(.degrees(isAnimating ? 360 : 0))
+            Spacer()
             
-            // Temperature with scale animation
-            Text("\(Int(round(weather.temperature)))°")
-                .font(.system(size: 120, weight: .thin))
-                .scaleEffect(isAnimating ? 1 : 0.5)
+            // Large temperature display
+            Text("\(Int(round(weather.temperature)))")
+                .font(.system(size: 180, weight: .thin))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
             
-            // Condition with fade animation
+            // Weather condition
             Text(weather.condition)
-                .font(.title)
+                .font(.system(size: 24, weight: .medium))
                 .foregroundStyle(.secondary)
-                .opacity(isAnimating ? 1 : 0)
             
-            // High/Low with slide animation
+            Spacer()
+            
             if let todayForecast = dailyForecast.first {
-                HStack(spacing: 30) {
-                    Label("H: \(Int(round(todayForecast.highTemperature)))°", 
-                          systemImage: "arrow.up")
-                    Label("L: \(Int(round(todayForecast.lowTemperature)))°", 
-                          systemImage: "arrow.down")
-                }
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .offset(x: isAnimating ? 0 : -100)
+                // Simple temperature range
+                Text("\(Int(round(todayForecast.lowTemperature)))° — \(Int(round(todayForecast.highTemperature)))°")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(.top, 50)
+        .frame(maxHeight: .infinity)
     }
 }

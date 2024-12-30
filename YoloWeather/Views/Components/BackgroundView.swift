@@ -3,38 +3,40 @@ import SwiftUI
 struct TimeBasedBackground: View {
     var body: some View {
         let hour = Calendar.current.component(.hour, from: Date())
-        let colors: [Color] = {
+        let backgroundColor: Color = {
             switch hour {
             case 5..<8:   // Dawn
-                return [Color(red: 0.3, green: 0.4, blue: 0.6),
-                        Color(red: 0.6, green: 0.4, blue: 0.3)]
+                return Color(red: 0.98, green: 0.95, blue: 0.92)
             case 8..<17:  // Day
-                return [Color(red: 0.4, green: 0.6, blue: 0.9),
-                        Color(red: 0.3, green: 0.5, blue: 0.8)]
+                return .white
             case 17..<20: // Dusk
-                return [Color(red: 0.6, green: 0.4, blue: 0.5),
-                        Color(red: 0.4, green: 0.3, blue: 0.6)]
+                return Color(red: 0.98, green: 0.95, blue: 0.92)
             default:     // Night
-                return [Color(red: 0.2, green: 0.3, blue: 0.4),
-                        Color(red: 0.1, green: 0.2, blue: 0.3)]
+                return Color(red: 0.12, green: 0.12, blue: 0.18)
             }
         }()
         
-        LinearGradient(colors: colors,
-                      startPoint: .top,
-                      endPoint: .bottom)
+        backgroundColor
             .ignoresSafeArea()
     }
 }
 
 struct TemperatureBar: View {
-    let low: Double
-    let high: Double
+    let progress: CGFloat
     
     var body: some View {
-        Capsule()
-            .fill(LinearGradient(colors: [.blue.opacity(0.7), .orange.opacity(0.7)],
-                                startPoint: .leading,
-                                endPoint: .trailing))
+        GeometryReader { geometry in
+            Rectangle()
+                .fill(.secondary.opacity(0.15))
+                .frame(height: 4)
+                .clipShape(Capsule())
+                .overlay(
+                    Rectangle()
+                        .fill(.secondary)
+                        .frame(width: geometry.size.width * progress, height: 4)
+                        .clipShape(Capsule()),
+                    alignment: .leading
+                )
+        }
     }
 }
