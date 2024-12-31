@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct TimeBasedBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+    
     private var isDaytime: Bool {
         let timezone = TimeZone.current
         let currentDate = Date()
@@ -11,15 +13,23 @@ struct TimeBasedBackground: View {
     }
     
     private var backgroundColor: Color {
-        isDaytime ?
-            Color(red: 0.98, green: 0.95, blue: 0.92) :  // 白天的浅色背景
-            Color(red: 0.08, green: 0.08, blue: 0.12)    // 夜间的深色背景
+        if isDaytime {
+            return colorScheme == .light ?
+                Color(red: 0.99, green: 0.99, blue: 0.99) :  // 日间亮色模式，更亮的白色
+                Color(red: 0.15, green: 0.15, blue: 0.17)    // 日间暗色模式
+        } else {
+            return Color(red: 0.08, green: 0.08, blue: 0.12) // 夜间模式统一深色
+        }
     }
     
     private var gradientColors: [Color] {
-        isDaytime ?
-            [.white.opacity(0.1), .black.opacity(0.05)] :
-            [.white.opacity(0.05), .black.opacity(0.2)]
+        if isDaytime {
+            return colorScheme == .light ?
+                [.white.opacity(0.2), .black.opacity(0.03)] :  // 日间亮色模式渐变，更柔和
+                [.white.opacity(0.05), .black.opacity(0.2)]    // 日间暗色模式渐变
+        } else {
+            return [.white.opacity(0.05), .black.opacity(0.2)] // 夜间模式渐变
+        }
     }
     
     var body: some View {
@@ -27,7 +37,6 @@ struct TimeBasedBackground: View {
             backgroundColor
                 .ignoresSafeArea()
             
-            // 添加微妙的渐变效果
             LinearGradient(
                 colors: gradientColors,
                 startPoint: .top,

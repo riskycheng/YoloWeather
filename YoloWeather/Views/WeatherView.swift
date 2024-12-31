@@ -23,6 +23,34 @@ struct WeatherView: View {
         lastRefreshTime = Date()
     }
     
+    private var temperatureText: some View {
+        Text("\(Int(round(weatherService.currentWeather?.temperature ?? 0)))")
+            .font(.system(size: 200))
+            .minimumScaleFactor(0.1)
+            .foregroundColor(.white)
+            .shadow(color: .white.opacity(0.5), radius: 3, x: 0, y: 0)
+            .fontWeight(.light)
+            .brightness(0.2)
+    }
+    
+    private var weatherDescription: some View {
+        Text(weatherService.currentWeather?.condition ?? "")
+            .font(.title)
+            .foregroundColor(.white)
+    }
+    
+    private var temperatureRange: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "arrow.down")
+            Text("\(Int(round(weatherService.dailyForecast.first?.lowTemperature ?? 0)))°")
+            Text("—")
+            Image(systemName: "arrow.up")
+            Text("\(Int(round(weatherService.dailyForecast.first?.highTemperature ?? 0)))°")
+        }
+        .font(.title2)
+        .foregroundColor(.white)
+    }
+    
     var body: some View {
         ZStack {
             TimeBasedBackground()

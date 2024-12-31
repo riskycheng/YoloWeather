@@ -108,16 +108,19 @@ struct CurrentWeatherView: View {
             } else {
                 // Large temperature display
                 Text("\(Int(round(weather.temperature)))")
-                    .font(.system(size: 180, weight: .thin))
+                    .font(.system(size: 180, weight: .ultraLight))
                     .minimumScaleFactor(0.5)
                     .lineLimit(1)
+                    .foregroundStyle(.white)
+                    .shadow(color: .white.opacity(0.7), radius: 3, x: 0, y: 0)
                     .scaleEffect(showContent ? 1 : 0.5)
                     .opacity(showContent ? 1 : 0)
                 
                 // Weather condition
                 Text(weather.condition)
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white)
+                    .shadow(color: .white.opacity(0.5), radius: 2, x: 0, y: 0)
                     .opacity(showContent ? 1 : 0)
                     .offset(y: showContent ? 0 : 20)
             }

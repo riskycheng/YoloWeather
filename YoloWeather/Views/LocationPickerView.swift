@@ -13,6 +13,20 @@ struct LocationPickerView: View {
     @State private var showLocationError = false
     @State private var locationErrorMessage = ""
     
+    private let predefinedLocations = [
+        "北京市",
+        "上海市",
+        "广州市",
+        "深圳市",
+        "杭州市",
+        "成都市",
+        "武汉市",
+        "西安市",
+        "南京市",
+        "重庆市",
+        "冰岛"
+    ]
+    
     var filteredLocations: [PresetLocation] {
         if searchText.isEmpty {
             return PresetLocation.presets
