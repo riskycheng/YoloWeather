@@ -85,7 +85,7 @@ struct HourlyTemperatureTrendView: View {
     private func calculateTemperaturePosition(temperature: Double, minTemp: Double, maxTemp: Double, height: CGFloat) -> CGFloat {
         let tempRange = max(1, maxTemp - minTemp)
         let normalizedTemp = (temperature - minTemp) / tempRange
-        return height * 0.6 * (1 - CGFloat(normalizedTemp)) + height * 0.2
+        return height * 0.35 * (1 - CGFloat(normalizedTemp)) + height * 0.1
     }
     
     // Create point for temperature curve
@@ -122,7 +122,7 @@ struct HourlyTemperatureTrendView: View {
     }
     
     // Temperature curve view
-    private func TemperatureCurveView(points: [CGPoint], context: GraphicsContext) {
+    private func TemperatureCurveView(points: [CGPoint], context: GraphicsContext, selectedIndex: Int?) {
         var path = Path()
         let textColor = WeatherThemeManager.shared.textColor(for: timeOfDay)
         
@@ -144,19 +144,36 @@ struct HourlyTemperatureTrendView: View {
             }
         }
         
-        // Draw line
-        context.stroke(path, with: .color(textColor.opacity(0.8)), lineWidth: 2)
+        // Draw line with lower opacity
+        context.stroke(path, with: .color(textColor.opacity(0.5)), lineWidth: 2)
         
-        // Draw points
-        for point in points {
+        // Draw points with lower opacity
+        for (index, point) in points.enumerated() {
+            let isSelected = index == selectedIndex
+            let pointSize: CGFloat = isSelected ? 8 : 6
+            let opacity: CGFloat = isSelected ? 0.8 : 0.5
+            
+            // Draw highlight for selected point
+            if isSelected {
+                context.fill(
+                    Path(ellipseIn: CGRect(
+                        x: point.x - pointSize/2 - 2,
+                        y: point.y - pointSize/2 - 2,
+                        width: pointSize + 4,
+                        height: pointSize + 4
+                    )),
+                    with: .color(textColor.opacity(0.2))
+                )
+            }
+            
             context.fill(
                 Path(ellipseIn: CGRect(
-                    x: point.x - 3,
-                    y: point.y - 3,
-                    width: 6,
-                    height: 6
+                    x: point.x - pointSize/2,
+                    y: point.y - pointSize/2,
+                    width: pointSize,
+                    height: pointSize
                 )),
-                with: .color(textColor.opacity(0.8))
+                with: .color(textColor.opacity(opacity))
             )
         }
     }
@@ -186,7 +203,7 @@ struct HourlyTemperatureTrendView: View {
                 
                 VStack(spacing: 0) {
                     // Temperature curve and bubble
-                    ZStack(alignment: .top) {
+                    ZStack {
                         // Temperature curve
                         Canvas { context, size in
                             let points = keyPoints.enumerated().map { index, weather in
@@ -199,43 +216,50 @@ struct HourlyTemperatureTrendView: View {
                                     height: size.height
                                 )
                             }
-                            TemperatureCurveView(points: points, context: context)
+                            TemperatureCurveView(points: points, context: context, selectedIndex: selectedHourIndex)
                         }
                         
-                        // Temperature labels
+                        // Temperature labels and weather bubble
                         HStack(spacing: 0) {
                             ForEach(Array(keyPoints.enumerated()), id: \.0) { index, point in
-                                Text("\(Int(round(point.temperature)))°")
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                                    .frame(width: hourWidth)
-                                    .opacity(selectedHourIndex == nil ? 0 : 1)
+                                VStack(spacing: 0) {
+                                    // Weather bubble
+                                    if index == selectedHourIndex {
+                                        Image(systemName: point.symbolName)
+                                            .symbolRenderingMode(.multicolor)
+                                            .font(.system(size: 24))
+                                            .padding(10)
+                                            .background {
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .fill(.ultraThinMaterial)
+                                                    .opacity(0.8)
+                                                    .background {
+                                                        RoundedRectangle(cornerRadius: 10)
+                                                            .fill(Color.white.opacity(0.2))
+                                                    }
+                                            }
+                                            .offset(y: -45)
+                                            .transition(.opacity)
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Temperature text - 固定在底部上方
+                                    Text("\(Int(round(point.temperature)))°")
+                                        .font(.system(
+                                            size: index == selectedHourIndex ? 16 : 13,
+                                            weight: index == selectedHourIndex ? .bold : .medium
+                                        ))
+                                        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                                        .opacity(selectedHourIndex == nil ? 0 : 1)
+                                        .padding(.bottom, 40) // 增加底部间距到 40pt
+                                }
+                                .frame(width: hourWidth)
+                                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedHourIndex)
                             }
                         }
-                        .offset(y: 10)
-                        
-                        // Weather bubble
-                        if let selectedIndex = selectedHourIndex {
-                            let weather = keyPoints[selectedIndex]
-                            Image(systemName: weather.symbolName)
-                                .symbolRenderingMode(.multicolor)
-                                .font(.system(size: 32))
-                                .padding(16)
-                                .background {
-                                    RoundedRectangle(cornerRadius: 15)
-                                        .fill(.ultraThinMaterial)
-                                        .opacity(0.8)
-                                        .background {
-                                            RoundedRectangle(cornerRadius: 15)
-                                                .fill(Color.white.opacity(0.2))
-                                        }
-                                }
-                                .offset(x: CGFloat(selectedIndex) * hourWidth + hourWidth/2 - width/2, y: -60)
-                                .transition(.opacity)
-                        }
                     }
-                    .frame(height: height * 0.7)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedHourIndex)
+                    .frame(height: height * 0.45)
                     
                     // Time slots
                     HStack(spacing: 0) {
@@ -253,7 +277,7 @@ struct HourlyTemperatureTrendView: View {
                     }
                 }
             }
-            .frame(height: isExpanded ? 150 : 100)
+            .frame(height: isExpanded ? 110 : 80)
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
             .contentShape(Rectangle())
             .gesture(
@@ -288,7 +312,7 @@ struct HourlyTemperatureTrendView: View {
                     }
             )
         }
-        .frame(height: isExpanded ? 150 : 100)
+        .frame(height: isExpanded ? 110 : 80)
     }
 }
 
