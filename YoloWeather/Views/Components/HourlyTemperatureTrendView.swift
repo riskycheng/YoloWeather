@@ -1,42 +1,8 @@
 import SwiftUI
-
-struct WaveHighlight: View {
-    @State private var phase: CGFloat = 0
-    let timer = Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()
-    
-    var body: some View {
-        Canvas { context, size in
-            let width = size.width
-            let height = size.height
-            let path = Path { p in
-                p.move(to: CGPoint(x: 0, y: height))
-                
-                for x in stride(from: 0, through: width, by: 1) {
-                    let normalizedX = x / width
-                    let y = height * (1 - sin((normalizedX * .pi + phase) * 2) * 0.15)
-                    p.addLine(to: CGPoint(x: x, y: y))
-                }
-                
-                p.addLine(to: CGPoint(x: width, y: height))
-                p.closeSubpath()
-            }
-            
-            context.fill(path, with: .linearGradient(
-                Gradient(colors: [
-                    .white.opacity(0.3),
-                    .white.opacity(0.1)
-                ]),
-                startPoint: CGPoint(x: 0, y: 0),
-                endPoint: CGPoint(x: 0, y: height)
-            ))
-        }
-        .onReceive(timer) { _ in
-            withAnimation(.linear(duration: 0.1)) {
-                phase += 0.1
-            }
-        }
-    }
-}
+import Foundation
+import CoreLocation
+import CoreGraphics
+import UIKit
 
 struct TimeSlot: View {
     let date: Date
@@ -65,12 +31,6 @@ struct TimeSlot: View {
     
     var body: some View {
         VStack(spacing: 8) {
-            Text("\(Int(round(temperature)))°")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-                .frame(height: 20)
-            
             Text(formattedHour(from: date))
                 .font(.system(size: 12, weight: .regular))
                 .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.9))
@@ -88,33 +48,38 @@ struct WeatherBubble: View {
     @Environment(\.weatherTimeOfDay) var timeOfDay
     
     var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: symbolName)
-                .symbolRenderingMode(.multicolor)
-                .font(.system(size: 24))
-                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-            
-            Text("\(Int(round(temperature)))°")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-        }
-        .padding(12)
-        .background {
-            RoundedRectangle(cornerRadius: 15)
-                .fill(WeatherThemeManager.shared.cardBackgroundColor(for: timeOfDay))
-        }
+        Image(systemName: symbolName)
+            .symbolRenderingMode(.multicolor)
+            .font(.system(size: 24))
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(.ultraThinMaterial)
+                    .opacity(timeOfDay == .day ? 0.5 : 0.3)
+                    .background {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white.opacity(timeOfDay == .day ? 0.2 : 0.1))
+                    }
+            }
+            .shadow(
+                color: .black.opacity(timeOfDay == .day ? 0.1 : 0.2),
+                radius: 4,
+                x: 0,
+                y: 2
+            )
     }
 }
 
 struct HourlyTemperatureTrendView: View {
     let forecast: [WeatherInfo]
     @State private var selectedHourIndex: Int?
+    @State private var isExpanded = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.weatherTimeOfDay) var timeOfDay
     @GestureState private var isDragging: Bool = false
     
     private let keyTimePoints = 8
+    private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
     
     // Calculate temperature range and normalized position
     private func calculateTemperaturePosition(temperature: Double, minTemp: Double, maxTemp: Double, height: CGFloat) -> CGFloat {
@@ -180,7 +145,7 @@ struct HourlyTemperatureTrendView: View {
         }
         
         // Draw line
-        context.stroke(path, with: .color(textColor), lineWidth: 2)
+        context.stroke(path, with: .color(textColor.opacity(0.8)), lineWidth: 2)
         
         // Draw points
         for point in points {
@@ -191,7 +156,7 @@ struct HourlyTemperatureTrendView: View {
                     width: 6,
                     height: 6
                 )),
-                with: .color(textColor)
+                with: .color(textColor.opacity(0.8))
             )
         }
     }
@@ -211,12 +176,12 @@ struct HourlyTemperatureTrendView: View {
             
             ZStack(alignment: .bottom) {
                 // Background
-                WeatherThemeManager.shared.cardBackgroundColor(for: timeOfDay)
-                    .clipShape(RoundedRectangle(cornerRadius: 25))
-                    .overlay {
-                        if isDragging {
-                            WaveHighlight()
-                        }
+                RoundedRectangle(cornerRadius: 15)
+                    .fill(.ultraThinMaterial)
+                    .opacity(timeOfDay == .day ? 0.3 : 0.2)
+                    .background {
+                        RoundedRectangle(cornerRadius: 15)
+                            .fill(Color.white.opacity(timeOfDay == .day ? 0.15 : 0.1))
                     }
                 
                 VStack(spacing: 0) {
@@ -237,29 +202,40 @@ struct HourlyTemperatureTrendView: View {
                             TemperatureCurveView(points: points, context: context)
                         }
                         
+                        // Temperature labels
+                        HStack(spacing: 0) {
+                            ForEach(Array(keyPoints.enumerated()), id: \.0) { index, point in
+                                Text("\(Int(round(point.temperature)))°")
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                                    .frame(width: hourWidth)
+                                    .opacity(selectedHourIndex == nil ? 0 : 1)
+                            }
+                        }
+                        .offset(y: 10)
+                        
                         // Weather bubble
                         if let selectedIndex = selectedHourIndex {
                             let weather = keyPoints[selectedIndex]
-                            GeometryReader { bubbleGeometry in
-                                let yPosition = calculateTemperaturePosition(
-                                    temperature: weather.temperature,
-                                    minTemp: minTemp,
-                                    maxTemp: maxTemp,
-                                    height: bubbleGeometry.size.height
-                                )
-                                
-                                WeatherBubble(
-                                    symbolName: weather.symbolName,
-                                    temperature: weather.temperature
-                                )
-                                .position(
-                                    x: CGFloat(selectedIndex) * hourWidth + hourWidth/2,
-                                    y: yPosition
-                                )
-                            }
+                            Image(systemName: weather.symbolName)
+                                .symbolRenderingMode(.multicolor)
+                                .font(.system(size: 32))
+                                .padding(16)
+                                .background {
+                                    RoundedRectangle(cornerRadius: 15)
+                                        .fill(.ultraThinMaterial)
+                                        .opacity(0.8)
+                                        .background {
+                                            RoundedRectangle(cornerRadius: 15)
+                                                .fill(Color.white.opacity(0.2))
+                                        }
+                                }
+                                .offset(x: CGFloat(selectedIndex) * hourWidth + hourWidth/2 - width/2, y: -60)
+                                .transition(.opacity)
                         }
                     }
                     .frame(height: height * 0.7)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedHourIndex)
                     
                     // Time slots
                     HStack(spacing: 0) {
@@ -277,16 +253,28 @@ struct HourlyTemperatureTrendView: View {
                     }
                 }
             }
-            .frame(height: height)
+            .frame(height: isExpanded ? 150 : 100)
+            .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isExpanded)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
                     .updating($isDragging) { value, state, _ in
+                        if !state {
+                            // 只在开始拖动时触发震动
+                            impactGenerator.impactOccurred()
+                            withAnimation {
+                                isExpanded = true
+                            }
+                        }
                         state = true
                     }
                     .onChanged { value in
                         let index = Int((value.location.x) / hourWidth)
                         if index >= 0 && index < keyTimePoints {
+                            if selectedHourIndex != index {
+                                // 当选中的时间点改变时触发震动
+                                impactGenerator.impactOccurred(intensity: 0.7)
+                            }
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                 selectedHourIndex = index
                             }
@@ -295,11 +283,12 @@ struct HourlyTemperatureTrendView: View {
                     .onEnded { _ in
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedHourIndex = nil
+                            isExpanded = false
                         }
                     }
             )
         }
-        .frame(height: 100)
+        .frame(height: isExpanded ? 150 : 100)
     }
 }
 
