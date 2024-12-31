@@ -45,6 +45,37 @@ struct TemperatureRangeView: View {
     }
 }
 
+struct LocationHeaderView: View {
+    let location: String
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "location.fill")
+                .imageScale(.medium)
+                .foregroundStyle(.white.opacity(0.9))
+            
+            Text(location)
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 20)
+        .background {
+            Capsule()
+                .fill(.black.opacity(0.3))
+                .overlay {
+                    Capsule()
+                        .stroke(LinearGradient(
+                            colors: [.white.opacity(0.5), .white.opacity(0.2)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ), lineWidth: 0.5)
+                }
+        }
+        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+    }
+}
+
 struct CurrentWeatherView: View {
     let location: String
     let weather: WeatherInfo
@@ -54,9 +85,8 @@ struct CurrentWeatherView: View {
     var body: some View {
         VStack(spacing: 20) {
             // Location
-            Text(location)
-                .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(.secondary)
+            LocationHeaderView(location: location)
+                .transition(.move(edge: .top).combined(with: .opacity))
             
             Spacer()
             
