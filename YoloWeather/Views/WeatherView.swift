@@ -25,11 +25,9 @@ struct WeatherView: View {
                     
                     // Bottom section with hourly forecast
                     if !weatherService.hourlyForecast.isEmpty {
-                        VStack(spacing: 0) {
-                            HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
-                                .padding(.vertical)
-                        }
-                        .background(.ultraThinMaterial)
+                        HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
+                            .padding(.vertical, 24)
+                            .padding(.horizontal, 16)
                     }
                 }
             } else {

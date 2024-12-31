@@ -62,7 +62,7 @@ struct TimeSlot: View {
     }
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 8) {
             Text("\(Int(round(temperature)))°")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white)
@@ -308,57 +308,59 @@ struct HourlyTemperatureTrendView: View {
                 Color.black.opacity(0.2)
                     .clipShape(RoundedRectangle(cornerRadius: 25))
                 
-                // 温度曲线
-                Canvas { context, size in
-                    let temps = keyPoints.map { $0.temperature }
-                    guard let minTemp = temps.min(),
-                          let maxTemp = temps.max() else { return }
-                    let tempRange = max(1, maxTemp - minTemp)
-                    
-                    var path = Path()
-                    let points = keyPoints.enumerated().map { (index, weather) in
-                        CGPoint(
-                            x: CGFloat(index) * hourWidth + hourWidth/2,
-                            y: size.height * 0.25 * (1 - CGFloat((weather.temperature - minTemp) / tempRange)) + size.height * 0.15
-                        )
+                VStack(spacing: 0) {
+                    // 温度曲线
+                    Canvas { context, size in
+                        let temps = keyPoints.map { $0.temperature }
+                        guard let minTemp = temps.min(),
+                              let maxTemp = temps.max() else { return }
+                        let tempRange = max(1, maxTemp - minTemp)
+                        
+                        var path = Path()
+                        let points = keyPoints.enumerated().map { (index, weather) in
+                            CGPoint(
+                                x: CGFloat(index) * hourWidth + hourWidth/2,
+                                y: size.height * 0.6 * (1 - CGFloat((weather.temperature - minTemp) / tempRange)) + size.height * 0.2
+                            )
+                        }
+                        
+                        path.move(to: points[0])
+                        for i in 1..<points.count {
+                            let prev = points[i-1]
+                            let curr = points[i]
+                            let control1 = CGPoint(x: prev.x + (curr.x - prev.x) * 0.5, y: prev.y)
+                            let control2 = CGPoint(x: prev.x + (curr.x - prev.x) * 0.5, y: curr.y)
+                            path.addCurve(to: curr, control1: control1, control2: control2)
+                        }
+                        
+                        // 绘制温度曲线
+                        context.stroke(path, with: .color(.white), lineWidth: 1.5)
+                        
+                        // 绘制选中点
+                        if let selectedIndex = selectedHourIndex {
+                            let point = points[selectedIndex]
+                            context.fill(
+                                Path(ellipseIn: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)),
+                                with: .color(.white)
+                            )
+                        }
                     }
+                    .frame(height: height * 0.5)
                     
-                    path.move(to: points[0])
-                    for i in 1..<points.count {
-                        let prev = points[i-1]
-                        let curr = points[i]
-                        let control1 = CGPoint(x: prev.x + (curr.x - prev.x) * 0.5, y: prev.y)
-                        let control2 = CGPoint(x: prev.x + (curr.x - prev.x) * 0.5, y: curr.y)
-                        path.addCurve(to: curr, control1: control1, control2: control2)
+                    // 时间轴
+                    HStack(spacing: 0) {
+                        ForEach(Array(keyPoints.enumerated()), id: \.0) { index, weather in
+                            TimeSlot(
+                                date: weather.date,
+                                isSelected: selectedHourIndex == index,
+                                isCurrent: index == 0,
+                                temperature: weather.temperature,
+                                showHour: true
+                            )
+                        }
                     }
-                    
-                    // 绘制温度曲线
-                    context.stroke(path, with: .color(.white), lineWidth: 1.5)
-                    
-                    // 绘制选中点
-                    if let selectedIndex = selectedHourIndex {
-                        let point = points[selectedIndex]
-                        context.fill(
-                            Path(ellipseIn: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)),
-                            with: .color(.white)
-                        )
-                    }
+                    .frame(height: height * 0.5)
                 }
-                .frame(height: height)
-                
-                // 时间轴
-                HStack(spacing: 0) {
-                    ForEach(Array(keyPoints.enumerated()), id: \.0) { index, weather in
-                        TimeSlot(
-                            date: weather.date,
-                            isSelected: selectedHourIndex == index,
-                            isCurrent: index == 0,
-                            temperature: weather.temperature,
-                            showHour: true
-                        )
-                    }
-                }
-                .frame(height: 50)
             }
             .frame(height: height)
             .contentShape(Rectangle())
@@ -389,7 +391,7 @@ struct HourlyTemperatureTrendView: View {
                 print("温度数据: \(keyPoints.map { "\(calendar.component(.hour, from: $0.date))时: \($0.temperature)°" }.joined(separator: ", "))")
             }
         }
-        .frame(height: 70)
+        .frame(height: 100)
     }
 }
 
