@@ -89,7 +89,10 @@ struct CurrentWeatherView: View {
     let dailyForecast: [DayWeatherInfo]
     
     @State private var showContent = false
-    @State private var temperatureScale: CGFloat = 0.5
+    @State private var loadingStartTime: Date? = nil
+    @State private var shouldShowLoading = false
+    
+    private let minimumLoadingDuration: TimeInterval = 2.0
     
     var body: some View {
         VStack(spacing: 20) {
@@ -99,7 +102,7 @@ struct CurrentWeatherView: View {
             
             Spacer()
             
-            if isLoading {
+            if shouldShowLoading {
                 WeatherLoadingView()
                     .transition(.opacity)
             } else {
@@ -121,7 +124,7 @@ struct CurrentWeatherView: View {
             
             Spacer()
             
-            if !isLoading, let todayForecast = dailyForecast.first {
+            if !shouldShowLoading, let todayForecast = dailyForecast.first {
                 TemperatureRangeView(
                     lowTemp: todayForecast.lowTemperature,
                     highTemp: todayForecast.highTemperature
@@ -132,21 +135,38 @@ struct CurrentWeatherView: View {
         }
         .frame(maxHeight: .infinity)
         .onChange(of: isLoading) { newValue in
-            if !newValue {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    showContent = true
-                }
-            } else {
+            if newValue {
+                // 开始加载
+                loadingStartTime = Date()
+                shouldShowLoading = true
                 withAnimation(.easeOut(duration: 0.2)) {
                     showContent = false
+                }
+            } else {
+                // 计算已经显示的时间
+                let elapsedTime = Date().timeIntervalSince(loadingStartTime ?? Date())
+                let remainingTime = max(0, minimumLoadingDuration - elapsedTime)
+                
+                // 延迟隐藏加载动画
+                DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        shouldShowLoading = false
+                    }
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                        showContent = true
+                    }
                 }
             }
         }
         .onAppear {
             if !isLoading {
+                shouldShowLoading = false
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                     showContent = true
                 }
+            } else {
+                shouldShowLoading = true
+                loadingStartTime = Date()
             }
         }
     }
