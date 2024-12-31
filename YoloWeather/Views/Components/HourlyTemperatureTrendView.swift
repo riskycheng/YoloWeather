@@ -45,6 +45,7 @@ struct TimeSlot: View {
     let temperature: Double
     let showHour: Bool
     let timezone: TimeZone
+    @Environment(\.weatherTimeOfDay) var timeOfDay
     
     private func formattedHour(from date: Date) -> String {
         if isCurrent {
@@ -66,23 +67,25 @@ struct TimeSlot: View {
         VStack(spacing: 8) {
             Text("\(Int(round(temperature)))°")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
                 .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 .frame(height: 20)
             
             Text(formattedHour(from: date))
                 .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.9))
                 .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 .frame(height: 16)
         }
         .frame(width: 44)
+        .opacity(isSelected ? 1 : 0.8)
     }
 }
 
 struct WeatherBubble: View {
     let symbolName: String
     let temperature: Double
+    @Environment(\.weatherTimeOfDay) var timeOfDay
     
     var body: some View {
         VStack(spacing: 4) {
@@ -93,71 +96,13 @@ struct WeatherBubble: View {
             
             Text("\(Int(round(temperature)))°")
                 .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
                 .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
         }
         .padding(12)
         .background {
             RoundedRectangle(cornerRadius: 15)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 15)
-                        .fill(.black.opacity(0.2))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 15)
-                        .stroke(LinearGradient(
-                            colors: [.white.opacity(0.6), .white.opacity(0.3)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ), lineWidth: 0.5)
-                }
-        }
-        .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-    }
-}
-
-// 添加背景颜色主题
-struct WeatherBackgroundColor {
-    static func background(for date: Date, in timezone: TimeZone) -> Color {
-        var calendar = Calendar.current
-        calendar.timeZone = timezone
-        let hour = calendar.component(.hour, from: date)
-        
-        if hour >= 6 && hour < 18 {
-            // 白天主题
-            return Color(red: 0.98, green: 0.95, blue: 0.92)
-        } else {
-            // 夜间主题 - 深色但不是纯黑
-            return Color(red: 0.1, green: 0.1, blue: 0.15)
-        }
-    }
-    
-    static func cardBackground(for date: Date, in timezone: TimeZone) -> Color {
-        var calendar = Calendar.current
-        calendar.timeZone = timezone
-        let hour = calendar.component(.hour, from: date)
-        
-        if hour >= 6 && hour < 18 {
-            // 白天卡片背景
-            return .black.opacity(0.1)
-        } else {
-            // 夜间卡片背景 - 使用更深的颜色
-            return Color(red: 0.12, green: 0.12, blue: 0.18).opacity(0.95)
-        }
-    }
-    
-    static func cardGradient(for date: Date, in timezone: TimeZone) -> [Color] {
-        var calendar = Calendar.current
-        calendar.timeZone = timezone
-        let hour = calendar.component(.hour, from: date)
-        
-        if hour >= 6 && hour < 18 {
-            // 白天渐变
-            return [.white.opacity(0.15), .white.opacity(0.05)]
-        } else {
-            // 夜间渐变
-            return [.white.opacity(0.08), .white.opacity(0.02)]
+                .fill(WeatherThemeManager.shared.cardBackgroundColor(for: timeOfDay))
         }
     }
 }
@@ -166,22 +111,10 @@ struct HourlyTemperatureTrendView: View {
     let forecast: [WeatherInfo]
     @State private var selectedHourIndex: Int?
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.weatherTimeOfDay) var timeOfDay
     @GestureState private var isDragging: Bool = false
     
     private let keyTimePoints = 8
-    
-    // 获取背景颜色
-    private func getBackgroundColor(for date: Date, in timezone: TimeZone) -> Color {
-        var calendar = Calendar.current
-        calendar.timeZone = timezone
-        let hour = calendar.component(.hour, from: date)
-        return isDaytime(hour: hour) ? .clear : .black.opacity(0.2)
-    }
-    
-    // 判断是否是白天
-    private func isDaytime(hour: Int) -> Bool {
-        return hour >= 6 && hour < 18
-    }
     
     // Calculate temperature range and normalized position
     private func calculateTemperaturePosition(temperature: Double, minTemp: Double, maxTemp: Double, height: CGFloat) -> CGFloat {
@@ -226,6 +159,7 @@ struct HourlyTemperatureTrendView: View {
     // Temperature curve view
     private func TemperatureCurveView(points: [CGPoint], context: GraphicsContext) {
         var path = Path()
+        let textColor = WeatherThemeManager.shared.textColor(for: timeOfDay)
         
         // Draw curve through points
         if points.count > 1 {
@@ -246,7 +180,7 @@ struct HourlyTemperatureTrendView: View {
         }
         
         // Draw line
-        context.stroke(path, with: .color(.white), lineWidth: 2)
+        context.stroke(path, with: .color(textColor), lineWidth: 2)
         
         // Draw points
         for point in points {
@@ -257,7 +191,7 @@ struct HourlyTemperatureTrendView: View {
                     width: 6,
                     height: 6
                 )),
-                with: .color(.white)
+                with: .color(textColor)
             )
         }
     }
@@ -277,7 +211,7 @@ struct HourlyTemperatureTrendView: View {
             
             ZStack(alignment: .bottom) {
                 // Background
-                getBackgroundColor(for: Date(), in: timezone)
+                WeatherThemeManager.shared.cardBackgroundColor(for: timeOfDay)
                     .clipShape(RoundedRectangle(cornerRadius: 25))
                     .overlay {
                         if isDragging {
@@ -338,6 +272,7 @@ struct HourlyTemperatureTrendView: View {
                                 showHour: true,
                                 timezone: point.timezone
                             )
+                            .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
                         }
                     }
                 }
@@ -368,25 +303,28 @@ struct HourlyTemperatureTrendView: View {
     }
 }
 
-#Preview {
-    ZStack {
-        Color.black
-        VStack {
-            Spacer()
-            HourlyTemperatureTrendView(
-                forecast: (0..<48).map { hour in
-                    let baseTemp = 25.0
-                    let variation = sin(Double(hour) * .pi / 12.0) * 5.0
-                    return WeatherInfo(
-                        date: Date().addingTimeInterval(Double(hour) * 3600),
-                        temperature: baseTemp + variation,
-                        condition: "晴",
-                        symbolName: "sun.max.fill",
-                        timezone: TimeZone.current
-                    )
-                }
-            )
-            .padding()
+struct HourlyTemperatureTrendView_Previews: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            Color.black
+            VStack {
+                Spacer()
+                HourlyTemperatureTrendView(
+                    forecast: (0..<48).map { hour in
+                        let baseTemp = 25.0
+                        let variation = sin(Double(hour) * .pi / 12.0) * 5.0
+                        return WeatherInfo(
+                            date: Date().addingTimeInterval(Double(hour) * 3600),
+                            temperature: baseTemp + variation,
+                            condition: "晴",
+                            symbolName: "sun.max.fill",
+                            timezone: TimeZone.current
+                        )
+                    }
+                )
+                .padding()
+            }
         }
+        .environment(\.weatherTimeOfDay, .day)
     }
 }
