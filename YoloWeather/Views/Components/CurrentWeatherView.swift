@@ -184,7 +184,8 @@ struct CurrentWeatherView: View {
                 date: Date(),
                 temperature: 25,
                 condition: "Sunny",
-                symbolName: "sun.max.fill"
+                symbolName: "sun.max.fill",
+                timezone: TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
             ),
             isLoading: false,
             dailyForecast: [

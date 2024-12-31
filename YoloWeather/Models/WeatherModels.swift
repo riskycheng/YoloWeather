@@ -5,13 +5,15 @@ struct WeatherInfo: Equatable {
     let temperature: Double
     let condition: String
     let symbolName: String
+    let timezone: TimeZone
     
     static func mock(temp: Double, condition: String, symbol: String) -> WeatherInfo {
         WeatherInfo(
             date: Date(),
             temperature: temp,
             condition: condition,
-            symbolName: symbol
+            symbolName: symbol,
+            timezone: TimeZone.current
         )
     }
 }

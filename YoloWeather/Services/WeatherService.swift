@@ -123,7 +123,8 @@ class WeatherService: ObservableObject {
                 date: currentDate,
                 temperature: currentTemp,
                 condition: weather.currentWeather.condition.description,
-                symbolName: weather.currentWeather.symbolName
+                symbolName: weather.currentWeather.symbolName,
+                timezone: timezone
             )
             
             // 4. 处理小时预报
@@ -140,7 +141,8 @@ class WeatherService: ObservableObject {
                     date: localDate,
                     temperature: temp,
                     condition: hour.condition.description,
-                    symbolName: hour.symbolName
+                    symbolName: hour.symbolName,
+                    timezone: timezone
                 )
             }.sorted { $0.date < $1.date }
             

@@ -90,12 +90,12 @@ struct HourlyForecastView_Previews: PreviewProvider {
         VStack {
             HourlyForecastView(
                 forecast: [
-                    WeatherInfo(date: Date(), temperature: 25, condition: "Sunny", symbolName: "sun.max.fill"),
-                    WeatherInfo(date: Date().addingTimeInterval(3600), temperature: 26, condition: "Sunny", symbolName: "sun.max.fill"),
-                    WeatherInfo(date: Date().addingTimeInterval(7200), temperature: 27, condition: "Sunny", symbolName: "sun.max.fill"),
-                    WeatherInfo(date: Date().addingTimeInterval(10800), temperature: 28, condition: "Sunny", symbolName: "sun.max.fill"),
-                    WeatherInfo(date: Date().addingTimeInterval(14400), temperature: 24, condition: "Sunny", symbolName: "sun.max.fill"),
-                    WeatherInfo(date: Date().addingTimeInterval(18000), temperature: 23, condition: "Sunny", symbolName: "sun.max.fill")
+                    WeatherInfo(date: Date(), temperature: 25, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
+                    WeatherInfo(date: Date().addingTimeInterval(3600), temperature: 26, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
+                    WeatherInfo(date: Date().addingTimeInterval(7200), temperature: 27, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
+                    WeatherInfo(date: Date().addingTimeInterval(10800), temperature: 28, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
+                    WeatherInfo(date: Date().addingTimeInterval(14400), temperature: 24, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
+                    WeatherInfo(date: Date().addingTimeInterval(18000), temperature: 23, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current)
                 ],
                 hourFormatter: {
                     let formatter = DateFormatter()
