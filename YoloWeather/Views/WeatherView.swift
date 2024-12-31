@@ -6,22 +6,84 @@ struct WeatherView: View {
     @StateObject private var locationService = LocationService()
     @State private var selectedLocation: PresetLocation = PresetLocation.presets[0]
     @State private var showingLocationPicker = false
+    @State private var isRefreshing = false
+    @State private var lastRefreshTime: Date = Date()
+    @State private var isUsingCurrentLocation = false
+    
+    private func refreshWeather() async {
+        isRefreshing = true
+        defer { isRefreshing = false }
+        
+        if isUsingCurrentLocation, let currentLocation = locationService.currentLocation {
+            await weatherService.requestWeatherData(for: currentLocation)
+        } else {
+            locationService.locationName = selectedLocation.name
+            await weatherService.requestWeatherData(for: selectedLocation.location)
+        }
+        lastRefreshTime = Date()
+    }
     
     var body: some View {
         ZStack {
             TimeBasedBackground()
             
-            if let currentWeather = weatherService.currentWeather {
-                VStack(spacing: 0) {
-                    // Top section with main weather info
-                    CurrentWeatherView(
-                        location: locationService.locationName.isEmpty ? selectedLocation.name : locationService.locationName,
-                        weather: currentWeather,
-                        isAnimating: false,
-                        dailyForecast: weatherService.dailyForecast
-                    )
+            VStack(spacing: 0) {
+                // Top toolbar
+                HStack(alignment: .center) {
+                    Button {
+                        showingLocationPicker = true
+                    } label: {
+                        Image(systemName: "list.bullet")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background {
+                                Circle()
+                                    .fill(.black.opacity(0.3))
+                                    .overlay {
+                                        Circle()
+                                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                                    }
+                            }
+                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                    }
                     
                     Spacer()
+                    
+                    Button {
+                        Task {
+                            await refreshWeather()
+                        }
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 20, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background {
+                                Circle()
+                                    .fill(.black.opacity(0.3))
+                                    .overlay {
+                                        Circle()
+                                            .stroke(.white.opacity(0.3), lineWidth: 1)
+                                    }
+                            }
+                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                            .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                
+                if let currentWeather = weatherService.currentWeather {
+                    // Weather content
+                    CurrentWeatherView(
+                        location: locationService.locationName,
+                        weather: currentWeather,
+                        isLoading: weatherService.isLoading,
+                        dailyForecast: weatherService.dailyForecast
+                    )
+                    .padding(.top, -44) // 向上移动位置文本，与按钮水平对齐
                     
                     // Bottom section with hourly forecast
                     if !weatherService.hourlyForecast.isEmpty {
@@ -29,53 +91,51 @@ struct WeatherView: View {
                             .padding(.vertical, 24)
                             .padding(.horizontal, 16)
                     }
-                }
-            } else {
-                VStack {
-                    LoadingView(
-                        isLoading: weatherService.isLoading,
-                        error: weatherService.errorMessage
-                    )
-                    
-                    if !weatherService.isLoading {
-                        Button("Select Location") {
-                            showingLocationPicker = true
-                        }
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, 20)
-                    }
+                } else {
+                    Spacer()
+                    WeatherLoadingView()
+                    Spacer()
                 }
             }
         }
         .sheet(isPresented: $showingLocationPicker) {
             NavigationView {
-                List(PresetLocation.presets) { location in
-                    Button(location.name) {
-                        selectedLocation = location
+                LocationPickerView(
+                    selectedLocation: $selectedLocation,
+                    locationService: locationService,
+                    isUsingCurrentLocation: $isUsingCurrentLocation,
+                    onLocationSelected: { location in
                         Task {
-                            await weatherService.requestWeatherData(for: location.location)
+                            if let location = location {
+                                isUsingCurrentLocation = true
+                                await weatherService.requestWeatherData(for: location)
+                            } else {
+                                isUsingCurrentLocation = false
+                                locationService.locationName = selectedLocation.name
+                                locationService.currentLocation = nil
+                                await weatherService.requestWeatherData(for: selectedLocation.location)
+                            }
                         }
                         showingLocationPicker = false
                     }
-                }
-                .navigationTitle("Select Location")
-                .navigationBarTitleDisplayMode(.inline)
+                )
             }
-            .presentationDetents([.medium])
+            .presentationDetents([.medium, .large])
         }
         .onAppear {
             if locationService.authorizationStatus == .authorizedWhenInUse {
+                isUsingCurrentLocation = true
                 locationService.startUpdatingLocation()
             } else {
-                // If location services are not authorized, use the default location
+                isUsingCurrentLocation = false
+                locationService.locationName = selectedLocation.name
                 Task {
                     await weatherService.requestWeatherData(for: selectedLocation.location)
                 }
             }
         }
         .onChange(of: locationService.currentLocation) { newLocation in
-            if let location = newLocation {
+            if isUsingCurrentLocation, let location = newLocation {
                 Task {
                     await weatherService.requestWeatherData(for: location)
                 }
@@ -85,6 +145,9 @@ struct WeatherView: View {
             Button("确定", role: .cancel) { }
         } message: {
             Text(locationService.errorMessage ?? "")
+        }
+        .refreshable {
+            await refreshWeather()
         }
     }
 }

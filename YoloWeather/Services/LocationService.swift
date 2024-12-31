@@ -12,6 +12,9 @@ class LocationService: NSObject, ObservableObject {
     private let locationManager: CLLocationManager
     private let logger = Logger(subsystem: "com.yoloweather.app", category: "LocationService")
     private let geocoder = CLGeocoder()
+    private var isUpdatingLocationName = false
+    private var retryCount = 0
+    private let maxRetries = 3
     
     override init() {
         locationManager = CLLocationManager()
@@ -24,8 +27,15 @@ class LocationService: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
         locationManager.distanceFilter = 1000 // Update if location changes by 1km
         
+        // 在模拟器上使用默认位置
+        #if targetEnvironment(simulator)
+        let defaultLocation = CLLocation(latitude: 39.9042, longitude: 116.4074) // 北京
+        self.currentLocation = defaultLocation
+        updateLocationName(for: defaultLocation)
+        #else
         // Check initial status
         checkLocationAuthorization()
+        #endif
     }
     
     private func checkLocationAuthorization() {
@@ -37,14 +47,24 @@ class LocationService: NSObject, ObservableObject {
             startUpdatingLocation()
         case .denied, .restricted:
             logger.warning("Location authorization denied")
-            self.errorMessage = "Location access denied. Please enable in Settings."
+            self.errorMessage = "请在设置中允许访问位置信息"
+            // 使用默认位置
+            useDefaultLocation()
         case .notDetermined:
             logger.info("Location authorization not determined")
             requestLocationPermission()
         @unknown default:
             logger.error("Unknown location authorization status")
-            self.errorMessage = "Unknown location authorization status"
+            self.errorMessage = "位置服务状态未知"
+            // 使用默认位置
+            useDefaultLocation()
         }
+    }
+    
+    private func useDefaultLocation() {
+        let defaultLocation = CLLocation(latitude: 39.9042, longitude: 116.4074) // 北京
+        self.currentLocation = defaultLocation
+        updateLocationName(for: defaultLocation)
     }
     
     func requestLocationPermission() {
@@ -53,7 +73,8 @@ class LocationService: NSObject, ObservableObject {
         // Check if location services are enabled at the system level
         if !CLLocationManager.locationServicesEnabled() {
             logger.error("Location services are disabled at system level")
-            self.errorMessage = "Please enable Location Services in Settings"
+            self.errorMessage = "请在系统设置中开启定位服务"
+            useDefaultLocation()
             return
         }
         
@@ -66,24 +87,22 @@ class LocationService: NSObject, ObservableObject {
             locationManager.requestWhenInUseAuthorization()
         case .denied, .restricted:
             logger.warning("Location access denied, prompting to open settings")
-            self.errorMessage = "Please enable location access in Settings"
+            self.errorMessage = "请在设置中允许访问位置信息"
+            useDefaultLocation()
         case .authorizedWhenInUse, .authorizedAlways:
             logger.info("Location already authorized, starting updates")
             startUpdatingLocation()
         @unknown default:
             logger.error("Unknown authorization status")
-            self.errorMessage = "Unknown location authorization status"
+            self.errorMessage = "位置服务状态未知"
+            useDefaultLocation()
         }
     }
     
     func startUpdatingLocation() {
         logger.info("Starting location updates")
-        
-        // Force a single update
+        retryCount = 0
         locationManager.requestLocation()
-        
-        // Start continuous updates
-        locationManager.startUpdatingLocation()
     }
     
     func stopUpdatingLocation() {
@@ -92,6 +111,10 @@ class LocationService: NSObject, ObservableObject {
     }
     
     private func updateLocationName(for location: CLLocation) {
+        // 防止重复请求
+        guard !isUpdatingLocationName else { return }
+        isUpdatingLocationName = true
+        
         Task {
             do {
                 let placemarks = try await geocoder.reverseGeocodeLocation(location)
@@ -101,22 +124,37 @@ class LocationService: NSObject, ObservableObject {
                         name = locality
                     } else if let administrativeArea = placemark.administrativeArea {
                         name = administrativeArea
+                    } else if let country = placemark.country {
+                        name = country
                     }
                     
                     if name.isEmpty {
-                        name = "Unknown Location"
+                        name = "未知位置"
                     }
                     
                     logger.info("Location name updated: \(name)")
                     await MainActor.run {
                         self.locationName = name
                         self.errorMessage = nil
+                        self.isUpdatingLocationName = false
                     }
+                } else {
+                    throw NSError(domain: "LocationService", code: -1, userInfo: [NSLocalizedDescriptionKey: "无法获取位置信息"])
                 }
             } catch {
                 logger.error("Geocoding error: \(error.localizedDescription)")
                 await MainActor.run {
-                    self.errorMessage = "Failed to get location name"
+                    // 如果地理编码失败，尝试重试
+                    if self.retryCount < self.maxRetries {
+                        self.retryCount += 1
+                        self.isUpdatingLocationName = false
+                        self.updateLocationName(for: location)
+                    } else {
+                        self.errorMessage = "无法获取位置信息"
+                        self.isUpdatingLocationName = false
+                        // 如果多次重试失败，使用默认位置
+                        self.useDefaultLocation()
+                    }
                 }
             }
         }
@@ -142,12 +180,37 @@ extension LocationService: CLLocationManagerDelegate {
         
         logger.info("Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)")
         self.currentLocation = location
+        self.retryCount = 0 // 重置重试计数
         updateLocationName(for: location)
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         logger.error("Location error: \(error.localizedDescription)")
-        self.errorMessage = "Failed to get location: \(error.localizedDescription)"
+        
+        if let clError = error as? CLError {
+            switch clError.code {
+            case .denied:
+                self.errorMessage = "请在设置中允许访问位置信息"
+                useDefaultLocation()
+            case .locationUnknown:
+                if retryCount < maxRetries {
+                    retryCount += 1
+                    startUpdatingLocation()
+                } else {
+                    self.errorMessage = "无法获取位置信息，请稍后重试"
+                    useDefaultLocation()
+                }
+            case .network:
+                self.errorMessage = "网络错误，请检查网络连接"
+                useDefaultLocation()
+            default:
+                self.errorMessage = "获取位置信息失败"
+                useDefaultLocation()
+            }
+        } else {
+            self.errorMessage = "获取位置信息失败"
+            useDefaultLocation()
+        }
     }
     
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
@@ -162,14 +225,15 @@ extension LocationService: CLLocationManagerDelegate {
             startUpdatingLocation()
         case .denied, .restricted:
             logger.warning("Location authorization denied")
-            self.errorMessage = "Location access denied. Please enable in Settings."
-            stopUpdatingLocation()
+            self.errorMessage = "请在设置中允许访问位置信息"
+            useDefaultLocation()
         case .notDetermined:
             logger.info("Location authorization not determined")
             requestLocationPermission()
         @unknown default:
             logger.error("Unknown location authorization status")
-            self.errorMessage = "Unknown location authorization status"
+            self.errorMessage = "位置服务状态未知"
+            useDefaultLocation()
         }
     }
 }

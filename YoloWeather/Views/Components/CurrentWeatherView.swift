@@ -47,71 +47,108 @@ struct TemperatureRangeView: View {
 
 struct LocationHeaderView: View {
     let location: String
+    let isLoading: Bool
     
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: "location.fill")
-                .imageScale(.medium)
+                .imageScale(.small)
                 .foregroundStyle(.white.opacity(0.9))
             
-            Text(location)
-                .font(.system(size: 32, weight: .semibold))
-                .foregroundStyle(.white)
+            if isLoading {
+                Text("正在获取位置...")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .transition(.opacity)
+            } else {
+                Text(location)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white)
+                    .transition(.opacity)
+            }
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 20)
+        .frame(height: 44)
+        .padding(.horizontal, 16)
         .background {
             Capsule()
                 .fill(.black.opacity(0.3))
                 .overlay {
                     Capsule()
-                        .stroke(LinearGradient(
-                            colors: [.white.opacity(0.5), .white.opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ), lineWidth: 0.5)
+                        .stroke(.white.opacity(0.3), lineWidth: 1)
                 }
         }
-        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+        .animation(.easeInOut, value: isLoading)
     }
 }
 
 struct CurrentWeatherView: View {
     let location: String
     let weather: WeatherInfo
-    let isAnimating: Bool
+    let isLoading: Bool
     let dailyForecast: [DayWeatherInfo]
+    
+    @State private var showContent = false
+    @State private var temperatureScale: CGFloat = 0.5
     
     var body: some View {
         VStack(spacing: 20) {
             // Location
-            LocationHeaderView(location: location)
+            LocationHeaderView(location: location, isLoading: isLoading)
                 .transition(.move(edge: .top).combined(with: .opacity))
             
             Spacer()
             
-            // Large temperature display
-            Text("\(Int(round(weather.temperature)))")
-                .font(.system(size: 180, weight: .thin))
-                .minimumScaleFactor(0.5)
-                .lineLimit(1)
-            
-            // Weather condition
-            Text(weather.condition)
-                .font(.system(size: 24, weight: .medium))
-                .foregroundStyle(.secondary)
+            if isLoading {
+                WeatherLoadingView()
+                    .transition(.opacity)
+            } else {
+                // Large temperature display
+                Text("\(Int(round(weather.temperature)))")
+                    .font(.system(size: 180, weight: .thin))
+                    .minimumScaleFactor(0.5)
+                    .lineLimit(1)
+                    .scaleEffect(showContent ? 1 : 0.5)
+                    .opacity(showContent ? 1 : 0)
+                
+                // Weather condition
+                Text(weather.condition)
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .opacity(showContent ? 1 : 0)
+                    .offset(y: showContent ? 0 : 20)
+            }
             
             Spacer()
             
-            if let todayForecast = dailyForecast.first {
+            if !isLoading, let todayForecast = dailyForecast.first {
                 TemperatureRangeView(
                     lowTemp: todayForecast.lowTemperature,
                     highTemp: todayForecast.highTemperature
                 )
-                .transition(.scale.combined(with: .opacity))
+                .opacity(showContent ? 1 : 0)
+                .offset(y: showContent ? 0 : 20)
             }
         }
         .frame(maxHeight: .infinity)
+        .onChange(of: isLoading) { newValue in
+            if !newValue {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    showContent = true
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    showContent = false
+                }
+            }
+        }
+        .onAppear {
+            if !isLoading {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    showContent = true
+                }
+            }
+        }
     }
 }
 
@@ -126,7 +163,7 @@ struct CurrentWeatherView: View {
                 condition: "Sunny",
                 symbolName: "sun.max.fill"
             ),
-            isAnimating: true,
+            isLoading: false,
             dailyForecast: [
                 DayWeatherInfo(
                     date: Date(),

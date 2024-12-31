@@ -13,9 +13,76 @@ class WeatherService: ObservableObject {
     
     private let weatherService = WeatherKit.WeatherService()
     private let logger = Logger(subsystem: "com.yoloweather.app", category: "WeatherService")
+    private let geocoder = CLGeocoder()
     
     init() {
         logger.info("Initializing WeatherService")
+    }
+    
+    private func getLocationInfo(for location: CLLocation) async throws -> (timezone: TimeZone, placemark: CLPlacemark?) {
+        logger.info("Getting location info for: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        
+        // 首先根据经度计算时区，作为后备方案
+        let hourOffset = Int(round(location.coordinate.longitude / 15.0))
+        let secondsFromGMT = hourOffset * 3600
+        var fallbackTimeZone = TimeZone.current
+        if let calculatedTimeZone = TimeZone(secondsFromGMT: secondsFromGMT) {
+            fallbackTimeZone = calculatedTimeZone
+        }
+        logger.info("Calculated fallback timezone: \(fallbackTimeZone.identifier) for location")
+        
+        // 尝试使用地理编码获取更准确的时区
+        var attempts = 0
+        let maxAttempts = 3
+        var lastError: Error? = nil
+        
+        while attempts < maxAttempts {
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(location)
+                if let placemark = placemarks.first {
+                    // 获取时区
+                    var timezone = fallbackTimeZone
+                    if let placemarkTimeZone = placemark.timeZone {
+                        timezone = placemarkTimeZone
+                        logger.info("Using placemark timezone: \(timezone.identifier)")
+                    } else {
+                        logger.info("Using fallback timezone: \(timezone.identifier)")
+                    }
+                    
+                    // 记录更详细的位置信息
+                    logger.info("""
+                        Location details:
+                        Name: \(placemark.name ?? "Unknown")
+                        Locality: \(placemark.locality ?? "Unknown")
+                        SubLocality: \(placemark.subLocality ?? "Unknown")
+                        Administrative Area: \(placemark.administrativeArea ?? "Unknown")
+                        Country: \(placemark.country ?? "Unknown")
+                        Timezone: \(timezone.identifier)
+                        Coordinates: \(location.coordinate.latitude), \(location.coordinate.longitude)
+                        """)
+                    
+                    return (timezone, placemark)
+                }
+                
+                attempts += 1
+                if attempts < maxAttempts {
+                    try await Task.sleep(nanoseconds: UInt64(1_000_000_000))
+                    logger.info("Retrying geocoding attempt \(attempts + 1) of \(maxAttempts)")
+                }
+            } catch {
+                lastError = error
+                logger.error("Geocoding error on attempt \(attempts + 1): \(error.localizedDescription)")
+                attempts += 1
+                if attempts < maxAttempts {
+                    try await Task.sleep(nanoseconds: UInt64(1_000_000_000))
+                    logger.info("Retrying geocoding attempt \(attempts + 1) of \(maxAttempts)")
+                }
+            }
+        }
+        
+        // 如果地理编码失败，使用后备时区并继续
+        logger.warning("Geocoding failed, proceeding with fallback timezone: \(fallbackTimeZone.identifier)")
+        return (fallbackTimeZone, nil)
     }
     
     func requestWeatherData(for location: CLLocation) async {
@@ -24,23 +91,15 @@ class WeatherService: ObservableObject {
         errorMessage = nil
         
         do {
+            // 1. 获取位置信息和时区
+            let (timezone, placemark) = try await getLocationInfo(for: location)
+            
+            // 2. 获取天气数据
             logger.info("Starting weather request...")
             let weather = try await weatherService.weather(for: location)
             logger.info("Weather request successful")
             
-            // 获取位置对应的时区
-            let geocoder = CLGeocoder()
-            let placemarks = try await geocoder.reverseGeocodeLocation(location)
-            guard let timezone = placemarks.first?.timeZone else {
-                throw NSError(domain: "WeatherService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get timezone for location"])
-            }
-            
-            logger.info("Location timezone: \(timezone.identifier)")
-            
             // 设置时区转换所需的日历
-            var utcCalendar = Calendar(identifier: .gregorian)
-            utcCalendar.timeZone = TimeZone(identifier: "UTC")!
-            
             var localCalendar = Calendar(identifier: .gregorian)
             localCalendar.timeZone = timezone
             
@@ -48,41 +107,52 @@ class WeatherService: ObservableObject {
             let currentDate = Date()
             let today = localCalendar.startOfDay(for: currentDate)
             
-            // Convert WeatherKit data to our models with timezone conversion
+            // 记录时区和时间信息
+            logger.info("""
+                Time information:
+                Timezone: \(timezone.identifier)
+                Local time: \(localCalendar.date(from: localCalendar.dateComponents([.year, .month, .day, .hour, .minute], from: currentDate)) ?? currentDate)
+                UTC offset: \(timezone.secondsFromGMT()/3600) hours
+                """)
+            
+            // 3. 处理当前天气
+            let currentTemp = weather.currentWeather.temperature.value
+            logger.info("Current weather - Temperature: \(currentTemp)°, Condition: \(weather.currentWeather.condition.description)")
+            
             self.currentWeather = WeatherInfo(
                 date: currentDate,
-                temperature: weather.currentWeather.temperature.value,
+                temperature: currentTemp,
                 condition: weather.currentWeather.condition.description,
                 symbolName: weather.currentWeather.symbolName
             )
             
-            // 处理未来48小时的预报数据，确保时区转换
+            // 4. 处理小时预报
+            logger.info("Processing hourly forecast...")
             self.hourlyForecast = weather.hourlyForecast.prefix(48).map { hour in
-                // 将UTC时间转换为本地时间
-                let utcDate = hour.date
-                let localDate = utcDate.addingTimeInterval(TimeInterval(timezone.secondsFromGMT()))
+                let localDate = hour.date
+                let hourNum = localCalendar.component(.hour, from: localDate)
+                let isNextDay = !localCalendar.isDate(localDate, inSameDayAs: today)
+                let temp = hour.temperature.value
                 
-                // 打印时间转换信息
-                logger.info("Time conversion - UTC: \(utcDate) (\(utcCalendar.component(.hour, from: utcDate)):00), Local(\(timezone.identifier)): \(localDate) (\(localCalendar.component(.hour, from: localDate)):00), Temp: \(hour.temperature.value)°")
+                logger.info("Hour forecast - \(isNextDay ? "Tomorrow" : "Today") \(String(format: "%02d", hourNum)):00 - \(String(format: "%.1f", temp))° (\(hour.date))")
                 
                 return WeatherInfo(
                     date: localDate,
-                    temperature: hour.temperature.value,
+                    temperature: temp,
                     condition: hour.condition.description,
                     symbolName: hour.symbolName
                 )
             }.sorted { $0.date < $1.date }
             
-            // 打印处理后的数据
-            for forecast in self.hourlyForecast {
-                let hour = localCalendar.component(.hour, from: forecast.date)
-                let isNextDay = !localCalendar.isDate(forecast.date, inSameDayAs: today)
-                logger.info("Processed forecast - \(isNextDay ? "Tomorrow" : "Today") \(hour):00 - \(forecast.temperature)°")
-            }
-            
+            // 5. 处理每日预报
+            logger.info("Processing daily forecast...")
             self.dailyForecast = weather.dailyForecast.prefix(7).map { day in
-                // 转换日期到本地时间
-                let localDate = day.date.addingTimeInterval(TimeInterval(timezone.secondsFromGMT()))
+                let localDate = day.date
+                let dateFormatter = DateFormatter()
+                dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
+                dateFormatter.timeZone = timezone
+                
+                logger.info("Day forecast - \(dateFormatter.string(from: localDate)): Low: \(String(format: "%.1f", day.lowTemperature.value))°, High: \(String(format: "%.1f", day.highTemperature.value))°")
                 
                 return DayWeatherInfo(
                     date: localDate,
@@ -93,16 +163,34 @@ class WeatherService: ObservableObject {
                 )
             }
             
-            logger.info("Current temperature: \(self.currentWeather?.temperature ?? 0)°")
-            logger.info("Retrieved \(self.hourlyForecast.count) hourly forecasts")
-            logger.info("Retrieved \(self.dailyForecast.count) daily forecasts")
+            logger.info("Weather data processing completed successfully")
+            logger.info("Summary - Current: \(String(format: "%.1f", currentTemp))°, Hours: \(self.hourlyForecast.count), Days: \(self.dailyForecast.count)")
             
+        } catch let error as CLError {
+            logger.error("Location error: \(error.localizedDescription)")
+            switch error.code {
+            case .geocodeFoundNoResult:
+                self.errorMessage = "无法找到该位置信息"
+            case .geocodeFoundPartialResult:
+                self.errorMessage = "位置信息不完整"
+            case .network:
+                self.errorMessage = "网络连接错误，请检查网络设置"
+            default:
+                self.errorMessage = "获取位置信息失败：\(error.localizedDescription)"
+            }
         } catch {
-            logger.error("Weather error: \(error.localizedDescription)")
-            self.errorMessage = "获取天气数据失败: \(error.localizedDescription)"
+            logger.error("Error type: \(type(of: error))")
+            logger.error("Error description: \(error.localizedDescription)")
+            
+            if let weatherError = error as? WeatherError {
+                logger.error("WeatherKit error: \(weatherError)")
+                self.errorMessage = "获取天气数据失败：\(weatherError.localizedDescription)"
+            } else {
+                logger.error("Unknown error: \(error)")
+                self.errorMessage = "获取天气数据失败，请稍后重试"
+            }
         }
         
         isLoading = false
-        logger.info("Weather request completed. Success: \(self.errorMessage == nil)")
     }
 }
