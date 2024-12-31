@@ -66,11 +66,13 @@ struct TimeSlot: View {
             Text("\(Int(round(temperature)))°")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 .frame(height: 20)
             
             Text(formattedHour(from: date))
                 .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(.white.opacity(0.9))
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
                 .frame(height: 16)
         }
         .frame(width: 44)
@@ -86,10 +88,12 @@ struct WeatherBubble: View {
             Image(systemName: symbolName)
                 .symbolRenderingMode(.multicolor)
                 .font(.system(size: 24))
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             
             Text("\(Int(round(temperature)))°")
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
         }
         .padding(12)
         .background {
@@ -97,7 +101,7 @@ struct WeatherBubble: View {
                 .fill(.ultraThinMaterial)
                 .overlay {
                     RoundedRectangle(cornerRadius: 15)
-                        .fill(.black.opacity(0.3))
+                        .fill(.black.opacity(0.2))
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: 15)
@@ -112,13 +116,72 @@ struct WeatherBubble: View {
     }
 }
 
+// 添加背景颜色主题
+struct WeatherBackgroundColor {
+    static func background(for date: Date, in timezone: TimeZone) -> Color {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone
+        let hour = calendar.component(.hour, from: date)
+        
+        if hour >= 6 && hour < 18 {
+            // 白天主题
+            return Color(red: 0.98, green: 0.95, blue: 0.92)
+        } else {
+            // 夜间主题 - 深色但不是纯黑
+            return Color(red: 0.1, green: 0.1, blue: 0.15)
+        }
+    }
+    
+    static func cardBackground(for date: Date, in timezone: TimeZone) -> Color {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone
+        let hour = calendar.component(.hour, from: date)
+        
+        if hour >= 6 && hour < 18 {
+            // 白天卡片背景
+            return .black.opacity(0.1)
+        } else {
+            // 夜间卡片背景 - 使用更深的颜色
+            return Color(red: 0.12, green: 0.12, blue: 0.18).opacity(0.95)
+        }
+    }
+    
+    static func cardGradient(for date: Date, in timezone: TimeZone) -> [Color] {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone
+        let hour = calendar.component(.hour, from: date)
+        
+        if hour >= 6 && hour < 18 {
+            // 白天渐变
+            return [.white.opacity(0.15), .white.opacity(0.05)]
+        } else {
+            // 夜间渐变
+            return [.white.opacity(0.08), .white.opacity(0.02)]
+        }
+    }
+}
+
 struct HourlyTemperatureTrendView: View {
     let forecast: [WeatherInfo]
     @State private var selectedHourIndex: Int?
+    @Environment(\.colorScheme) var colorScheme
     @GestureState private var isDragging: Bool = false
     
     private let feedbackGenerator = UIImpactFeedbackGenerator(style: .rigid)
     private let keyTimePoints = 8 // 固定显示8个时间点
+    
+    // 判断是否是白天
+    private func isDaytime(for date: Date, in timezone: TimeZone) -> Bool {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone
+        let hour = calendar.component(.hour, from: date)
+        return hour >= 6 && hour < 18
+    }
+    
+    // 获取背景颜色
+    private func getBackgroundColor(for date: Date, in timezone: TimeZone) -> Color {
+        return WeatherBackgroundColor.cardBackground(for: date, in: timezone)
+    }
     
     private func printKeyTimeTemperatures(forecast: [WeatherInfo]) {
         var calendar = Calendar.current
@@ -336,12 +399,22 @@ struct HourlyTemperatureTrendView: View {
             let width = geometry.size.width
             let height = geometry.size.height
             let hourWidth = width / CGFloat(keyTimePoints)
+            let timezone = TimeZone.current
             let keyPoints = generateKeyTimePoints()
             
             ZStack(alignment: .bottom) {
-                // 背景
-                Color.black.opacity(0.2)
+                // 背景 - 根据时区和时间决定颜色
+                getBackgroundColor(for: Date(), in: timezone)
                     .clipShape(RoundedRectangle(cornerRadius: 25))
+                    .overlay {
+                        // 添加一个微弱的渐变效果提高可读性
+                        LinearGradient(
+                            colors: WeatherBackgroundColor.cardGradient(for: Date(), in: timezone),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                        .clipShape(RoundedRectangle(cornerRadius: 25))
+                    }
                 
                 VStack(spacing: 0) {
                     // 温度曲线和气泡
@@ -370,10 +443,20 @@ struct HourlyTemperatureTrendView: View {
                                 path.addCurve(to: curr, control1: control1, control2: control2)
                             }
                             
-                            context.stroke(path, with: .color(.white), lineWidth: 1.5)
+                            // 先绘制阴影
+                            context.stroke(path, with: .color(.black.opacity(0.6)), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                            
+                            // 再绘制主线条
+                            context.stroke(path, with: .color(.white), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
                             
                             if let selectedIndex = selectedHourIndex {
                                 let point = points[selectedIndex]
+                                // 绘制选中点的阴影
+                                context.fill(
+                                    Path(ellipseIn: CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)),
+                                    with: .color(.black.opacity(0.6))
+                                )
+                                // 绘制选中点
                                 context.fill(
                                     Path(ellipseIn: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)),
                                     with: .color(.white)
@@ -392,7 +475,7 @@ struct HourlyTemperatureTrendView: View {
                                 )
                                 .position(
                                     x: CGFloat(selectedIndex) * hourWidth + hourWidth/2,
-                                    y: -10  // 向上偏移，确保不遮挡曲线
+                                    y: -10
                                 )
                                 .transition(.scale.combined(with: .opacity))
                             }
