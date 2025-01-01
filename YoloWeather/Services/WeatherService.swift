@@ -6,7 +6,6 @@ import CoreLocation
 class WeatherService: ObservableObject {
     static let shared = WeatherService()
     private let weatherService = WeatherKit.WeatherService.shared
-    private let locationManager = LocationManager()
     
     @Published private(set) var currentWeather: CurrentWeather?
     @Published private(set) var hourlyForecast: [CurrentWeather] = []
@@ -14,28 +13,10 @@ class WeatherService: ObservableObject {
     @Published private(set) var lastUpdateTime: Date?
     @Published var errorMessage: String?
     
-    private var updateTimer: Timer?
-    private let updateInterval: TimeInterval = 300 // 5 minutes
+    private init() {}
     
-    init() {
-        setupUpdateTimer()
-    }
-    
-    private func setupUpdateTimer() {
-        updateTimer = Timer.scheduledTimer(withTimeInterval: updateInterval, repeats: true) { [weak self] _ in
-            Task {
-                await self?.updateWeather()
-            }
-        }
-    }
-    
-    func updateWeather() async {
+    func updateWeather(for location: CLLocation) async {
         do {
-            guard let location = locationManager.location else {
-                errorMessage = "无法获取位置信息"
-                return
-            }
-            
             let weather = try await weatherService.weather(for: location)
             
             // 更新当前天气
@@ -99,20 +80,17 @@ class WeatherService: ObservableObject {
         service.hourlyForecast = [
             .mock(temp: 25, condition: "晴", symbol: "sun.max"),
             .mock(temp: 27, condition: "晴", symbol: "sun.max"),
-            .mock(temp: 28, condition: "多云", symbol: "cloud"),
-            .mock(temp: 26, condition: "多云", symbol: "cloud"),
-            .mock(temp: 24, condition: "阴", symbol: "cloud.fill")
+            .mock(temp: 29, condition: "多云", symbol: "cloud.sun"),
+            .mock(temp: 28, condition: "多云", symbol: "cloud.sun"),
+            .mock(temp: 26, condition: "晴", symbol: "sun.max"),
         ]
         service.dailyForecast = [
-            .mock(low: 20, high: 28, condition: "晴", symbol: "sun.max"),
-            .mock(low: 21, high: 29, condition: "多云", symbol: "cloud"),
-            .mock(low: 19, high: 27, condition: "阴", symbol: "cloud.fill"),
-            .mock(low: 18, high: 25, condition: "小雨", symbol: "cloud.rain"),
-            .mock(low: 17, high: 24, condition: "中雨", symbol: "cloud.heavyrain"),
-            .mock(low: 19, high: 26, condition: "多云", symbol: "cloud"),
-            .mock(low: 20, high: 28, condition: "晴", symbol: "sun.max")
+            DayWeatherInfo(date: Date(), condition: "晴", symbolName: "sun.max", lowTemperature: 20, highTemperature: 28),
+            DayWeatherInfo(date: Date().addingTimeInterval(86400), condition: "晴", symbolName: "sun.max", lowTemperature: 19, highTemperature: 27),
+            DayWeatherInfo(date: Date().addingTimeInterval(86400 * 2), condition: "多云", symbolName: "cloud.sun", lowTemperature: 21, highTemperature: 29),
+            DayWeatherInfo(date: Date().addingTimeInterval(86400 * 3), condition: "多云", symbolName: "cloud.sun", lowTemperature: 20, highTemperature: 28),
+            DayWeatherInfo(date: Date().addingTimeInterval(86400 * 4), condition: "晴", symbolName: "sun.max", lowTemperature: 18, highTemperature: 26),
         ]
-        service.lastUpdateTime = Date()
         return service
     }
 }

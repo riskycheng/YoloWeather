@@ -22,21 +22,26 @@ struct WeatherView: View {
         isRefreshing = true
         defer { isRefreshing = false }
         
-        await weatherService.updateWeather()
-        lastRefreshTime = Date()
-        updateTimeOfDay()
+        if let location = locationService.currentLocation {
+            await weatherService.updateWeather(for: location)
+            lastRefreshTime = Date()
+            updateTimeOfDay()
+        }
     }
     
     private func updateLocation(_ location: CLLocation?) async {
         if let location = location {
             isUsingCurrentLocation = true
             locationService.currentLocation = location
+            await weatherService.updateWeather(for: location)
         } else {
             isUsingCurrentLocation = false
             locationService.locationName = selectedLocation.name
             locationService.currentLocation = selectedLocation.location
+            await weatherService.updateWeather(for: selectedLocation.location)
         }
-        await refreshWeather()
+        lastRefreshTime = Date()
+        updateTimeOfDay()
     }
     
     var body: some View {
@@ -98,7 +103,7 @@ struct WeatherView: View {
                     Button {
                         Task {
                             isRefreshing = true
-                            await weatherService.updateWeather()
+                            await weatherService.updateWeather(for: locationService.currentLocation ?? selectedLocation.location)
                             isRefreshing = false
                             lastRefreshTime = Date()
                             updateTimeOfDay()

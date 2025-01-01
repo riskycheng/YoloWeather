@@ -123,7 +123,6 @@ struct HourlyTemperatureTrendView: View {
             // Find the closest weather info to the target date
             if let weather = forecast
                 .min(by: { abs($0.date.timeIntervalSince(targetDate)) < abs($1.date.timeIntervalSince(targetDate)) }) {
-                let _ = weather.timezone
                 result.append(weather)
             }
         }
@@ -186,6 +185,12 @@ struct HourlyTemperatureTrendView: View {
                 with: .color(textColor.opacity(opacity))
             )
         }
+    }
+    
+    private func formatHour(for date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH"
+        return formatter.string(from: date)
     }
     
     var body: some View {
