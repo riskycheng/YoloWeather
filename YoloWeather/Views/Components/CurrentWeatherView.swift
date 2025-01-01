@@ -1,4 +1,5 @@
 import SwiftUI
+import WeatherKit
 
 struct TemperatureRangeView: View {
     let lowTemp: Double
@@ -84,84 +85,108 @@ struct LocationHeaderView: View {
 
 struct CurrentWeatherView: View {
     let weather: CurrentWeather
-    @ObservedObject private var tagManager = WeatherTagManager.shared
     @Environment(\.weatherTimeOfDay) private var timeOfDay
-    
-    private var temperatureText: String {
-        "\(Int(round(weather.temperature)))"
-    }
+    @StateObject private var tagManager = WeatherTagManager.shared
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 16) {
             // 主温度显示
-            VStack(spacing: 8) {
-                // 大数字温度显示
-                Text(temperatureText)
-                    .font(.system(size: 96, weight: .medium, design: .monospaced))
-                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                    .frame(height: 120)
-                    .padding(.vertical, 16)
-                    .background {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(.black.opacity(0.2))
-                    }
+            VStack(spacing: 4) {
+                Text("\(Int(round(weather.temperature)))°")
+                    .font(.system(size: 72, weight: .thin))
+                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
                 
-                // 天气描述
                 Text(weather.condition)
-                    .font(.title2)
-                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                    .font(.title3)
+                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
             }
             
             // 可配置的天气标签
             VStack(spacing: 12) {
-                ForEach(tagManager.activeTags) { tag in
-                    WeatherTagView(weather: weather, tag: tag)
-                        .transition(.opacity)
-                }
-            }
-            
-            // 编辑按钮
-            Button {
-                withAnimation {
-                    tagManager.isEditMode.toggle()
-                }
-            } label: {
-                Label(tagManager.isEditMode ? "完成" : "编辑标签", systemImage: tagManager.isEditMode ? "checkmark.circle.fill" : "pencil.circle")
-                    .font(.headline)
-                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background {
-                        Capsule()
-                            .fill(.black.opacity(0.2))
+                LazyVGrid(columns: [
+                    GridItem(.flexible()),
+                    GridItem(.flexible()),
+                    GridItem(.flexible())
+                ], spacing: 12) {
+                    ForEach(Array(tagManager.activeTags)) { tag in
+                        WeatherDetailItem(
+                            icon: tag.iconName,
+                            title: tag.name,
+                            value: tag.getValue(from: weather)
+                        )
                     }
-            }
-            
-            if tagManager.isEditMode {
-                // 可用标签列表
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(WeatherTag.allCases) { tag in
-                            Button {
-                                withAnimation {
-                                    tagManager.toggleTag(tag)
-                                }
-                            } label: {
-                                Text(tag.name)
-                                    .font(.subheadline)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background {
-                                        Capsule()
-                                            .fill(tagManager.activeTags.contains(tag) ? .green.opacity(0.3) : .gray.opacity(0.3))
+                }
+                
+                // 编辑按钮
+                Button {
+                    withAnimation {
+                        tagManager.isEditMode.toggle()
+                    }
+                } label: {
+                    Label(tagManager.isEditMode ? "完成" : "编辑标签", 
+                          systemImage: tagManager.isEditMode ? "checkmark.circle.fill" : "pencil.circle")
+                        .font(.subheadline)
+                        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                }
+                
+                if tagManager.isEditMode {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(WeatherTag.allCases) { tag in
+                                Button {
+                                    withAnimation {
+                                        tagManager.toggleTag(tag)
                                     }
-                                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                                } label: {
+                                    Text(tag.name)
+                                        .font(.caption)
+                                        .padding(.horizontal, 8)
+                                        .padding(.vertical, 4)
+                                        .background {
+                                            Capsule()
+                                                .fill(tagManager.activeTags.contains(tag) 
+                                                    ? Color.accentColor.opacity(0.3) 
+                                                    : Color.gray.opacity(0.3))
+                                        }
+                                        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                                }
                             }
                         }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal)
                 }
             }
+        }
+        .padding()
+    }
+}
+
+struct WeatherDetailItem: View {
+    let icon: String
+    let title: String
+    let value: String
+    @Environment(\.weatherTimeOfDay) private var timeOfDay
+    
+    var body: some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+            
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.7))
+            
+            Text(value)
+                .font(.headline)
+                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background {
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 2)
         }
     }
 }

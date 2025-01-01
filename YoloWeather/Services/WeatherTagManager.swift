@@ -1,38 +1,39 @@
 import Foundation
 import SwiftUI
 
-@MainActor
 class WeatherTagManager: ObservableObject {
     static let shared = WeatherTagManager()
     
-    @Published var activeTags: [WeatherTag] = [.temperature, .humidity, .windSpeed]
+    @AppStorage("activeTags") private var activeTagsData: Data = Data()
+    @Published private(set) var activeTags: Set<WeatherTag> = []
     @Published var isEditMode = false
     
-    private let defaults = UserDefaults.standard
-    private let activeTagsKey = "ActiveWeatherTags"
-    
     private init() {
-        if let savedTags = defaults.stringArray(forKey: activeTagsKey) {
-            activeTags = savedTags.compactMap { WeatherTag(rawValue: $0) }
+        loadActiveTags()
+    }
+    
+    private func loadActiveTags() {
+        if let tags = try? JSONDecoder().decode(Set<WeatherTag>.self, from: activeTagsData) {
+            activeTags = tags
+        } else {
+            // 默认显示的标签
+            activeTags = [.feelsLike, .humidity, .windSpeed]
+            saveActiveTags()
+        }
+    }
+    
+    private func saveActiveTags() {
+        if let data = try? JSONEncoder().encode(activeTags) {
+            activeTagsData = data
         }
     }
     
     func toggleTag(_ tag: WeatherTag) {
         if activeTags.contains(tag) {
-            activeTags.removeAll { $0 == tag }
+            activeTags.remove(tag)
         } else {
-            activeTags.append(tag)
+            activeTags.insert(tag)
         }
-        saveTags()
-    }
-    
-    private func saveTags() {
-        let tagStrings = activeTags.map { $0.rawValue }
-        defaults.set(tagStrings, forKey: activeTagsKey)
-    }
-    
-    func resetToDefaults() {
-        activeTags = [.temperature, .humidity, .windSpeed]
-        saveTags()
+        saveActiveTags()
     }
 }

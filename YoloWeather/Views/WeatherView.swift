@@ -10,6 +10,7 @@ struct WeatherView: View {
     @State private var lastRefreshTime: Date = Date()
     @State private var isUsingCurrentLocation = false
     @State private var timeOfDay: WeatherTimeOfDay = .night
+    @AppStorage("showDailyForecast") private var showDailyForecast = false
     
     private func updateTimeOfDay() {
         if let weather = weatherService.currentWeather {
@@ -24,6 +25,18 @@ struct WeatherView: View {
         await weatherService.updateWeather()
         lastRefreshTime = Date()
         updateTimeOfDay()
+    }
+    
+    private func updateLocation(_ location: CLLocation?) async {
+        if let location = location {
+            isUsingCurrentLocation = true
+            locationService.currentLocation = location
+        } else {
+            isUsingCurrentLocation = false
+            locationService.locationName = selectedLocation.name
+            locationService.currentLocation = selectedLocation.location
+        }
+        await refreshWeather()
     }
     
     var body: some View {
@@ -51,7 +64,7 @@ struct WeatherView: View {
                             .transition(.opacity)
                     }
                     
-                    if !weatherService.dailyForecast.isEmpty {
+                    if !weatherService.dailyForecast.isEmpty && showDailyForecast {
                         // 7天预报
                         DailyForecastView(forecast: weatherService.dailyForecast)
                             .transition(.opacity)
@@ -75,12 +88,27 @@ struct WeatherView: View {
                     Spacer()
                     
                     Button {
+                        withAnimation {
+                            showDailyForecast.toggle()
+                        }
+                    } label: {
+                        toolbarButton(showDailyForecast ? "calendar.circle.fill" : "calendar.circle")
+                    }
+                    
+                    Button {
                         Task {
-                            await refreshWeather()
+                            isRefreshing = true
+                            await weatherService.updateWeather()
+                            isRefreshing = false
+                            lastRefreshTime = Date()
+                            updateTimeOfDay()
                         }
                     } label: {
                         toolbarButton("arrow.clockwise")
+                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                            .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
                     }
+                    .disabled(isRefreshing)
                 }
                 .padding()
                 
@@ -95,27 +123,20 @@ struct WeatherView: View {
                     isUsingCurrentLocation: $isUsingCurrentLocation,
                     onLocationSelected: { location in
                         Task {
-                            if let location = location {
-                                isUsingCurrentLocation = true
-                                locationService.currentLocation = location
-                            } else {
-                                isUsingCurrentLocation = false
-                                locationService.locationName = selectedLocation.name
-                                locationService.currentLocation = nil
-                            }
-                            await refreshWeather()
+                            await updateLocation(location)
+                            showingLocationPicker = false
                         }
-                        showingLocationPicker = false
                     }
                 )
             }
         }
         .task {
-            await refreshWeather()
+            // 启动时使用默认城市
+            await updateLocation(selectedLocation.location)
         }
         .onChange(of: selectedLocation) { _ in
             Task {
-                await refreshWeather()
+                await updateLocation(selectedLocation.location)
             }
         }
     }

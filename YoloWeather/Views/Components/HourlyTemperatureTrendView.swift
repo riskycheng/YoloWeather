@@ -123,6 +123,7 @@ struct HourlyTemperatureTrendView: View {
             // Find the closest weather info to the target date
             if let weather = forecast
                 .min(by: { abs($0.date.timeIntervalSince(targetDate)) < abs($1.date.timeIntervalSince(targetDate)) }) {
+                let _ = weather.timezone
                 result.append(weather)
             }
         }
