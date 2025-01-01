@@ -2,7 +2,7 @@ import SwiftUI
 import CoreLocation
 
 struct WeatherView: View {
-    @StateObject private var weatherService = WeatherService()
+    @StateObject private var weatherService = WeatherService.shared
     @StateObject private var locationService = LocationService()
     @State private var selectedLocation: PresetLocation = PresetLocation.presets[0]
     @State private var showingLocationPicker = false
@@ -21,71 +21,55 @@ struct WeatherView: View {
         isRefreshing = true
         defer { isRefreshing = false }
         
-        if isUsingCurrentLocation, let currentLocation = locationService.currentLocation {
-            await weatherService.requestWeatherData(for: currentLocation)
-        } else {
-            locationService.locationName = selectedLocation.name
-            await weatherService.requestWeatherData(for: selectedLocation.location)
-        }
+        await weatherService.updateWeather()
         lastRefreshTime = Date()
-        
-        // 更新时间状态
         updateTimeOfDay()
-    }
-    
-    private var temperatureText: some View {
-        Text("\(Int(round(weatherService.currentWeather?.temperature ?? 0)))")
-            .font(.system(size: 200))
-            .minimumScaleFactor(0.1)
-            .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-            .shadow(color: WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.5), radius: 3, x: 0, y: 0)
-            .fontWeight(.light)
-            .brightness(0.2)
-    }
-    
-    private var weatherDescription: some View {
-        Text(weatherService.currentWeather?.condition ?? "")
-            .font(.title)
-            .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-    }
-    
-    private var temperatureRange: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "arrow.down")
-            Text("\(Int(round(weatherService.dailyForecast.first?.lowTemperature ?? 0)))°")
-            Text("—")
-            Image(systemName: "arrow.up")
-            Text("\(Int(round(weatherService.dailyForecast.first?.highTemperature ?? 0)))°")
-        }
-        .font(.title2)
-        .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
     }
     
     var body: some View {
         ZStack {
-            // 背景颜色
-            WeatherThemeManager.shared.backgroundColor(for: timeOfDay)
-                .ignoresSafeArea()
+            // 背景渐变
+            WeatherBackgroundView(timeOfDay: timeOfDay)
             
-            VStack(spacing: 0) {
-                // Top toolbar
-                HStack(alignment: .center) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    // 位置信息
+                    WeatherLocationHeaderView(
+                        location: locationService.locationName ?? selectedLocation.name,
+                        isLoading: isRefreshing
+                    )
+                    
+                    if let currentWeather = weatherService.currentWeather {
+                        // 当前天气
+                        CurrentWeatherView(weather: currentWeather)
+                            .transition(.opacity)
+                    }
+                    
+                    if !weatherService.hourlyForecast.isEmpty {
+                        // 24小时预报
+                        HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
+                            .transition(.opacity)
+                    }
+                    
+                    if !weatherService.dailyForecast.isEmpty {
+                        // 7天预报
+                        DailyForecastView(forecast: weatherService.dailyForecast)
+                            .transition(.opacity)
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .refreshable {
+                await refreshWeather()
+            }
+            
+            // 工具栏
+            VStack {
+                HStack {
                     Button {
-                        showingLocationPicker = true
+                        showingLocationPicker.toggle()
                     } label: {
-                        Image(systemName: "list.bullet")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                            .frame(width: 44, height: 44)
-                            .background {
-                                Circle()
-                                    .fill(.black.opacity(0.3))
-                                    .overlay {
-                                        Circle()
-                                            .stroke(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.3), lineWidth: 1)
-                                    }
-                            }
-                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+                        toolbarButton("list.bullet")
                     }
                     
                     Spacer()
@@ -95,84 +79,14 @@ struct WeatherView: View {
                             await refreshWeather()
                         }
                     } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                            .frame(width: 44, height: 44)
-                            .background {
-                                Circle()
-                                    .fill(.black.opacity(0.3))
-                                    .overlay {
-                                        Circle()
-                                            .stroke(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.3), lineWidth: 1)
-                                    }
-                            }
-                            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
-                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                            .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                        toolbarButton("arrow.clockwise")
                     }
                 }
-                .padding(.horizontal)
-                .padding(.top, 8)
+                .padding()
                 
-                if let currentWeather = weatherService.currentWeather {
-                    // Weather content
-                    CurrentWeatherView(
-                        location: locationService.locationName,
-                        weather: currentWeather,
-                        isLoading: weatherService.isLoading,
-                        dailyForecast: weatherService.dailyForecast
-                    )
-                    .padding(.top, -44) // 向上移动位置文本，与按钮水平对齐
-                    
-                    // Bottom section with hourly forecast
-                    if !weatherService.hourlyForecast.isEmpty {
-                        HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
-                            .padding(.vertical, 24)
-                            .padding(.horizontal, 16)
-                    }
-                } else {
-                    Spacer()
-                    WeatherLoadingView()
-                    Spacer()
-                }
+                Spacer()
             }
         }
-        .onChange(of: weatherService.currentWeather) { _ in
-            updateTimeOfDay()
-        }
-        .onAppear {
-            if locationService.authorizationStatus == .authorizedWhenInUse {
-                isUsingCurrentLocation = true
-                locationService.startUpdatingLocation()
-            }
-            
-            // 初始化时立即更新时间状态
-            updateTimeOfDay()
-            
-            // 如果没有天气数据，请求更新
-            if weatherService.currentWeather == nil {
-                Task {
-                    await refreshWeather()
-                }
-            }
-        }
-        .onChange(of: locationService.currentLocation) { newLocation in
-            if isUsingCurrentLocation, let location = newLocation {
-                Task {
-                    await weatherService.requestWeatherData(for: location)
-                }
-            }
-        }
-        .alert("位置错误", isPresented: .constant(locationService.errorMessage != nil)) {
-            Button("确定", role: .cancel) { }
-        } message: {
-            Text(locationService.errorMessage ?? "")
-        }
-        .refreshable {
-            await refreshWeather()
-        }
-        .environment(\.weatherTimeOfDay, timeOfDay)
         .sheet(isPresented: $showingLocationPicker) {
             NavigationView {
                 LocationPickerView(
@@ -183,23 +97,44 @@ struct WeatherView: View {
                         Task {
                             if let location = location {
                                 isUsingCurrentLocation = true
-                                await weatherService.requestWeatherData(for: location)
+                                locationService.currentLocation = location
                             } else {
                                 isUsingCurrentLocation = false
                                 locationService.locationName = selectedLocation.name
                                 locationService.currentLocation = nil
-                                await weatherService.requestWeatherData(for: selectedLocation.location)
                             }
+                            await refreshWeather()
                         }
                         showingLocationPicker = false
                     }
                 )
             }
-            .presentationDetents([.medium, .large])
+        }
+        .task {
+            await refreshWeather()
+        }
+        .onChange(of: selectedLocation) { _ in
+            Task {
+                await refreshWeather()
+            }
         }
     }
-}
-
-#Preview {
-    WeatherView()
+    
+    @ViewBuilder
+    private func toolbarButton(_ systemName: String) -> some View {
+        let textColor = WeatherThemeManager.shared.textColor(for: timeOfDay)
+        Image(systemName: systemName)
+            .font(.system(size: 20, weight: .medium))
+            .foregroundStyle(textColor)
+            .frame(width: 44, height: 44)
+            .background {
+                Circle()
+                    .fill(.black.opacity(0.3))
+                    .overlay {
+                        Circle()
+                            .stroke(textColor.opacity(0.3), lineWidth: 1)
+                    }
+            }
+            .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+    }
 }

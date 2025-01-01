@@ -1,122 +1,126 @@
 import SwiftUI
 
 struct HourlyForecastView: View {
-    let forecast: [WeatherInfo]
-    let hourFormatter: DateFormatter
+    let forecast: [CurrentWeather]
+    @Environment(\.weatherTimeOfDay) private var timeOfDay
     
     var body: some View {
-        VStack(spacing: 4) {
-            // Time slots
-            HStack(spacing: 0) {
-                Text("现在")
-                    .frame(maxWidth: .infinity)
-                ForEach(Array(forecast.prefix(5)), id: \.date) { weather in
-                    Text(hourFormatter.string(from: weather.date))
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("24小时预报")
+                .font(.headline)
+                .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
             
-            // Temperature trend bar
-            if let currentTemp = forecast.first?.temperature,
-               let maxTemp = forecast.prefix(6).map({ $0.temperature }).max(),
-               let minTemp = forecast.prefix(6).map({ $0.temperature }).min() {
-                TemperatureBar(progress: CGFloat((currentTemp - minTemp) / (maxTemp - minTemp)))
-                    .frame(height: 4)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 20) {
+                    ForEach(forecast.indices, id: \.self) { index in
+                        let weather = forecast[index]
+                        let hour = Calendar.current.component(.hour, from: weather.date)
+                        
+                        VStack(spacing: 8) {
+                            Text("\(hour)时")
+                                .font(.system(.footnote, design: .monospaced))
+                            
+                            Image(systemName: weather.symbolName)
+                                .font(.title2)
+                            
+                            Text("\(Int(round(weather.temperature)))°")
+                                .font(.system(.body, design: .monospaced))
+                        }
+                        .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                    }
+                }
+                .padding(.horizontal)
             }
         }
-        .padding(.horizontal)
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.black.opacity(0.2))
+        }
     }
 }
 
 struct DailyForecastView: View {
     let forecast: [DayWeatherInfo]
+    @Environment(\.weatherTimeOfDay) private var timeOfDay
     
     var body: some View {
-        VStack(spacing: 8) {
-            ForEach(forecast, id: \.date) { weather in
-                HStack {
-                    Text(weather.date, style: .date)
-                        .font(.system(size: 16, weight: .medium))
+        VStack(alignment: .leading, spacing: 16) {
+            Text("7天预报")
+                .font(.headline)
+                .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+            
+            VStack(spacing: 12) {
+                ForEach(forecast.indices, id: \.self) { index in
+                    let weather = forecast[index]
+                    let isToday = Calendar.current.isDateInToday(weather.date)
                     
-                    Spacer()
+                    HStack {
+                        // 日期
+                        Text(isToday ? "今天" : formatDate(weather.date))
+                            .frame(width: 60, alignment: .leading)
+                        
+                        // 天气图标
+                        Image(systemName: weather.symbolName)
+                            .frame(width: 30)
+                        
+                        // 天气描述
+                        Text(weather.condition)
+                            .frame(width: 60, alignment: .leading)
+                        
+                        Spacer()
+                        
+                        // 温度范围
+                        HStack(spacing: 8) {
+                            Text("\(Int(round(weather.lowTemperature)))°")
+                                .foregroundColor(.secondary)
+                            Text("\(Int(round(weather.highTemperature)))°")
+                        }
+                        .font(.system(.body, design: .monospaced))
+                    }
+                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
                     
-                    Text("\(Int(round(weather.lowTemperature)))° — \(Int(round(weather.highTemperature)))°")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(.secondary)
+                    if index < forecast.count - 1 {
+                        Divider()
+                            .background(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.2))
+                    }
                 }
             }
-        }
-        .padding(.horizontal)
-    }
-}
-
-struct ExpandableWeatherSection<Content: View>: View {
-    let title: String
-    @Binding var isExpanded: Bool
-    @ViewBuilder let content: () -> Content
-    
-    var body: some View {
-        VStack {
-            Button {
-                withAnimation(.spring(duration: 0.5)) {
-                    isExpanded.toggle()
-                }
-            } label: {
-                HStack {
-                    Text(title)
-                        .font(.headline)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                }
-                .padding()
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 15))
-            }
-            
-            if isExpanded {
-                content()
-                    .transition(.move(edge: .top).combined(with: .opacity))
-                    .padding(.top, 5)
-            }
-        }
-    }
-}
-
-struct HourlyForecastView_Previews: PreviewProvider {
-    static var previews: some View {
-        VStack {
-            HourlyForecastView(
-                forecast: [
-                    WeatherInfo(date: Date(), temperature: 25, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
-                    WeatherInfo(date: Date().addingTimeInterval(3600), temperature: 26, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
-                    WeatherInfo(date: Date().addingTimeInterval(7200), temperature: 27, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
-                    WeatherInfo(date: Date().addingTimeInterval(10800), temperature: 28, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
-                    WeatherInfo(date: Date().addingTimeInterval(14400), temperature: 24, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current),
-                    WeatherInfo(date: Date().addingTimeInterval(18000), temperature: 23, condition: "Sunny", symbolName: "sun.max.fill", timezone: TimeZone.current)
-                ],
-                hourFormatter: {
-                    let formatter = DateFormatter()
-                    formatter.dateFormat = "HH"
-                    return formatter
-                }()
-            )
-            .padding()
-            .background(.ultraThinMaterial)
-            
-            Spacer().frame(height: 40)
-            
-            DailyForecastView(
-                forecast: [
-                    DayWeatherInfo(date: Date(), condition: "Sunny", symbolName: "sun.max.fill", lowTemperature: 20, highTemperature: 30),
-                    DayWeatherInfo(date: Date().addingTimeInterval(86400), condition: "Cloudy", symbolName: "cloud.fill", lowTemperature: 19, highTemperature: 28),
-                    DayWeatherInfo(date: Date().addingTimeInterval(172800), condition: "Rain", symbolName: "cloud.rain.fill", lowTemperature: 18, highTemperature: 25)
-                ]
-            )
         }
         .padding()
-        .background(Color(white: 0.95))
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.black.opacity(0.2))
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E"
+        return formatter.string(from: date)
+    }
+}
+
+struct ForecastViews_Previews: PreviewProvider {
+    static var previews: some View {
+        ZStack {
+            Color.blue
+            VStack {
+                HourlyForecastView(forecast: [
+                    .mock(temp: 25, condition: "晴", symbol: "sun.max"),
+                    .mock(temp: 27, condition: "晴", symbol: "sun.max"),
+                    .mock(temp: 28, condition: "多云", symbol: "cloud"),
+                    .mock(temp: 26, condition: "多云", symbol: "cloud"),
+                    .mock(temp: 24, condition: "阴", symbol: "cloud.fill")
+                ])
+                
+                DailyForecastView(forecast: [
+                    .mock(low: 20, high: 28, condition: "晴", symbol: "sun.max"),
+                    .mock(low: 21, high: 29, condition: "多云", symbol: "cloud"),
+                    .mock(low: 19, high: 27, condition: "阴", symbol: "cloud.fill")
+                ])
+            }
+            .padding()
+        }
     }
 }

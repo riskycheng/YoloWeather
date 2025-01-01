@@ -71,7 +71,7 @@ struct WeatherBubble: View {
 }
 
 struct HourlyTemperatureTrendView: View {
-    let forecast: [WeatherInfo]
+    let forecast: [CurrentWeather]
     @State private var selectedHourIndex: Int?
     @State private var isExpanded = false
     @Environment(\.colorScheme) var colorScheme
@@ -80,6 +80,15 @@ struct HourlyTemperatureTrendView: View {
     
     private let keyTimePoints = 8
     private let impactGenerator = UIImpactFeedbackGenerator(style: .light)
+    
+    private var temperatureRange: ClosedRange<Double> {
+        let temperatures = forecast.map { $0.temperature }
+        if let min = temperatures.min(), let max = temperatures.max() {
+            // 添加一些边距以使图表更美观
+            return (min - 2)...(max + 2)
+        }
+        return 0...30 // 默认范围
+    }
     
     // Calculate temperature range and normalized position
     private func calculateTemperaturePosition(temperature: Double, minTemp: Double, maxTemp: Double, height: CGFloat) -> CGFloat {
@@ -95,14 +104,14 @@ struct HourlyTemperatureTrendView: View {
         return CGPoint(x: x, y: y)
     }
     
-    private func generateKeyTimePoints() -> [WeatherInfo] {
+    private func generateKeyTimePoints() -> [CurrentWeather] {
         guard let firstItem = forecast.first else { return [] }
         
         var calendar = Calendar.current
         calendar.timeZone = firstItem.timezone
         
         let currentDate = firstItem.date
-        var result: [WeatherInfo] = []
+        var result: [CurrentWeather] = []
         
         // Add current time point
         result.append(firstItem)
@@ -319,25 +328,41 @@ struct HourlyTemperatureTrendView: View {
 struct HourlyTemperatureTrendView_Previews: PreviewProvider {
     static var previews: some View {
         ZStack {
-            Color.black
-            VStack {
-                Spacer()
-                HourlyTemperatureTrendView(
-                    forecast: (0..<48).map { hour in
-                        let baseTemp = 25.0
-                        let variation = sin(Double(hour) * .pi / 12.0) * 5.0
-                        return WeatherInfo(
-                            date: Date().addingTimeInterval(Double(hour) * 3600),
-                            temperature: baseTemp + variation,
-                            condition: "晴",
-                            symbolName: "sun.max.fill",
-                            timezone: TimeZone.current
-                        )
-                    }
-                )
-                .padding()
-            }
+            Color.blue
+            HourlyTemperatureTrendView(
+                forecast: [
+                    CurrentWeather(
+                        date: Date(),
+                        temperature: 25,
+                        feelsLike: 27,
+                        condition: "晴",
+                        symbolName: "sun.max.fill",
+                        windSpeed: 3.4,
+                        precipitationChance: 0.2,
+                        uvIndex: 5,
+                        humidity: 0.65,
+                        pressure: 1013,
+                        visibility: 10,
+                        airQualityIndex: 75,
+                        timezone: TimeZone.current
+                    ),
+                    CurrentWeather(
+                        date: Date().addingTimeInterval(3600),
+                        temperature: 26,
+                        feelsLike: 28,
+                        condition: "晴",
+                        symbolName: "sun.max.fill",
+                        windSpeed: 3.4,
+                        precipitationChance: 0.2,
+                        uvIndex: 5,
+                        humidity: 0.65,
+                        pressure: 1013,
+                        visibility: 10,
+                        airQualityIndex: 75,
+                        timezone: TimeZone.current
+                    )
+                ]
+            )
         }
-        .environment(\.weatherTimeOfDay, .day)
     }
 }

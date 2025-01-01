@@ -83,120 +83,113 @@ struct LocationHeaderView: View {
 }
 
 struct CurrentWeatherView: View {
-    let location: String
-    let weather: WeatherInfo
-    let isLoading: Bool
-    let dailyForecast: [DayWeatherInfo]
+    let weather: CurrentWeather
+    @ObservedObject private var tagManager = WeatherTagManager.shared
+    @Environment(\.weatherTimeOfDay) private var timeOfDay
     
-    @State private var showContent = false
-    @State private var loadingStartTime: Date? = nil
-    @State private var shouldShowLoading = false
-    
-    private let minimumLoadingDuration: TimeInterval = 2.0
+    private var temperatureText: String {
+        "\(Int(round(weather.temperature)))"
+    }
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Location
-            LocationHeaderView(location: location, isLoading: isLoading)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            
-            Spacer()
-            
-            if shouldShowLoading {
-                WeatherLoadingView()
-                    .transition(.opacity)
-            } else {
-                // Large temperature display
-                Text("\(Int(round(weather.temperature)))")
-                    .font(.system(size: 180, weight: .ultraLight))
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                    .foregroundStyle(.white)
-                    .shadow(color: .white.opacity(0.7), radius: 3, x: 0, y: 0)
-                    .scaleEffect(showContent ? 1 : 0.5)
-                    .opacity(showContent ? 1 : 0)
+        VStack(spacing: 24) {
+            // 主温度显示
+            VStack(spacing: 8) {
+                // 大数字温度显示
+                Text(temperatureText)
+                    .font(.system(size: 96, weight: .medium, design: .monospaced))
+                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                    .frame(height: 120)
+                    .padding(.vertical, 16)
+                    .background {
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(.black.opacity(0.2))
+                    }
                 
-                // Weather condition
+                // 天气描述
                 Text(weather.condition)
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundStyle(.white)
-                    .shadow(color: .white.opacity(0.5), radius: 2, x: 0, y: 0)
-                    .opacity(showContent ? 1 : 0)
-                    .offset(y: showContent ? 0 : 20)
+                    .font(.title2)
+                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
             }
             
-            Spacer()
+            // 可配置的天气标签
+            VStack(spacing: 12) {
+                ForEach(tagManager.activeTags) { tag in
+                    WeatherTagView(weather: weather, tag: tag)
+                        .transition(.opacity)
+                }
+            }
             
-            if !shouldShowLoading, let todayForecast = dailyForecast.first {
-                TemperatureRangeView(
-                    lowTemp: todayForecast.lowTemperature,
-                    highTemp: todayForecast.highTemperature
-                )
-                .opacity(showContent ? 1 : 0)
-                .offset(y: showContent ? 0 : 20)
-            }
-        }
-        .frame(maxHeight: .infinity)
-        .onChange(of: isLoading) { newValue in
-            if newValue {
-                // 开始加载
-                loadingStartTime = Date()
-                shouldShowLoading = true
-                withAnimation(.easeOut(duration: 0.2)) {
-                    showContent = false
+            // 编辑按钮
+            Button {
+                withAnimation {
+                    tagManager.isEditMode.toggle()
                 }
-            } else {
-                // 计算已经显示的时间
-                let elapsedTime = Date().timeIntervalSince(loadingStartTime ?? Date())
-                let remainingTime = max(0, minimumLoadingDuration - elapsedTime)
-                
-                // 延迟隐藏加载动画
-                DispatchQueue.main.asyncAfter(deadline: .now() + remainingTime) {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        shouldShowLoading = false
+            } label: {
+                Label(tagManager.isEditMode ? "完成" : "编辑标签", systemImage: tagManager.isEditMode ? "checkmark.circle.fill" : "pencil.circle")
+                    .font(.headline)
+                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background {
+                        Capsule()
+                            .fill(.black.opacity(0.2))
                     }
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                        showContent = true
+            }
+            
+            if tagManager.isEditMode {
+                // 可用标签列表
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(WeatherTag.allCases) { tag in
+                            Button {
+                                withAnimation {
+                                    tagManager.toggleTag(tag)
+                                }
+                            } label: {
+                                Text(tag.name)
+                                    .font(.subheadline)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background {
+                                        Capsule()
+                                            .fill(tagManager.activeTags.contains(tag) ? .green.opacity(0.3) : .gray.opacity(0.3))
+                                    }
+                                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                            }
+                        }
                     }
+                    .padding(.horizontal)
                 }
             }
         }
-        .onAppear {
-            if !isLoading {
-                shouldShowLoading = false
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    showContent = true
-                }
-            } else {
-                shouldShowLoading = true
-                loadingStartTime = Date()
-            }
-        }
+    }
+}
+
+struct CurrentWeatherView_Previews: PreviewProvider {
+    static var previews: some View {
+        CurrentWeatherView(weather: CurrentWeather.mock(temp: 23, condition: "晴", symbol: "sun.max"))
+            .background(Color.blue)
     }
 }
 
 #Preview {
     ZStack {
         Color.black
-        CurrentWeatherView(
-            location: "Shanghai",
-            weather: WeatherInfo(
-                date: Date(),
-                temperature: 25,
-                condition: "Sunny",
-                symbolName: "sun.max.fill",
-                timezone: TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
-            ),
-            isLoading: false,
-            dailyForecast: [
-                DayWeatherInfo(
-                    date: Date(),
-                    condition: "Sunny",
-                    symbolName: "sun.max.fill",
-                    lowTemperature: 20,
-                    highTemperature: 28
-                )
-            ]
-        )
+        CurrentWeatherView(weather: CurrentWeather(
+            date: Date(),
+            temperature: 25,
+            feelsLike: 28,
+            condition: "Sunny",
+            symbolName: "sun.max.fill",
+            windSpeed: 3.4,
+            precipitationChance: 0.2,
+            uvIndex: 5,
+            humidity: 0.65,
+            pressure: 1013,
+            visibility: 10,
+            airQualityIndex: 75,
+            timezone: TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
+        ))
     }
 }

@@ -1,10 +1,14 @@
 import Foundation
 import CoreLocation
 
-struct PresetLocation: Identifiable {
+struct PresetLocation: Identifiable, Equatable {
     let id = UUID()
     let name: String
     let location: CLLocation
+    
+    static func == (lhs: PresetLocation, rhs: PresetLocation) -> Bool {
+        lhs.id == rhs.id
+    }
     
     static let presets: [PresetLocation] = [
         PresetLocation(name: "上海市", location: CLLocation(latitude: 31.2304, longitude: 121.4737)),

@@ -115,7 +115,7 @@ class LocationService: NSObject, ObservableObject {
         guard !isUpdatingLocationName else { return }
         isUpdatingLocationName = true
         
-        Task {
+        Task { @MainActor in
             do {
                 let placemarks = try await geocoder.reverseGeocodeLocation(location)
                 if let placemark = placemarks.first {
@@ -133,28 +133,24 @@ class LocationService: NSObject, ObservableObject {
                     }
                     
                     logger.info("Location name updated: \(name)")
-                    await MainActor.run {
-                        self.locationName = name
-                        self.errorMessage = nil
-                        self.isUpdatingLocationName = false
-                    }
+                    self.locationName = name
+                    self.errorMessage = nil
+                    self.isUpdatingLocationName = false
                 } else {
                     throw NSError(domain: "LocationService", code: -1, userInfo: [NSLocalizedDescriptionKey: "无法获取位置信息"])
                 }
             } catch {
                 logger.error("Geocoding error: \(error.localizedDescription)")
-                await MainActor.run {
-                    // 如果地理编码失败，尝试重试
-                    if self.retryCount < self.maxRetries {
-                        self.retryCount += 1
-                        self.isUpdatingLocationName = false
-                        self.updateLocationName(for: location)
-                    } else {
-                        self.errorMessage = "无法获取位置信息"
-                        self.isUpdatingLocationName = false
-                        // 如果多次重试失败，使用默认位置
-                        self.useDefaultLocation()
-                    }
+                // 如果地理编码失败，尝试重试
+                if self.retryCount < self.maxRetries {
+                    self.retryCount += 1
+                    self.isUpdatingLocationName = false
+                    self.updateLocationName(for: location)
+                } else {
+                    self.errorMessage = "无法获取位置信息"
+                    self.isUpdatingLocationName = false
+                    // 如果多次重试失败，使用默认位置
+                    self.useDefaultLocation()
                 }
             }
         }
@@ -162,7 +158,7 @@ class LocationService: NSObject, ObservableObject {
 }
 
 extension LocationService: CLLocationManagerDelegate {
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { 
             logger.warning("No location received")
             return 
@@ -178,62 +174,68 @@ extension LocationService: CLLocationManagerDelegate {
             return 
         }
         
-        logger.info("Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-        self.currentLocation = location
-        self.retryCount = 0 // 重置重试计数
-        updateLocationName(for: location)
-    }
-    
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        logger.error("Location error: \(error.localizedDescription)")
-        
-        if let clError = error as? CLError {
-            switch clError.code {
-            case .denied:
-                self.errorMessage = "请在设置中允许访问位置信息"
-                useDefaultLocation()
-            case .locationUnknown:
-                if retryCount < maxRetries {
-                    retryCount += 1
-                    startUpdatingLocation()
-                } else {
-                    self.errorMessage = "无法获取位置信息，请稍后重试"
-                    useDefaultLocation()
-                }
-            case .network:
-                self.errorMessage = "网络错误，请检查网络连接"
-                useDefaultLocation()
-            default:
-                self.errorMessage = "获取位置信息失败"
-                useDefaultLocation()
-            }
-        } else {
-            self.errorMessage = "获取位置信息失败"
-            useDefaultLocation()
+        Task { @MainActor in
+            logger.info("Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+            self.currentLocation = location
+            self.retryCount = 0 // 重置重试计数
+            self.updateLocationName(for: location)
         }
     }
     
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        self.authorizationStatus = manager.authorizationStatus
-        
-        logger.info("Authorization status changed to: \(manager.authorizationStatus.rawValue)")
-        
-        switch manager.authorizationStatus {
-        case .authorizedWhenInUse, .authorizedAlways:
-            logger.info("Location authorization granted")
-            self.errorMessage = nil
-            startUpdatingLocation()
-        case .denied, .restricted:
-            logger.warning("Location authorization denied")
-            self.errorMessage = "请在设置中允许访问位置信息"
-            useDefaultLocation()
-        case .notDetermined:
-            logger.info("Location authorization not determined")
-            requestLocationPermission()
-        @unknown default:
-            logger.error("Unknown location authorization status")
-            self.errorMessage = "位置服务状态未知"
-            useDefaultLocation()
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            logger.error("Location error: \(error.localizedDescription)")
+            
+            if let clError = error as? CLError {
+                switch clError.code {
+                case .denied:
+                    self.errorMessage = "请在设置中允许访问位置信息"
+                    self.useDefaultLocation()
+                case .locationUnknown:
+                    if self.retryCount < self.maxRetries {
+                        self.retryCount += 1
+                        self.startUpdatingLocation()
+                    } else {
+                        self.errorMessage = "无法获取位置信息，请稍后重试"
+                        self.useDefaultLocation()
+                    }
+                case .network:
+                    self.errorMessage = "网络错误，请检查网络连接"
+                    self.useDefaultLocation()
+                default:
+                    self.errorMessage = "获取位置信息失败"
+                    self.useDefaultLocation()
+                }
+            } else {
+                self.errorMessage = "获取位置信息失败"
+                self.useDefaultLocation()
+            }
+        }
+    }
+    
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        Task { @MainActor in
+            self.authorizationStatus = manager.authorizationStatus
+            
+            logger.info("Authorization status changed to: \(manager.authorizationStatus.rawValue)")
+            
+            switch manager.authorizationStatus {
+            case .authorizedWhenInUse, .authorizedAlways:
+                logger.info("Location authorization granted")
+                self.errorMessage = nil
+                self.startUpdatingLocation()
+            case .denied, .restricted:
+                logger.warning("Location authorization denied")
+                self.errorMessage = "请在设置中允许访问位置信息"
+                self.useDefaultLocation()
+            case .notDetermined:
+                logger.info("Location authorization not determined")
+                self.requestLocationPermission()
+            @unknown default:
+                logger.error("Unknown location authorization status")
+                self.errorMessage = "位置服务状态未知"
+                self.useDefaultLocation()
+            }
         }
     }
 }
