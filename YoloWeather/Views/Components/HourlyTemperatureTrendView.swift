@@ -190,6 +190,7 @@ struct HourlyTemperatureTrendView: View {
     private func formatHour(for date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH"
+        formatter.timeZone = forecast.first?.timezone ?? TimeZone.current
         return formatter.string(from: date)
     }
     

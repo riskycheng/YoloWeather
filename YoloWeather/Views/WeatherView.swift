@@ -50,12 +50,50 @@ struct WeatherView: View {
             WeatherBackgroundView(timeOfDay: timeOfDay)
             
             ScrollView {
-                VStack(spacing: 20) {
-                    // 位置信息
-                    WeatherLocationHeaderView(
-                        location: locationService.locationName ?? selectedLocation.name,
-                        isLoading: isRefreshing
-                    )
+                VStack(spacing: 24) {
+                    // 顶部工具栏
+                    HStack(spacing: 16) {
+                        Button {
+                            showingLocationPicker.toggle()
+                        } label: {
+                            toolbarButton("list.bullet")
+                        }
+                        
+                        Spacer()
+                        
+                        // 城市名称
+                        Text(locationService.locationName ?? selectedLocation.name)
+                            .font(.title2.weight(.medium))
+                            .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 12) {
+                            Button {
+                                withAnimation {
+                                    showDailyForecast.toggle()
+                                }
+                            } label: {
+                                toolbarButton(showDailyForecast ? "calendar.circle.fill" : "calendar.circle")
+                            }
+                            
+                            Button {
+                                Task {
+                                    isRefreshing = true
+                                    await weatherService.updateWeather(for: locationService.currentLocation ?? selectedLocation.location)
+                                    isRefreshing = false
+                                    lastRefreshTime = Date()
+                                    updateTimeOfDay()
+                                }
+                            } label: {
+                                toolbarButton("arrow.clockwise")
+                                    .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                                    .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                            }
+                            .disabled(isRefreshing)
+                        }
+                    }
+                    .padding(.horizontal)
                     
                     if let currentWeather = weatherService.currentWeather {
                         // 当前天气
@@ -67,57 +105,20 @@ struct WeatherView: View {
                         // 24小时预报
                         HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
                             .transition(.opacity)
+                            .padding(.horizontal)
                     }
                     
                     if !weatherService.dailyForecast.isEmpty && showDailyForecast {
                         // 7天预报
                         DailyForecastView(forecast: weatherService.dailyForecast)
                             .transition(.opacity)
+                            .padding(.horizontal)
                     }
                 }
-                .padding(.horizontal)
+                .padding(.vertical)
             }
             .refreshable {
                 await refreshWeather()
-            }
-            
-            // 工具栏
-            VStack {
-                HStack {
-                    Button {
-                        showingLocationPicker.toggle()
-                    } label: {
-                        toolbarButton("list.bullet")
-                    }
-                    
-                    Spacer()
-                    
-                    Button {
-                        withAnimation {
-                            showDailyForecast.toggle()
-                        }
-                    } label: {
-                        toolbarButton(showDailyForecast ? "calendar.circle.fill" : "calendar.circle")
-                    }
-                    
-                    Button {
-                        Task {
-                            isRefreshing = true
-                            await weatherService.updateWeather(for: locationService.currentLocation ?? selectedLocation.location)
-                            isRefreshing = false
-                            lastRefreshTime = Date()
-                            updateTimeOfDay()
-                        }
-                    } label: {
-                        toolbarButton("arrow.clockwise")
-                            .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                            .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
-                    }
-                    .disabled(isRefreshing)
-                }
-                .padding()
-                
-                Spacer()
             }
         }
         .sheet(isPresented: $showingLocationPicker) {
@@ -136,7 +137,6 @@ struct WeatherView: View {
             }
         }
         .task {
-            // 启动时使用默认城市
             await updateLocation(selectedLocation.location)
         }
         .onChange(of: selectedLocation) { _ in

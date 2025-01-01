@@ -44,61 +44,74 @@ struct DailyForecastView: View {
     let forecast: [DayWeatherInfo]
     @Environment(\.weatherTimeOfDay) private var timeOfDay
     
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E"
+        return formatter
+    }()
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("7天预报")
-                .font(.headline)
-                .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+        VStack(spacing: 16) {
+            HStack {
+                Text("7天预报")
+                    .font(.headline)
+                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                
+                Spacer()
+                
+                Image(systemName: "calendar")
+                    .font(.headline)
+                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+            }
             
-            VStack(spacing: 12) {
-                ForEach(forecast.indices, id: \.self) { index in
-                    let weather = forecast[index]
-                    let isToday = Calendar.current.isDateInToday(weather.date)
-                    
-                    HStack {
-                        // 日期
-                        Text(isToday ? "今天" : formatDate(weather.date))
-                            .frame(width: 60, alignment: .leading)
-                        
-                        // 天气图标
-                        Image(systemName: weather.symbolName)
-                            .frame(width: 30)
-                        
-                        // 天气描述
-                        Text(weather.condition)
-                            .frame(width: 60, alignment: .leading)
-                        
-                        Spacer()
-                        
-                        // 温度范围
-                        HStack(spacing: 8) {
-                            Text("\(Int(round(weather.lowTemperature)))°")
-                                .foregroundColor(.secondary)
-                            Text("\(Int(round(weather.highTemperature)))°")
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 12) {
+                    ForEach(forecast) { day in
+                        HStack(spacing: 16) {
+                            // 星期
+                            Text(dateFormatter.string(from: day.date))
+                                .font(.system(.body, design: .rounded))
+                                .frame(width: 40, alignment: .leading)
+                            
+                            // 天气图标
+                            Image(systemName: day.symbolName)
+                                .font(.title3)
+                                .symbolRenderingMode(.multicolor)
+                                .frame(width: 30)
+                            
+                            // 天气状况
+                            Text(day.condition)
+                                .font(.system(.body, design: .rounded))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            // 温度范围
+                            HStack(spacing: 4) {
+                                Text("\(Int(round(day.lowTemperature)))°")
+                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.7))
+                                Text("-")
+                                Text("\(Int(round(day.highTemperature)))°")
+                            }
+                            .font(.system(.body, design: .rounded))
+                            .frame(width: 80, alignment: .trailing)
                         }
-                        .font(.system(.body, design: .monospaced))
-                    }
-                    .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                    
-                    if index < forecast.count - 1 {
-                        Divider()
-                            .background(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.2))
+                        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background {
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.ultraThinMaterial)
+                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 2)
+                        }
                     }
                 }
             }
         }
-        .padding()
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.black.opacity(0.2))
-        }
+        .padding(.vertical, 8)
     }
-    
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "E"
-        return formatter.string(from: date)
-    }
+}
+
+extension DayWeatherInfo: Identifiable {
+    var id: Date { date }
 }
 
 struct ForecastViews_Previews: PreviewProvider {

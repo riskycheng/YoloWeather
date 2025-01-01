@@ -89,30 +89,34 @@ struct CurrentWeatherView: View {
     @StateObject private var tagManager = WeatherTagManager.shared
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 32) {
             // 主温度显示
-            VStack(spacing: 4) {
+            VStack(spacing: 8) {
                 Text("\(Int(round(weather.temperature)))°")
-                    .font(.system(size: 72, weight: .thin))
+                    .font(.system(size: 96, weight: .thin))
                     .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
                 
                 Text(weather.condition)
-                    .font(.title3)
+                    .font(.title2)
                     .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
             }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+            }
+            .padding(.horizontal)
             
             // 可配置的天气标签
-            VStack(spacing: 12) {
-                LazyVGrid(columns: [
-                    GridItem(.flexible()),
-                    GridItem(.flexible()),
-                    GridItem(.flexible())
-                ], spacing: 12) {
+            VStack(spacing: 16) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 12) {
                     ForEach(Array(tagManager.activeTags)) { tag in
                         WeatherDetailItem(
                             icon: tag.iconName,
                             title: tag.name,
-                            value: tag.getValue(from: weather)
+                            value: "\(tag.getValue(from: weather))\(tag.unit)"
                         )
                     }
                 }
@@ -156,8 +160,8 @@ struct CurrentWeatherView: View {
                     }
                 }
             }
+            .padding(.horizontal)
         }
-        .padding()
     }
 }
 
