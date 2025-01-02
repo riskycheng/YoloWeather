@@ -50,63 +50,99 @@ struct DailyForecastView: View {
         return formatter
     }()
     
+    private func temperatureBar(low: Double, high: Double, width: CGFloat = 100) -> some View {
+        GeometryReader { geometry in
+            let minTemp = forecast.map { $0.lowTemperature }.min() ?? low
+            let maxTemp = forecast.map { $0.highTemperature }.max() ?? high
+            let tempRange = maxTemp - minTemp
+            
+            let lowX = (low - minTemp) / tempRange * width
+            let highX = (high - minTemp) / tempRange * width
+            
+            ZStack(alignment: .leading) {
+                // 背景条
+                Capsule()
+                    .fill(.white.opacity(0.3))
+                    .frame(width: width, height: 4)
+                
+                // 温度范围条
+                Capsule()
+                    .fill(.teal)
+                    .frame(width: highX - lowX, height: 4)
+                    .offset(x: lowX)
+                
+                // 当前温度点
+                Circle()
+                    .fill(.white)
+                    .frame(width: 6, height: 6)
+                    .offset(x: highX - 3)
+            }
+        }
+        .frame(width: width, height: 6)
+    }
+    
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("7天预报")
                     .font(.headline)
-                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                
+                    .foregroundStyle(.white)
                 Spacer()
-                
                 Image(systemName: "calendar")
-                    .font(.headline)
-                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                    .foregroundStyle(.white)
             }
             
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(spacing: 12) {
-                    ForEach(forecast) { day in
-                        HStack(spacing: 16) {
-                            // 星期
-                            Text(dateFormatter.string(from: day.date))
-                                .font(.system(.body, design: .rounded))
-                                .frame(width: 40, alignment: .leading)
-                            
-                            // 天气图标
-                            Image(systemName: day.symbolName)
-                                .font(.title3)
-                                .symbolRenderingMode(.multicolor)
-                                .frame(width: 30)
-                            
-                            // 天气状况
-                            Text(day.condition)
-                                .font(.system(.body, design: .rounded))
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            // 温度范围
-                            HStack(spacing: 4) {
-                                Text("\(Int(round(day.lowTemperature)))°")
-                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.7))
-                                Text("-")
-                                Text("\(Int(round(day.highTemperature)))°")
-                            }
+            VStack(spacing: 8) {
+                ForEach(forecast.indices, id: \.self) { index in
+                    let day = forecast[index]
+                    HStack(spacing: 16) {
+                        // 星期
+                        Text(dateFormatter.string(from: day.date))
+                            .frame(width: 45, alignment: .leading)
                             .font(.system(.body, design: .rounded))
-                            .frame(width: 80, alignment: .trailing)
+                        
+                        // 天气图标
+                        Group {
+                            if day.condition.contains("Clear") {
+                                Image(systemName: "sun.max.fill")
+                                    .symbolRenderingMode(.multicolor)
+                                    .foregroundStyle(.yellow)
+                            } else if day.condition.contains("Cloudy") {
+                                Image(systemName: "cloud.sun.fill")
+                                    .symbolRenderingMode(.multicolor)
+                                    .foregroundStyle(.yellow, .white)
+                            } else if day.condition.contains("Drizzle") {
+                                Image(systemName: "cloud.drizzle.fill")
+                                    .symbolRenderingMode(.multicolor)
+                                    .foregroundStyle(.white, .blue)
+                            }
                         }
-                        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background {
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 2)
+                        .font(.title2)
+                        .frame(width: 30)
+                        
+                        // 天气描述
+                        Text(day.condition)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .font(.system(.body, design: .rounded))
+                        
+                        // 温度范围
+                        HStack(spacing: 4) {
+                            Text("\(Int(round(day.lowTemperature)))°")
+                            temperatureBar(low: day.lowTemperature, high: day.highTemperature)
+                            Text("\(Int(round(day.highTemperature)))°")
                         }
                     }
+                    .foregroundStyle(.white)
+                    .padding(.vertical, 4)
                 }
             }
         }
-        .padding(.vertical, 8)
+        .padding()
+        .background {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .opacity(0.5)
+        }
     }
 }
 

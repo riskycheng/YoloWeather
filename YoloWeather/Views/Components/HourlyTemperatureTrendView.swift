@@ -199,7 +199,7 @@ struct HourlyTemperatureTrendView: View {
             let width = geometry.size.width
             let height = geometry.size.height
             let hourWidth = width / CGFloat(keyTimePoints)
-            let timezone = forecast.first?.timezone ?? TimeZone.current
+            let _ = forecast.first?.timezone ?? TimeZone.current
             let keyPoints = generateKeyTimePoints()
             
             // Calculate temperature range once

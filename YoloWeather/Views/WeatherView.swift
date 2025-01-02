@@ -139,7 +139,7 @@ struct WeatherView: View {
         .task {
             await updateLocation(selectedLocation.location)
         }
-        .onChange(of: selectedLocation) { _ in
+        .onChange(of: selectedLocation) { oldValue, newValue in
             Task {
                 await updateLocation(selectedLocation.location)
             }
