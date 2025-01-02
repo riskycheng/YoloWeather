@@ -2,7 +2,7 @@ import SwiftUI
 
 struct HourlyForecastView: View {
     let forecast: [CurrentWeather]
-    @Environment(\.weatherTimeOfDay) private var timeOfDay
+    @Environment(\.weatherTimeOfDay) private var timeOfDay: WeatherTimeOfDay
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -12,7 +12,7 @@ struct HourlyForecastView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 20) {
-                    ForEach(forecast.indices, id: \.self) { index in
+                    ForEach(0..<forecast.count, id: \.self) { index in
                         let weather = forecast[index]
                         let hour = Calendar.current.component(.hour, from: weather.date)
                         
@@ -42,107 +42,114 @@ struct HourlyForecastView: View {
 
 struct DailyForecastView: View {
     let forecast: [DayWeatherInfo]
-    @Environment(\.weatherTimeOfDay) private var timeOfDay
+    @Environment(\.weatherTimeOfDay) private var timeOfDay: WeatherTimeOfDay
     
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.dateFormat = "E"
+        formatter.dateFormat = "EEE"
         return formatter
     }()
     
+    // 计算7天内的全局温度范围
+    private var globalTempRange: (min: Double, max: Double) {
+        let minTemp = forecast.map { $0.lowTemperature }.min() ?? 0
+        let maxTemp = forecast.map { $0.highTemperature }.max() ?? 0
+        return (minTemp, maxTemp)
+    }
+    
     private func temperatureBar(low: Double, high: Double, width: CGFloat = 100) -> some View {
-        GeometryReader { geometry in
-            let minTemp = forecast.map { $0.lowTemperature }.min() ?? low
-            let maxTemp = forecast.map { $0.highTemperature }.max() ?? high
-            let tempRange = maxTemp - minTemp
+        let (minTemp, maxTemp) = globalTempRange
+        let tempRange = maxTemp - minTemp
+        
+        let lowX = (low - minTemp) / tempRange * width
+        let highX = (high - minTemp) / tempRange * width
+        
+        return ZStack(alignment: .leading) {
+            // 背景条
+            Capsule()
+                .fill(.white.opacity(0.3))
+                .frame(width: width, height: 4)
             
-            let lowX = (low - minTemp) / tempRange * width
-            let highX = (high - minTemp) / tempRange * width
+            // 温度范围条
+            Capsule()
+                .fill(.teal)
+                .frame(width: highX - lowX, height: 4)
+                .offset(x: lowX)
             
-            ZStack(alignment: .leading) {
-                // 背景条
-                Capsule()
-                    .fill(.white.opacity(0.3))
-                    .frame(width: width, height: 4)
-                
-                // 温度范围条
-                Capsule()
-                    .fill(.teal)
-                    .frame(width: highX - lowX, height: 4)
-                    .offset(x: lowX)
-                
-                // 当前温度点
-                Circle()
-                    .fill(.white)
-                    .frame(width: 6, height: 6)
-                    .offset(x: highX - 3)
-            }
+            // 当前温度点
+            Circle()
+                .fill(.white)
+                .frame(width: 6, height: 6)
+                .offset(x: highX - 3)
         }
         .frame(width: width, height: 6)
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 16) {
+            // 标题栏
             HStack {
                 Text("7天预报")
-                    .font(.headline)
+                    .font(.system(.headline, design: .rounded))
                     .foregroundStyle(.white)
+                
                 Spacer()
+                
                 Image(systemName: "calendar")
                     .foregroundStyle(.white)
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
             
-            VStack(spacing: 8) {
-                ForEach(forecast.indices, id: \.self) { index in
+            // 预报列表
+            VStack(spacing: 12) {
+                ForEach(0..<forecast.count, id: \.self) { index in
                     let day = forecast[index]
-                    HStack(spacing: 16) {
+                    HStack(spacing: 12) {
                         // 星期
                         Text(dateFormatter.string(from: day.date))
-                            .frame(width: 45, alignment: .leading)
                             .font(.system(.body, design: .rounded))
+                            .frame(width: 45, alignment: .leading)
                         
                         // 天气图标
-                        Group {
-                            if day.condition.contains("Clear") {
-                                Image(systemName: "sun.max.fill")
-                                    .symbolRenderingMode(.multicolor)
-                                    .foregroundStyle(.yellow)
-                            } else if day.condition.contains("Cloudy") {
-                                Image(systemName: "cloud.sun.fill")
-                                    .symbolRenderingMode(.multicolor)
-                                    .foregroundStyle(.yellow, .white)
-                            } else if day.condition.contains("Drizzle") {
-                                Image(systemName: "cloud.drizzle.fill")
-                                    .symbolRenderingMode(.multicolor)
-                                    .foregroundStyle(.white, .blue)
-                            }
-                        }
-                        .font(.title2)
-                        .frame(width: 30)
+                        Image(systemName: day.symbolName)
+                            .font(.title3)
+                            .frame(width: 24)
+                            .symbolRenderingMode(.multicolor)
                         
-                        // 天气描述
-                        Text(day.condition)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .font(.system(.body, design: .rounded))
-                        
-                        // 温度范围
-                        HStack(spacing: 4) {
+                        // 温度条和温度
+                        HStack(spacing: 8) {
                             Text("\(Int(round(day.lowTemperature)))°")
-                            temperatureBar(low: day.lowTemperature, high: day.highTemperature)
+                                .font(.system(.subheadline, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: 30, alignment: .trailing)
+                                .lineLimit(1)
+                            
+                            temperatureBar(low: day.lowTemperature, high: day.highTemperature, width: 80)
+                                .frame(height: 6)
+                            
                             Text("\(Int(round(day.highTemperature)))°")
+                                .font(.system(.subheadline, design: .rounded))
+                                .frame(width: 30, alignment: .leading)
+                                .lineLimit(1)
                         }
+                        .frame(maxWidth: .infinity)
                     }
-                    .foregroundStyle(.white)
-                    .padding(.vertical, 4)
+                    
+                    if index != forecast.count - 1 {
+                        Divider()
+                            .padding(.horizontal, 16)
+                    }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
-        .padding()
         .background {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
-                .opacity(0.5)
         }
+        .padding(.horizontal, 20)
     }
 }
 
