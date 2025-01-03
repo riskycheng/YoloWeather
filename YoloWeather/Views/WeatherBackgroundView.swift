@@ -18,24 +18,9 @@ struct WeatherBackgroundView: View {
                 )
                 .ignoresSafeArea()
                 
-                // Animated clouds
-                ForEach(0..<3) { index in
-                    Image(systemName: "cloud.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(.white.opacity(0.8))
-                        .frame(width: 100)
-                        .offset(x: cloudOffset + CGFloat(index * 200), y: CGFloat(50 + index * 30))
-                        .onAppear {
-                            withAnimation(.linear(duration: 20).repeatForever(autoreverses: false)) {
-                                cloudOffset = geometry.size.width
-                            }
-                        }
-                }
-                
-                // Nature scene
+                // Nature scene with trees higher up
                 VStack {
-                    Spacer()
+                    // Trees positioned in the upper third
                     ZStack {
                         // Background trees
                         HStack(spacing: -20) {
@@ -48,36 +33,58 @@ struct WeatherBackgroundView: View {
                                     .offset(y: CGFloat(index % 2) * 20)
                             }
                         }
-                        .padding(.bottom, -30)
-                        
-                        // Foreground elements
-                        HStack {
-                            // Left side vegetation
-                            VStack {
-                                Image(systemName: "leaf.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .foregroundStyle(Color.green.opacity(0.9))
-                                    .frame(width: 60, height: 60)
-                                    .rotationEffect(.degrees(-30))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            
-                            Spacer()
-                            
-                            // Right side vegetation
-                            VStack {
-                                Image(systemName: "leaf.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .foregroundStyle(Color.green.opacity(0.9))
-                                    .frame(width: 60, height: 60)
-                                    .rotationEffect(.degrees(30))
-                            }
-                            .frame(maxWidth: .infinity, alignment: .trailing)
-                        }
-                        .padding(.horizontal)
                     }
+                    .padding(.top, geometry.size.height * 0.2) // Position trees in upper third
+                    
+                    Spacer()
+                    
+                    // Ground vegetation
+                    HStack {
+                        // Left side vegetation
+                        VStack {
+                            Image(systemName: "leaf.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundStyle(Color.green.opacity(0.9))
+                                .frame(width: 60, height: 60)
+                                .rotationEffect(.degrees(-30))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading)
+                        
+                        Spacer()
+                        
+                        // Right side vegetation
+                        VStack {
+                            Image(systemName: "leaf.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundStyle(Color.green.opacity(0.9))
+                                .frame(width: 60, height: 60)
+                                .rotationEffect(.degrees(30))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing)
+                    }
+                }
+                
+                // Animated clouds
+                ForEach(0..<3) { index in
+                    Image(systemName: "cloud.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 100)
+                        .offset(x: cloudOffset + CGFloat(index * 200), 
+                               y: CGFloat(50 + index * 30))
+                        .onAppear {
+                            withAnimation(
+                                .linear(duration: 20)
+                                .repeatForever(autoreverses: false)
+                            ) {
+                                cloudOffset = geometry.size.width
+                            }
+                        }
                 }
             }
         }

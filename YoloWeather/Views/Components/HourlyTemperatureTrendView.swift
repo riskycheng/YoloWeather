@@ -86,10 +86,9 @@ struct HourlyTemperatureTrendView: View {
     
     var body: some View {
         ZStack {
-            // Background
-            RoundedRectangle(cornerRadius: 20)
-                .fill(.ultraThinMaterial)
-                .opacity(0.3)
+            // Dark background with radius
+            RoundedRectangle(cornerRadius: 25)
+                .fill(Color.black.opacity(0.7))
             
             // Forecast items
             HStack(spacing: 0) {
@@ -99,7 +98,7 @@ struct HourlyTemperatureTrendView: View {
                         // Time
                         Text(formatHour(weather.date))
                             .font(.system(size: 16))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.white)
                         
                         // Weather icon
                         Image(systemName: weather.symbolName)
@@ -109,7 +108,7 @@ struct HourlyTemperatureTrendView: View {
                         // Temperature
                         Text("\(Int(round(weather.temperature)))°")
                             .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.white)
                     }
                     .frame(maxWidth: .infinity)
                 }
