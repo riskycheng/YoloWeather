@@ -38,17 +38,17 @@ struct WeatherBackgroundView: View {
                     Spacer()
                     ZStack {
                         // Background trees
-                        HStack(spacing: -10) {
-                            ForEach(0..<8) { index in
+                        HStack(spacing: -20) {
+                            ForEach(0..<5) { index in
                                 Image(systemName: "tree.fill")
                                     .resizable()
                                     .scaledToFit()
-                                    .foregroundStyle(Color.green.opacity(0.6))
-                                    .frame(height: 60 + CGFloat(index % 3) * 20)
-                                    .offset(y: CGFloat(index % 2) * 10)
+                                    .foregroundStyle(Color.green.opacity(0.8))
+                                    .frame(height: 120 + CGFloat(index % 3) * 40)
+                                    .offset(y: CGFloat(index % 2) * 20)
                             }
                         }
-                        .padding(.bottom, -20)
+                        .padding(.bottom, -30)
                         
                         // Foreground elements
                         HStack {
@@ -57,8 +57,8 @@ struct WeatherBackgroundView: View {
                                 Image(systemName: "leaf.fill")
                                     .resizable()
                                     .scaledToFit()
-                                    .foregroundStyle(Color.green.opacity(0.8))
-                                    .frame(width: 40, height: 40)
+                                    .foregroundStyle(Color.green.opacity(0.9))
+                                    .frame(width: 60, height: 60)
                                     .rotationEffect(.degrees(-30))
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -70,8 +70,8 @@ struct WeatherBackgroundView: View {
                                 Image(systemName: "leaf.fill")
                                     .resizable()
                                     .scaledToFit()
-                                    .foregroundStyle(Color.green.opacity(0.8))
-                                    .frame(width: 40, height: 40)
+                                    .foregroundStyle(Color.green.opacity(0.9))
+                                    .frame(width: 60, height: 60)
                                     .rotationEffect(.degrees(30))
                             }
                             .frame(maxWidth: .infinity, alignment: .trailing)

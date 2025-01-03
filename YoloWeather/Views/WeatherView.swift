@@ -98,38 +98,44 @@ struct WeatherView: View {
                     }
                 }
                 .padding(.horizontal, 20)
-                .padding(.top, 60)
-                
-                // Weather information
-                VStack(spacing: 8) {
-                    // Location name
-                    Text(locationService.locationName)
-                        .font(.system(size: 34, weight: .medium))
-                        .foregroundStyle(.primary)
-                    
-                    if let weather = weatherService.currentWeather {
-                        // Weather condition
-                        Text(weather.condition)
-                            .font(.system(size: 20))
-                            .foregroundStyle(.secondary)
-                        
-                        // Large temperature display
-                        Text("\(Int(round(weather.temperature)))°")
-                            .font(.system(size: 120, weight: .thin))
-                            .foregroundStyle(.primary)
-                            .padding(.top, -20)
-                    }
-                }
-                .padding(.top, 40)
+                .padding(.top, 30)
                 
                 Spacer()
                 
-                // Hourly forecast
-                if !weatherService.hourlyForecast.isEmpty {
-                    HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
-                        .frame(height: 100)
-                        .padding(.horizontal)
-                        .padding(.bottom, 30)
+                // Weather information at the bottom
+                VStack(alignment: .leading, spacing: 0) {
+                    // City name and condition
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(locationService.locationName)
+                            .font(.system(size: 40, weight: .bold))
+                            .foregroundStyle(.primary)
+                        
+                        if let weather = weatherService.currentWeather {
+                            Text(weather.condition)
+                                .font(.system(size: 24, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 10)
+                    
+                    // Large temperature
+                    if let weather = weatherService.currentWeather {
+                        Text("\(Int(round(weather.temperature)))°")
+                            .font(.system(size: 140, weight: .bold))
+                            .foregroundStyle(.primary)
+                            .padding(.leading, 10)
+                    }
+                    
+                    Spacer().frame(height: 30)
+                    
+                    // Hourly forecast
+                    if !weatherService.hourlyForecast.isEmpty {
+                        HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
+                            .frame(height: 100)
+                            .padding(.horizontal)
+                            .padding(.bottom, 30)
+                    }
                 }
             }
         }
