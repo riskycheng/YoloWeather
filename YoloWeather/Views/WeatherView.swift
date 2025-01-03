@@ -49,76 +49,88 @@ struct WeatherView: View {
             // 背景渐变
             WeatherBackgroundView(timeOfDay: timeOfDay)
             
-            ScrollView {
-                VStack(spacing: 24) {
-                    // 顶部工具栏
-                    HStack(spacing: 16) {
-                        Button {
-                            showingLocationPicker.toggle()
-                        } label: {
-                            toolbarButton("list.bullet")
+            VStack(spacing: 0) {
+                // Top bar with controls
+                HStack(spacing: 20) {
+                    // Left controls
+                    HStack(spacing: 12) {
+                        Button(action: {
+                            Task {
+                                if let location = locationService.currentLocation {
+                                    await updateLocation(location)
+                                }
+                            }
+                        }) {
+                            Image(systemName: "location.fill")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.brown)
+                                .frame(width: 44, height: 44)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
                         }
                         
-                        Spacer()
-                        
-                        // 城市名称
-                        Text(locationService.locationName ?? selectedLocation.name)
-                            .font(.title2.weight(.medium))
-                            .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                        
-                        Spacer()
-                        
-                        HStack(spacing: 12) {
-                            Button {
-                                withAnimation {
-                                    showDailyForecast.toggle()
-                                }
-                            } label: {
-                                toolbarButton(showDailyForecast ? "calendar.circle.fill" : "calendar.circle")
-                            }
-                            
-                            Button {
-                                Task {
-                                    isRefreshing = true
-                                    await weatherService.updateWeather(for: locationService.currentLocation ?? selectedLocation.location)
-                                    isRefreshing = false
-                                    lastRefreshTime = Date()
-                                    updateTimeOfDay()
-                                }
-                            } label: {
-                                toolbarButton("arrow.clockwise")
-                                    .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                                    .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
-                            }
-                            .disabled(isRefreshing)
+                        Button(action: {
+                            showingLocationPicker = true
+                        }) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.brown)
+                                .frame(width: 44, height: 44)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
                         }
                     }
-                    .padding(.horizontal)
                     
-                    if let currentWeather = weatherService.currentWeather {
-                        // 当前天气
-                        CurrentWeatherView(weather: currentWeather)
-                            .transition(.opacity)
-                    }
+                    Spacer()
                     
-                    if !weatherService.hourlyForecast.isEmpty {
-                        // 24小时预报
-                        HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
-                            .transition(.opacity)
-                            .padding(.horizontal)
-                    }
-                    
-                    if !weatherService.dailyForecast.isEmpty && showDailyForecast {
-                        // 7天预报
-                        DailyForecastView(forecast: weatherService.dailyForecast)
-                            .transition(.opacity)
-                            .padding(.horizontal)
+                    // Right control - Day/Night toggle
+                    Button(action: {
+                        withAnimation {
+                            timeOfDay = timeOfDay == .day ? .night : .day
+                        }
+                    }) {
+                        Image(systemName: timeOfDay == .day ? "sun.max.fill" : "moon.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(timeOfDay == .day ? .yellow : .gray)
+                            .frame(width: 44, height: 44)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
                     }
                 }
-                .padding(.vertical)
-            }
-            .refreshable {
-                await refreshWeather()
+                .padding(.horizontal, 20)
+                .padding(.top, 60)
+                
+                // Weather information
+                VStack(spacing: 8) {
+                    // Location name
+                    Text(locationService.locationName)
+                        .font(.system(size: 34, weight: .medium))
+                        .foregroundStyle(.primary)
+                    
+                    if let weather = weatherService.currentWeather {
+                        // Weather condition
+                        Text(weather.condition)
+                            .font(.system(size: 20))
+                            .foregroundStyle(.secondary)
+                        
+                        // Large temperature display
+                        Text("\(Int(round(weather.temperature)))°")
+                            .font(.system(size: 120, weight: .thin))
+                            .foregroundStyle(.primary)
+                            .padding(.top, -20)
+                    }
+                }
+                .padding(.top, 40)
+                
+                Spacer()
+                
+                // Hourly forecast
+                if !weatherService.hourlyForecast.isEmpty {
+                    HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
+                        .frame(height: 100)
+                        .padding(.horizontal)
+                        .padding(.bottom, 30)
+                }
             }
         }
         .sheet(isPresented: $showingLocationPicker) {
