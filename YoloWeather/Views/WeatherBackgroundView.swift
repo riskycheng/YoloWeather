@@ -2,69 +2,81 @@ import SwiftUI
 
 struct WeatherBackgroundView: View {
     let timeOfDay: WeatherTimeOfDay
-    @State private var cloudOffset: CGFloat = -200
+    @State private var cloudOffsets: [CGFloat] = [-200, -400, -600]
+    @State private var cloudScales: [CGFloat] = [1.0, 1.0, 1.0]
     
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 // 背景渐变
                 LinearGradient(
-                    colors: [
-                        Color(red: 0.4, green: 0.8, blue: 1.0),  // Light blue sky
-                        Color(red: 0.6, green: 0.9, blue: 1.0)   // Lighter blue horizon
-                    ],
+                    colors: colors,
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 .ignoresSafeArea()
                 
-                // Animated clouds
+                // 飘动的云或星星
                 ForEach(0..<3) { index in
-                    Image(systemName: "cloud.fill")
+                    Image(timeOfDay == .day ? "cloudy" : "moon_stars")
                         .resizable()
                         .scaledToFit()
-                        .foregroundStyle(.white.opacity(0.8))
-                        .frame(width: 100)
-                        .offset(x: cloudOffset + CGFloat(index * 200), 
-                               y: -geometry.size.height * 0.25 + CGFloat(index * 20))
-                        .onAppear {
-                            withAnimation(
-                                .linear(duration: 20)
-                                .repeatForever(autoreverses: false)
-                            ) {
-                                cloudOffset = geometry.size.width
-                            }
+                        .frame(width: [100, 80, 120][index])
+                        .opacity(0.8)
+                        .scaleEffect(cloudScales[index])
+                        .offset(x: cloudOffsets[index],
+                               y: -geometry.size.height * [0.3, 0.4, 0.25][index])
+                }
+                .onAppear {
+                    // 云的移动动画，每个云速度和起始位置不同
+                    for index in 0..<3 {
+                        withAnimation(
+                            .linear(duration: Double.random(in: 25...35))
+                            .repeatForever(autoreverses: false)
+                        ) {
+                            cloudOffsets[index] = geometry.size.width
                         }
+                        
+                        // 云的缩放动画，每个云的时间和幅度不同
+                        withAnimation(
+                            .easeInOut(duration: Double.random(in: 2...4))
+                            .repeatForever(autoreverses: true)
+                        ) {
+                            cloudScales[index] = Double.random(in: 1.1...1.2)
+                        }
+                    }
                 }
                 
-                // Ground vegetation
+                // 地面装饰
                 HStack {
-                    // Left side vegetation
+                    // 左侧
                     VStack {
-                        Image(systemName: "leaf.fill")
+                        Image("sparkles")
                             .resizable()
                             .scaledToFit()
-                            .foregroundStyle(Color.green.opacity(0.9))
-                            .frame(width: 60, height: 60)
-                            .rotationEffect(.degrees(-30))
+                            .frame(width: 80, height: 80)
+                            .rotationEffect(.degrees(-15))
+                            .opacity(0.8)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading)
                     
                     Spacer()
                     
-                    // Right side vegetation
+                    // 右侧
                     VStack {
-                        Image(systemName: "leaf.fill")
+                        Image("sparkles")
                             .resizable()
                             .scaledToFit()
-                            .foregroundStyle(Color.green.opacity(0.9))
-                            .frame(width: 60, height: 60)
-                            .rotationEffect(.degrees(30))
+                            .frame(width: 80, height: 80)
+                            .rotationEffect(.degrees(15))
+                            .opacity(0.8)
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .padding(.trailing)
                 }
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .padding(.bottom, 50)
             }
         }
     }

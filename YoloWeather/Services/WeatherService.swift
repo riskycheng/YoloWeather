@@ -1,11 +1,13 @@
 import Foundation
 import WeatherKit
 import CoreLocation
+import os.log
 
 @MainActor
 class WeatherService: ObservableObject {
     static let shared = WeatherService()
     private let weatherService = WeatherKit.WeatherService.shared
+    private let logger = Logger(subsystem: "com.yoloweather.app", category: "WeatherService")
     
     @Published private(set) var currentWeather: CurrentWeather?
     @Published private(set) var hourlyForecast: [CurrentWeather] = []
@@ -17,12 +19,14 @@ class WeatherService: ObservableObject {
     
     func updateWeather(for location: CLLocation) async {
         do {
+            logger.info("Updating weather for location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+            
+            // 获取天气数据
             let weather = try await weatherService.weather(for: location)
             
-            // Get timezone for the location
-            let geocoder = CLGeocoder()
-            let placemarks = try await geocoder.reverseGeocodeLocation(location)
-            let timezone = placemarks.first?.timeZone ?? TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
+            // 计算时区
+            let timezone = self.calculateTimezone(for: location)
+            logger.info("Using timezone: \(timezone.identifier)")
             
             // 更新当前天气
             currentWeather = CurrentWeather(
@@ -73,10 +77,39 @@ class WeatherService: ObservableObject {
             
             lastUpdateTime = Date()
             errorMessage = nil
+            logger.info("Weather update completed successfully")
             
         } catch {
+            logger.error("Weather update failed: \(error.localizedDescription)")
             errorMessage = "获取天气信息失败：\(error.localizedDescription)"
         }
+    }
+    
+    private func calculateTimezone(for location: CLLocation) -> TimeZone {
+        // 根据经度计算时区
+        let longitude = location.coordinate.longitude
+        let hourOffset = Int(round(longitude / 15.0))
+        let secondsFromGMT = hourOffset * 3600
+        
+        // 特殊时区处理
+        if longitude >= -25 && longitude <= -10 && // 冰岛经度范围
+           location.coordinate.latitude >= 63 && location.coordinate.latitude <= 67 { // 冰岛纬度范围
+            return TimeZone(identifier: "Atlantic/Reykjavik") ?? TimeZone(secondsFromGMT: 0)!
+        }
+        
+        // 尝试使用系统时区数据库
+        let timeZones = TimeZone.knownTimeZoneIdentifiers
+        for identifier in timeZones {
+            if let tz = TimeZone(identifier: identifier) {
+                let offset = Double(tz.secondsFromGMT()) / 3600.0
+                if abs(offset - Double(hourOffset)) < 0.5 {
+                    return tz
+                }
+            }
+        }
+        
+        // 如果找不到匹配的时区，使用计算的偏移
+        return TimeZone(secondsFromGMT: secondsFromGMT) ?? TimeZone(identifier: "UTC")!
     }
     
     static func mock() -> WeatherService {

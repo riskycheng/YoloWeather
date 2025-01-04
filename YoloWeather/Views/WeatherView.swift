@@ -22,19 +22,26 @@ struct WeatherView: View {
         isRefreshing = true
         defer { isRefreshing = false }
         
-        if let location = locationService.currentLocation {
-            await weatherService.updateWeather(for: location)
-            lastRefreshTime = Date()
-            updateTimeOfDay()
+        if isUsingCurrentLocation {
+            if let location = locationService.currentLocation {
+                await weatherService.updateWeather(for: location)
+            }
+        } else {
+            locationService.locationName = selectedLocation.name
+            await weatherService.updateWeather(for: selectedLocation.location)
         }
+        lastRefreshTime = Date()
+        updateTimeOfDay()
     }
     
     private func updateLocation(_ location: CLLocation?) async {
         if let location = location {
+            // 使用当前位置
             isUsingCurrentLocation = true
             locationService.currentLocation = location
             await weatherService.updateWeather(for: location)
         } else {
+            // 使用预设位置
             isUsingCurrentLocation = false
             locationService.locationName = selectedLocation.name
             locationService.currentLocation = selectedLocation.location
@@ -49,117 +56,128 @@ struct WeatherView: View {
             // 背景渐变
             WeatherBackgroundView(timeOfDay: timeOfDay)
             
-            VStack(spacing: 0) {
-                // Top bar with controls
-                HStack(spacing: 20) {
-                    // Left controls
-                    HStack(spacing: 12) {
-                        Button(action: {
-                            Task {
-                                if let location = locationService.currentLocation {
-                                    await updateLocation(location)
+            // 主内容
+            RefreshableView(isRefreshing: $isRefreshing) {
+                Task {
+                    await refreshWeather()
+                }
+            } content: {
+                VStack(spacing: 0) {
+                    // Top bar with controls
+                    HStack(spacing: 20) {
+                        // Left controls
+                        HStack(spacing: 12) {
+                            Button(action: {
+                                Task {
+                                    if let location = locationService.currentLocation {
+                                        await updateLocation(location)
+                                    }
                                 }
+                            }) {
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundStyle(.brown)
+                                    .frame(width: 44, height: 44)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
+                            }
+                            
+                            Button(action: {
+                                showingLocationPicker = true
+                            }) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 22))
+                                    .foregroundStyle(.brown)
+                                    .frame(width: 44, height: 44)
+                                    .background(.ultraThinMaterial)
+                                    .clipShape(Circle())
+                            }
+                        }
+                        
+                        Spacer()
+                        
+                        // Right control - Day/Night toggle
+                        Button(action: {
+                            withAnimation {
+                                timeOfDay = timeOfDay == .day ? .night : .day
                             }
                         }) {
-                            Image(systemName: "location.fill")
+                            Image(systemName: timeOfDay == .day ? "sun.max.fill" : "moon.fill")
                                 .font(.system(size: 22))
-                                .foregroundStyle(.brown)
+                                .foregroundStyle(timeOfDay == .day ? .yellow : .gray)
                                 .frame(width: 44, height: 44)
                                 .background(.ultraThinMaterial)
                                 .clipShape(Circle())
-                        }
-                        
-                        Button(action: {
-                            showingLocationPicker = true
-                        }) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 22))
-                                .foregroundStyle(.brown)
-                                .frame(width: 44, height: 44)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    // Right control - Day/Night toggle
-                    Button(action: {
-                        withAnimation {
-                            timeOfDay = timeOfDay == .day ? .night : .day
-                        }
-                    }) {
-                        Image(systemName: timeOfDay == .day ? "sun.max.fill" : "moon.fill")
-                            .font(.system(size: 22))
-                            .foregroundStyle(timeOfDay == .day ? .yellow : .gray)
-                            .frame(width: 44, height: 44)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.top, 30)
-                
-                Spacer()
-                
-                // Weather information at the bottom
-                VStack(alignment: .leading, spacing: 0) {
-                    // City name and condition
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(locationService.locationName)
-                            .font(.system(size: 40, weight: .bold))
-                            .foregroundStyle(.primary)
-                        
-                        if let weather = weatherService.currentWeather {
-                            Text(weather.condition)
-                                .font(.system(size: 24, weight: .medium))
-                                .foregroundStyle(.secondary)
                         }
                     }
                     .padding(.horizontal, 20)
-                    .padding(.bottom, 10)
+                    .padding(.top, 30)
                     
-                    // Large temperature
-                    if let weather = weatherService.currentWeather {
-                        Text("\(Int(round(weather.temperature)))°")
-                            .font(.system(size: 140, weight: .bold))
-                            .foregroundStyle(.primary)
-                            .padding(.leading, 10)
-                    }
+                    Spacer()
                     
-                    Spacer().frame(height: 30)
-                    
-                    // Hourly forecast
-                    if !weatherService.hourlyForecast.isEmpty {
-                        HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
-                            .frame(height: 100)
-                            .padding(.horizontal)
-                            .padding(.bottom, 30)
+                    // Weather information at the bottom
+                    VStack(alignment: .leading, spacing: 0) {
+                        // City name and condition
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(isUsingCurrentLocation ? locationService.locationName : selectedLocation.name)
+                                .font(.system(size: 40, weight: .bold))
+                                .foregroundStyle(.primary)
+                            
+                            if let weather = weatherService.currentWeather {
+                                Text(weather.condition)
+                                    .font(.system(size: 24, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 10)
+                        
+                        // Large temperature
+                        if let weather = weatherService.currentWeather {
+                            Text("\(Int(round(weather.temperature)))°")
+                                .font(.system(size: 140, weight: .bold))
+                                .foregroundStyle(.primary)
+                                .padding(.leading, 10)
+                        }
+                        
+                        Spacer().frame(height: 30)
+                        
+                        // Hourly forecast
+                        if !weatherService.hourlyForecast.isEmpty {
+                            HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
+                                .frame(height: 100)
+                                .padding(.horizontal)
+                                .padding(.bottom, 30)
+                        }
                     }
                 }
             }
-        }
-        .sheet(isPresented: $showingLocationPicker) {
-            NavigationView {
-                LocationPickerView(
-                    selectedLocation: $selectedLocation,
-                    locationService: locationService,
-                    isUsingCurrentLocation: $isUsingCurrentLocation,
-                    onLocationSelected: { location in
-                        Task {
-                            await updateLocation(location)
+            
+            // Location picker sheet
+            .sheet(isPresented: $showingLocationPicker) {
+                NavigationView {
+                    LocationPickerView(
+                        selectedLocation: $selectedLocation,
+                        locationService: locationService,
+                        isUsingCurrentLocation: $isUsingCurrentLocation,
+                        onLocationSelected: { location in
                             showingLocationPicker = false
+                            Task {
+                                await updateLocation(location)
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
         .task {
+            // 首次加载时更新天气
             await updateLocation(selectedLocation.location)
         }
         .onChange(of: selectedLocation) { oldValue, newValue in
+            // 切换城市时更新天气
             Task {
-                await updateLocation(selectedLocation.location)
+                await updateLocation(newValue.location)
             }
         }
     }
