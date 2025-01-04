@@ -75,46 +75,54 @@ struct HourlyTemperatureTrendView: View {
     @Environment(\.weatherTimeOfDay) var timeOfDay
     
     private func formatHour(_ date: Date) -> String {
-        if Calendar.current.isDate(date, equalTo: Date(), toGranularity: .hour) {
+        var calendar = Calendar.current
+        let timeZone = forecast.first?.timezone ?? .current
+        calendar.timeZone = timeZone
+        
+        if calendar.isDate(date, equalTo: Date(), toGranularity: .hour) {
             return "Now"
         }
+        
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        formatter.timeZone = forecast.first?.timezone ?? .current
+        formatter.dateFormat = "HH:00"
+        formatter.timeZone = timeZone
         return formatter.string(from: date)
     }
     
     var body: some View {
         ZStack {
             // Dark background with radius
-            RoundedRectangle(cornerRadius: 25)
-                .fill(Color.black.opacity(0.7))
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.8))
             
             // Forecast items
             HStack(spacing: 0) {
                 ForEach(0..<min(5, forecast.count), id: \.self) { index in
                     let weather = forecast[index]
-                    VStack(spacing: 12) {
+                    VStack(spacing: 8) {
                         // Time
                         Text(formatHour(weather.date))
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white)
+                            .font(.system(size: 15, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.9))
                         
                         // Weather icon
                         Image(systemName: weather.symbolName)
-                            .symbolRenderingMode(.multicolor)
-                            .font(.system(size: 24))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, .yellow, .gray)
+                            .font(.system(size: 28))
+                            .symbolEffect(.bounce, options: .repeat(2))
                         
                         // Temperature
                         Text("\(Int(round(weather.temperature)))°")
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 20, weight: .medium, design: .rounded))
                             .foregroundStyle(.white)
                     }
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
                 }
             }
-            .padding(.vertical, 15)
         }
+        .frame(height: 120)
     }
 }
 

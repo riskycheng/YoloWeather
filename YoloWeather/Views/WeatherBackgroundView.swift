@@ -18,56 +18,6 @@ struct WeatherBackgroundView: View {
                 )
                 .ignoresSafeArea()
                 
-                // Nature scene with trees higher up
-                VStack {
-                    // Trees positioned in the upper third
-                    ZStack {
-                        // Background trees
-                        HStack(spacing: -20) {
-                            ForEach(0..<5) { index in
-                                Image(systemName: "tree.fill")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .foregroundStyle(Color.green.opacity(0.8))
-                                    .frame(height: 120 + CGFloat(index % 3) * 40)
-                                    .offset(y: CGFloat(index % 2) * 20)
-                            }
-                        }
-                    }
-                    .padding(.top, geometry.size.height * 0.2) // Position trees in upper third
-                    
-                    Spacer()
-                    
-                    // Ground vegetation
-                    HStack {
-                        // Left side vegetation
-                        VStack {
-                            Image(systemName: "leaf.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .foregroundStyle(Color.green.opacity(0.9))
-                                .frame(width: 60, height: 60)
-                                .rotationEffect(.degrees(-30))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading)
-                        
-                        Spacer()
-                        
-                        // Right side vegetation
-                        VStack {
-                            Image(systemName: "leaf.fill")
-                                .resizable()
-                                .scaledToFit()
-                                .foregroundStyle(Color.green.opacity(0.9))
-                                .frame(width: 60, height: 60)
-                                .rotationEffect(.degrees(30))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing)
-                    }
-                }
-                
                 // Animated clouds
                 ForEach(0..<3) { index in
                     Image(systemName: "cloud.fill")
@@ -76,7 +26,7 @@ struct WeatherBackgroundView: View {
                         .foregroundStyle(.white.opacity(0.8))
                         .frame(width: 100)
                         .offset(x: cloudOffset + CGFloat(index * 200), 
-                               y: CGFloat(50 + index * 30))
+                               y: -geometry.size.height * 0.25 + CGFloat(index * 20))
                         .onAppear {
                             withAnimation(
                                 .linear(duration: 20)
@@ -85,6 +35,35 @@ struct WeatherBackgroundView: View {
                                 cloudOffset = geometry.size.width
                             }
                         }
+                }
+                
+                // Ground vegetation
+                HStack {
+                    // Left side vegetation
+                    VStack {
+                        Image(systemName: "leaf.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(Color.green.opacity(0.9))
+                            .frame(width: 60, height: 60)
+                            .rotationEffect(.degrees(-30))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.leading)
+                    
+                    Spacer()
+                    
+                    // Right side vegetation
+                    VStack {
+                        Image(systemName: "leaf.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(Color.green.opacity(0.9))
+                            .frame(width: 60, height: 60)
+                            .rotationEffect(.degrees(30))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing)
                 }
             }
         }
