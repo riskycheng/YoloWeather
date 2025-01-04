@@ -135,6 +135,38 @@ struct HourlyTemperatureTrendView: View {
         return Array(result.prefix(24))
     }
     
+    private func mapWeatherConditionToAsset(_ condition: String) -> String {
+        // Map WeatherKit conditions to our custom asset names
+        switch condition.lowercased() {
+        case let c where c.contains("clear"):
+            return "sunny"
+        case let c where c.contains("cloudy") && c.contains("partly"):
+            return "partly_cloudy_daytime"
+        case let c where c.contains("cloudy"):
+            return "cloudy"
+        case let c where c.contains("rain") && c.contains("heavy"):
+            return "heavy_rain"
+        case let c where c.contains("rain") && c.contains("light"):
+            return "light_rain"
+        case let c where c.contains("rain"):
+            return "moderate_rain"
+        case let c where c.contains("snow") && c.contains("heavy"):
+            return "heavy_snow"
+        case let c where c.contains("snow") && c.contains("light"):
+            return "light_snow"
+        case let c where c.contains("snow"):
+            return "moderate_snow"
+        case let c where c.contains("thunderstorm"):
+            return "thunderstorm"
+        case let c where c.contains("fog") || c.contains("haze"):
+            return "fog"
+        case let c where c.contains("wind"):
+            return "windy"
+        default:
+            return "NA" // Fallback icon
+        }
+    }
+    
     var body: some View {
         ZStack {
             // Dark background with radius
@@ -153,10 +185,9 @@ struct HourlyTemperatureTrendView: View {
                                 .frame(height: 25) // Fixed height for alignment
                             
                             // Weather icon in the middle
-                            Image(systemName: weather.symbolName)
-                                .symbolRenderingMode(.palette)
-                                .foregroundStyle(.white, .yellow, .gray)
-                                .font(.system(size: 28))
+                            Image(mapWeatherConditionToAsset(weather.condition))
+                                .resizable()
+                                .scaledToFit()
                                 .frame(height: 32) // Fixed height for alignment
                             
                             // Time at the bottom

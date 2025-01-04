@@ -1,0 +1,23 @@
+{
+  "images" : [
+    {
+      "filename" : "12_rainstorm_color_w48.png",
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "filename" : "12_rainstorm_color_w128.png",
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "12_rainstorm_color_w256.png",
+      "idiom" : "universal",
+      "scale" : "3x"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}
