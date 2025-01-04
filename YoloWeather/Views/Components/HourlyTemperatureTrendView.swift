@@ -76,17 +76,63 @@ struct HourlyTemperatureTrendView: View {
     
     private func formatHour(_ date: Date) -> String {
         var calendar = Calendar.current
-        let timeZone = forecast.first?.timezone ?? .current
+        let timeZone = forecast.first?.timezone ?? TimeZone(identifier: "Asia/Shanghai") ?? .current
         calendar.timeZone = timeZone
         
-        if calendar.isDate(date, equalTo: Date(), toGranularity: .hour) {
+        let now = Date()
+        
+        // Check if this is the current hour
+        if calendar.isDateInToday(date) && 
+           calendar.component(.hour, from: date) == calendar.component(.hour, from: now) {
             return "Now"
         }
         
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:00"
+        formatter.dateFormat = "HH:00"  // 24-hour format
         formatter.timeZone = timeZone
         return formatter.string(from: date)
+    }
+    
+    private var displayedForecast: [CurrentWeather] {
+        guard !forecast.isEmpty else { return [] }
+        
+        var calendar = Calendar.current
+        let timeZone = forecast.first?.timezone ?? TimeZone(identifier: "Asia/Shanghai") ?? .current
+        calendar.timeZone = timeZone
+        
+        let now = Date()
+        let currentHour = calendar.component(.hour, from: now)
+        
+        // First, find the current hour's forecast
+        let currentForecast = forecast.first { weather in
+            let weatherHour = calendar.component(.hour, from: weather.date)
+            return calendar.isDateInToday(weather.date) && weatherHour == currentHour
+        }
+        
+        // Then get the future forecasts for today
+        let todayForecast = forecast
+            .filter { weather in
+                let weatherHour = calendar.component(.hour, from: weather.date)
+                return calendar.isDateInToday(weather.date) && weatherHour > currentHour
+            }
+            .sorted { $0.date < $1.date }
+        
+        // Get tomorrow's forecasts
+        let tomorrowForecast = forecast
+            .filter { weather in
+                return calendar.isDateInTomorrow(weather.date)
+            }
+            .sorted { $0.date < $1.date }
+        
+        // Combine all forecasts in correct order
+        var result: [CurrentWeather] = []
+        if let current = currentForecast {
+            result.append(current)
+        }
+        result.append(contentsOf: todayForecast)
+        result.append(contentsOf: tomorrowForecast)
+        
+        return Array(result.prefix(24))
     }
     
     var body: some View {
@@ -95,31 +141,35 @@ struct HourlyTemperatureTrendView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color.black.opacity(0.8))
             
-            // Forecast items
-            HStack(spacing: 0) {
-                ForEach(0..<min(5, forecast.count), id: \.self) { index in
-                    let weather = forecast[index]
-                    VStack(spacing: 8) {
-                        // Time
-                        Text(formatHour(weather.date))
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.9))
-                        
-                        // Weather icon
-                        Image(systemName: weather.symbolName)
-                            .symbolRenderingMode(.palette)
-                            .foregroundStyle(.white, .yellow, .gray)
-                            .font(.system(size: 28))
-                            .symbolEffect(.bounce, options: .repeat(2))
-                        
-                        // Temperature
-                        Text("\(Int(round(weather.temperature)))°")
-                            .font(.system(size: 20, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white)
+            // Scrollable forecast items
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(Array(displayedForecast.enumerated()), id: \.1.date) { index, weather in
+                        VStack(alignment: .center, spacing: 8) {
+                            // Temperature at the top
+                            Text("\(Int(round(weather.temperature)))°")
+                                .font(.system(size: 20, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white)
+                                .frame(height: 25) // Fixed height for alignment
+                            
+                            // Weather icon in the middle
+                            Image(systemName: weather.symbolName)
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(.white, .yellow, .gray)
+                                .font(.system(size: 28))
+                                .frame(height: 32) // Fixed height for alignment
+                            
+                            // Time at the bottom
+                            Text(formatHour(weather.date))
+                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .foregroundStyle(.white.opacity(0.9))
+                                .frame(height: 20) // Fixed height for alignment
+                        }
+                        .frame(width: 70) // Fixed width for each item
+                        .padding(.vertical, 12)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
                 }
+                .padding(.horizontal, 8)
             }
         }
         .frame(height: 120)

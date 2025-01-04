@@ -19,6 +19,11 @@ class WeatherService: ObservableObject {
         do {
             let weather = try await weatherService.weather(for: location)
             
+            // Get timezone for the location
+            let geocoder = CLGeocoder()
+            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            let timezone = placemarks.first?.timeZone ?? TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
+            
             // 更新当前天气
             currentWeather = CurrentWeather(
                 date: weather.currentWeather.date,
@@ -33,7 +38,7 @@ class WeatherService: ObservableObject {
                 pressure: weather.currentWeather.pressure.value,
                 visibility: weather.currentWeather.visibility.value,
                 airQualityIndex: 0,
-                timezone: TimeZone.current
+                timezone: timezone
             )
             
             // 更新小时预报
@@ -51,7 +56,7 @@ class WeatherService: ObservableObject {
                     pressure: hour.pressure.value,
                     visibility: hour.visibility.value,
                     airQualityIndex: 0,
-                    timezone: TimeZone.current
+                    timezone: timezone
                 )
             }
             
