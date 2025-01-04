@@ -22,16 +22,12 @@ class WeatherService: ObservableObject {
             // 获取时区信息
             let timezone = calculateTimezone(for: location)
             
-            // 打印天气状况用于调试
-            print("Current condition: \(weather.currentWeather.condition.description)")
-            print("Current symbol: \(weather.currentWeather.symbolName)")
-            
-            // 更新当前天气
-            currentWeather = CurrentWeather(
-                date: weather.currentWeather.date,
+            // 创建当前天气数据
+            let current = CurrentWeather(
+                date: Date(),  // 使用当前时间
                 temperature: weather.currentWeather.temperature.value,
                 feelsLike: weather.currentWeather.apparentTemperature.value,
-                condition: translateWeatherCondition(weather.currentWeather.condition),  // 转换天气状况
+                condition: translateWeatherCondition(weather.currentWeather.condition),
                 symbolName: weather.currentWeather.symbolName,
                 windSpeed: weather.currentWeather.wind.speed.value,
                 precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
@@ -43,31 +39,45 @@ class WeatherService: ObservableObject {
                 timezone: timezone
             )
             
+            // 更新当前天气
+            currentWeather = current
+            
             // 更新小时预报（24小时）
-            hourlyForecast = Array(weather.hourlyForecast.forecast.prefix(24)).map { hour in
-                print("Hour condition: \(hour.condition.description)")  // 打印每小时天气状况
-                return CurrentWeather(
-                    date: hour.date,
-                    temperature: hour.temperature.value,
-                    feelsLike: hour.apparentTemperature.value,
-                    condition: translateWeatherCondition(hour.condition),  // 转换天气状况
-                    symbolName: hour.symbolName,
-                    windSpeed: hour.wind.speed.value,
-                    precipitationChance: hour.precipitationChance,
-                    uvIndex: Int(hour.uvIndex.value),
-                    humidity: hour.humidity,
-                    pressure: hour.pressure.value,
-                    visibility: hour.visibility.value,
-                    airQualityIndex: 0,
-                    timezone: timezone
-                )
-            }
+            var hourlyWeatherData = [CurrentWeather]()
+            
+            // 添加当前天气作为第一项
+            hourlyWeatherData.append(current)
+            
+            // 添加未来23小时的预报
+            let futureForecasts = weather.hourlyForecast.forecast
+                .filter { $0.date > Date() }  // 只取未来的时间
+                .prefix(23)  // 取23小时（加上当前时刻共24小时）
+                .map { hour in
+                    CurrentWeather(
+                        date: hour.date,
+                        temperature: hour.temperature.value,
+                        feelsLike: hour.apparentTemperature.value,
+                        condition: translateWeatherCondition(hour.condition),
+                        symbolName: hour.symbolName,
+                        windSpeed: hour.wind.speed.value,
+                        precipitationChance: hour.precipitationChance,
+                        uvIndex: Int(hour.uvIndex.value),
+                        humidity: hour.humidity,
+                        pressure: hour.pressure.value,
+                        visibility: hour.visibility.value,
+                        airQualityIndex: 0,
+                        timezone: timezone
+                    )
+                }
+            
+            hourlyWeatherData.append(contentsOf: futureForecasts)
+            hourlyForecast = hourlyWeatherData
             
             // 更新每日预报
             dailyForecast = weather.dailyForecast.forecast.prefix(7).map { day in
                 DayWeatherInfo(
                     date: day.date,
-                    condition: translateWeatherCondition(day.condition),  // 转换天气状况
+                    condition: translateWeatherCondition(day.condition),
                     symbolName: day.symbolName,
                     lowTemperature: day.lowTemperature.value,
                     highTemperature: day.highTemperature.value
