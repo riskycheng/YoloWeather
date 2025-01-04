@@ -62,51 +62,24 @@ struct RefreshableView<Content: View>: View {
                             
                             if showRefreshView {
                                 // 刷新动画
-                                ZStack {
-                                    // 旋转的云
-                                    Image("cloudy")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 32, height: 32)
-                                        .rotationEffect(.degrees(rotationAngle))
-                                    
-                                    // 闪电效果
-                                    Image("lightning")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 24, height: 24)
-                                        .opacity(sin(rotationAngle * .pi / 180) * 0.8 + 0.2)
-                                        .offset(x: 4, y: 4)
-                                }
-                                .onAppear {
-                                    withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                                        rotationAngle = 360
+                                Image("sunny")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 32, height: 32)
+                                    .rotationEffect(.degrees(rotationAngle))
+                                    .onAppear {
+                                        withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                                            rotationAngle = 360
+                                        }
                                     }
-                                }
                             } else {
                                 // 下拉时的动画
-                                ZStack {
-                                    Image("sunny")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 32, height: 32)
-                                        .rotationEffect(.degrees(rotationAngle))
-                                        .scaleEffect(min(dragOffset / refreshThreshold, 1.0))
-                                    
-                                    Image("cloud")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 32, height: 32)
-                                        .opacity(min(dragOffset / refreshThreshold, 1.0))
-                                        .offset(x: min(dragOffset / 2, 20), y: 0)
-                                }
+                                Image("sunny")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 32, height: 32)
+                                    .rotationEffect(.degrees(rotationAngle))
                             }
-                        }
-                        
-                        if !showRefreshView {
-                            Text(dragOffset > refreshThreshold ? "释放刷新" : "下拉刷新")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
                         }
                     }
                     .frame(width: 80, height: 80)

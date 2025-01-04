@@ -15,9 +15,9 @@ struct CurrentWeather: Equatable {
     let airQualityIndex: Int
     let timezone: TimeZone
     
-    static func mock(temp: Double, condition: String, symbol: String) -> CurrentWeather {
+    static func mock(temp: Double, condition: String, symbol: String, date: Date = Date()) -> CurrentWeather {
         CurrentWeather(
-            date: Date(),
+            date: date,
             temperature: temp,
             feelsLike: temp + 2,
             condition: condition,
@@ -41,9 +41,9 @@ struct DayWeatherInfo: Equatable {
     let lowTemperature: Double
     let highTemperature: Double
     
-    static func mock(low: Double, high: Double, condition: String, symbol: String) -> DayWeatherInfo {
+    static func mock(low: Double, high: Double, condition: String, symbol: String, date: Date = Date()) -> DayWeatherInfo {
         DayWeatherInfo(
-            date: Date(),
+            date: date,
             condition: condition,
             symbolName: symbol,
             lowTemperature: low,

@@ -1,13 +1,11 @@
 import Foundation
 import WeatherKit
 import CoreLocation
-import os.log
 
 @MainActor
 class WeatherService: ObservableObject {
     static let shared = WeatherService()
     private let weatherService = WeatherKit.WeatherService.shared
-    private let logger = Logger(subsystem: "com.yoloweather.app", category: "WeatherService")
     
     @Published private(set) var currentWeather: CurrentWeather?
     @Published private(set) var hourlyForecast: [CurrentWeather] = []
@@ -19,21 +17,21 @@ class WeatherService: ObservableObject {
     
     func updateWeather(for location: CLLocation) async {
         do {
-            logger.info("Updating weather for location: \(location.coordinate.latitude), \(location.coordinate.longitude)")
-            
-            // 获取天气数据
             let weather = try await weatherService.weather(for: location)
             
-            // 计算时区
-            let timezone = self.calculateTimezone(for: location)
-            logger.info("Using timezone: \(timezone.identifier)")
+            // 获取时区信息
+            let timezone = calculateTimezone(for: location)
+            
+            // 打印天气状况用于调试
+            print("Current condition: \(weather.currentWeather.condition.description)")
+            print("Current symbol: \(weather.currentWeather.symbolName)")
             
             // 更新当前天气
             currentWeather = CurrentWeather(
                 date: weather.currentWeather.date,
                 temperature: weather.currentWeather.temperature.value,
                 feelsLike: weather.currentWeather.apparentTemperature.value,
-                condition: weather.currentWeather.condition.description,
+                condition: translateWeatherCondition(weather.currentWeather.condition),  // 转换天气状况
                 symbolName: weather.currentWeather.symbolName,
                 windSpeed: weather.currentWeather.wind.speed.value,
                 precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
@@ -45,13 +43,14 @@ class WeatherService: ObservableObject {
                 timezone: timezone
             )
             
-            // 更新小时预报
-            hourlyForecast = weather.hourlyForecast.forecast.prefix(24).map { hour in
-                CurrentWeather(
+            // 更新小时预报（24小时）
+            hourlyForecast = Array(weather.hourlyForecast.forecast.prefix(24)).map { hour in
+                print("Hour condition: \(hour.condition.description)")  // 打印每小时天气状况
+                return CurrentWeather(
                     date: hour.date,
                     temperature: hour.temperature.value,
                     feelsLike: hour.apparentTemperature.value,
-                    condition: hour.condition.description,
+                    condition: translateWeatherCondition(hour.condition),  // 转换天气状况
                     symbolName: hour.symbolName,
                     windSpeed: hour.wind.speed.value,
                     precipitationChance: hour.precipitationChance,
@@ -68,7 +67,7 @@ class WeatherService: ObservableObject {
             dailyForecast = weather.dailyForecast.forecast.prefix(7).map { day in
                 DayWeatherInfo(
                     date: day.date,
-                    condition: day.condition.description,
+                    condition: translateWeatherCondition(day.condition),  // 转换天气状况
                     symbolName: day.symbolName,
                     lowTemperature: day.lowTemperature.value,
                     highTemperature: day.highTemperature.value
@@ -77,11 +76,58 @@ class WeatherService: ObservableObject {
             
             lastUpdateTime = Date()
             errorMessage = nil
-            logger.info("Weather update completed successfully")
             
         } catch {
-            logger.error("Weather update failed: \(error.localizedDescription)")
+            print("Weather update error: \(error.localizedDescription)")
             errorMessage = "获取天气信息失败：\(error.localizedDescription)"
+        }
+    }
+    
+    // 将 WeatherKit 的天气状况转换为图标名称
+    private func translateWeatherCondition(_ condition: WeatherCondition) -> String {
+        switch condition {
+        case .clear:
+            return "sunny"
+        case .cloudy:
+            return "cloudy"
+        case .mostlyClear:
+            return "sunny_cloudy"
+        case .mostlyCloudy, .partlyCloudy:
+            return "partly_cloudy_daytime"
+        case .drizzle:
+            return "light_rain"
+        case .rain:
+            return "moderate_rain"
+        case .heavyRain:
+            return "heavy_rain"
+        case .snow:
+            return "snow"
+        case .heavySnow:
+            return "heavy_snow"
+        case .sleet:
+            return "snow"  // 雨夹雪使用 snow 图标
+        case .freezingDrizzle:
+            return "hail"
+        case .strongStorms:
+            return "thunderstorm"
+        case .windy:
+            return "typhoon"  // 大风使用台风图标
+        case .foggy:
+            return "fog"
+        case .haze:
+            return "haze"
+        case .hot:
+            return "high_temperature"
+        case .blizzard:
+            return "blizzard"
+        case .blowingDust:
+            return "blowing_sand"
+        case .tropicalStorm:
+            return "thunderstorm"
+        case .hurricane:
+            return "typhoon"
+        default:
+            return "partly_cloudy_daytime"  // 默认使用多云图标
         }
     }
     
@@ -114,21 +160,53 @@ class WeatherService: ObservableObject {
     
     static func mock() -> WeatherService {
         let service = WeatherService()
-        service.currentWeather = .mock(temp: 25, condition: "晴", symbol: "sun.max")
-        service.hourlyForecast = [
-            .mock(temp: 25, condition: "晴", symbol: "sun.max"),
-            .mock(temp: 27, condition: "晴", symbol: "sun.max"),
-            .mock(temp: 29, condition: "多云", symbol: "cloud.sun"),
-            .mock(temp: 28, condition: "多云", symbol: "cloud.sun"),
-            .mock(temp: 26, condition: "晴", symbol: "sun.max"),
-        ]
-        service.dailyForecast = [
-            DayWeatherInfo(date: Date(), condition: "晴", symbolName: "sun.max", lowTemperature: 20, highTemperature: 28),
-            DayWeatherInfo(date: Date().addingTimeInterval(86400), condition: "晴", symbolName: "sun.max", lowTemperature: 19, highTemperature: 27),
-            DayWeatherInfo(date: Date().addingTimeInterval(86400 * 2), condition: "多云", symbolName: "cloud.sun", lowTemperature: 21, highTemperature: 29),
-            DayWeatherInfo(date: Date().addingTimeInterval(86400 * 3), condition: "多云", symbolName: "cloud.sun", lowTemperature: 20, highTemperature: 28),
-            DayWeatherInfo(date: Date().addingTimeInterval(86400 * 4), condition: "晴", symbolName: "sun.max", lowTemperature: 18, highTemperature: 26),
-        ]
+        let timezone = TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
+        let now = Date()
+        
+        // 当前天气
+        service.currentWeather = CurrentWeather(
+            date: now,
+            temperature: 25,
+            feelsLike: 27,
+            condition: "晴",
+            symbolName: "sun.max",
+            windSpeed: 3.4,
+            precipitationChance: 0.2,
+            uvIndex: 5,
+            humidity: 0.65,
+            pressure: 1013,
+            visibility: 10,
+            airQualityIndex: 75,
+            timezone: timezone
+        )
+        
+        // 模拟24小时预报
+        var hourlyForecast: [CurrentWeather] = []
+        for hour in 0..<24 {
+            let futureDate = Calendar.current.date(byAdding: .hour, value: hour, to: now) ?? now
+            let temp = 25 - Double(hour) * 0.5 // 温度逐渐降低
+            let condition = hour % 2 == 0 ? "晴" : "多云"
+            let symbol = hour % 2 == 0 ? "sun.max" : "cloud.sun"
+            
+            let forecast = CurrentWeather(
+                date: futureDate,
+                temperature: temp,
+                feelsLike: temp + 2,
+                condition: condition,
+                symbolName: symbol,
+                windSpeed: 3.4,
+                precipitationChance: 0.2,
+                uvIndex: 5,
+                humidity: 0.65,
+                pressure: 1013,
+                visibility: 10,
+                airQualityIndex: 75,
+                timezone: timezone
+            )
+            hourlyForecast.append(forecast)
+        }
+        service.hourlyForecast = hourlyForecast
+        
         return service
     }
 }

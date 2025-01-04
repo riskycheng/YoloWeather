@@ -54,7 +54,10 @@ struct WeatherView: View {
     var body: some View {
         ZStack {
             // 背景渐变
-            WeatherBackgroundView(timeOfDay: timeOfDay)
+            WeatherBackgroundView(
+                weatherCondition: weatherService.currentWeather?.condition ?? "晴天"
+            )
+            .environment(\.weatherTimeOfDay, timeOfDay)
             
             // 主内容
             RefreshableView(isRefreshing: $isRefreshing) {
