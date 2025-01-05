@@ -2,6 +2,7 @@ import SwiftUI
 
 struct WeatherBackgroundView: View {
     @Environment(\.weatherTimeOfDay) var timeOfDay
+    @ObservedObject var weatherService: WeatherService
     let weatherCondition: String
     @State private var centerScale: CGFloat = 1.0
     @State private var cloudOffset1: CGFloat = -200
@@ -9,6 +10,10 @@ struct WeatherBackgroundView: View {
     @State private var sparkleOpacities: [Double] = Array(repeating: 0.0, count: 20)
     @State private var sparkleScales: [CGFloat] = []
     @State private var sparklePositions: [(CGFloat, CGFloat)] = []
+    
+    private var currentWeatherCondition: String {
+        weatherService.currentWeather?.condition ?? weatherCondition
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -79,19 +84,54 @@ struct WeatherBackgroundView: View {
                         }
                         .offset(x: geometry.size.width * 0.1)
                     } else {
-                        // 白天根据天气显示太阳或云
-                        if weatherCondition.contains("晴") {
+                        // 白天根据天气显示对应图标
+                        let condition = currentWeatherCondition.lowercased()
+                        switch condition {
+                        case let c where c.contains("sunny") || c.contains("clear"):
                             Image("sunny")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 140, height: 140)
+                                .frame(width: 180, height: 180)
                                 .scaleEffect(centerScale)
-                        } else {
-                            Image("cloudy")
+                        case let c where c.contains("cloud") || c.contains("overcast"):
+                            Image("cloud")
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 140, height: 140)
+                                .frame(width: 180, height: 180)
                                 .scaleEffect(centerScale)
+                        case let c where c.contains("rain"):
+                            Image("rain")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 180, height: 180)
+                                .scaleEffect(centerScale)
+                        case let c where c.contains("snow"):
+                            Image("snow")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 180, height: 180)
+                                .scaleEffect(centerScale)
+                        case let c where c.contains("fog") || c.contains("haze"):
+                            Image("fog")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 180, height: 180)
+                                .scaleEffect(centerScale)
+                        default:
+                            // 如果不确定，根据是否包含 sunny 来决定
+                            if condition.contains("sunny") {
+                                Image("sunny")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 180, height: 180)
+                                    .scaleEffect(centerScale)
+                            } else {
+                                Image("cloudy")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 180, height: 180)
+                                    .scaleEffect(centerScale)
+                            }
                         }
                     }
                 }
@@ -208,7 +248,7 @@ struct WeatherBackgroundView: View {
         if timeOfDay == .night {
             return [Color(hex: 0x1A237E), Color(hex: 0x0D47A1)] // 夜晚
         } else {
-            return weatherCondition.contains("晴") ?
+            return currentWeatherCondition.contains("晴") ?
                 [Color(hex: 0x64B5F6), Color(hex: 0x2196F3)] :  // 晴天
                 [Color(hex: 0x90CAF9), Color(hex: 0x42A5F5)]    // 多云
         }
@@ -227,15 +267,14 @@ extension Color {
     }
 }
 
+#if DEBUG
 struct WeatherBackgroundView_Previews: PreviewProvider {
     static var previews: some View {
-        Group {
-            WeatherBackgroundView(weatherCondition: "晴天")
-                .previewDisplayName("Day")
-            
-            WeatherBackgroundView(weatherCondition: "晴天")
-                .environment(\.weatherTimeOfDay, .night)
-                .previewDisplayName("Night")
-        }
+        WeatherBackgroundView(
+            weatherService: WeatherService.shared,
+            weatherCondition: "晴"
+        )
+        .environment(\.weatherTimeOfDay, .day)
     }
 }
+#endif

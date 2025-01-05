@@ -55,9 +55,11 @@ struct WeatherView: View {
         ZStack {
             // 背景渐变
             WeatherBackgroundView(
+                weatherService: weatherService,
                 weatherCondition: weatherService.currentWeather?.condition ?? "晴天"
             )
             .environment(\.weatherTimeOfDay, timeOfDay)
+            .environmentObject(weatherService)  // 添加 weatherService 作为环境对象
             
             // 主内容
             RefreshableView(isRefreshing: $isRefreshing) {
@@ -123,13 +125,14 @@ struct WeatherView: View {
                         // City name and condition
                         VStack(alignment: .leading, spacing: 4) {
                             Text(isUsingCurrentLocation ? locationService.locationName : selectedLocation.name)
-                                .font(.system(size: 40, weight: .bold))
-                                .foregroundStyle(.primary)
+                                .font(.system(size: 34, weight: .medium))
+                                .foregroundColor(timeOfDay == .night ? .black : .white)
                             
                             if let weather = weatherService.currentWeather {
                                 Text(weather.condition)
-                                    .font(.system(size: 24, weight: .medium))
-                                    .foregroundStyle(.secondary)
+                                    .font(.system(size: 17))
+                                    .foregroundColor(timeOfDay == .night ? .black : .white)
+                                    .opacity(0.8)
                             }
                         }
                         .padding(.horizontal, 20)
@@ -138,8 +141,8 @@ struct WeatherView: View {
                         // Large temperature
                         if let weather = weatherService.currentWeather {
                             Text("\(Int(round(weather.temperature)))°")
-                                .font(.system(size: 140, weight: .bold))
-                                .foregroundStyle(.primary)
+                                .font(.system(size: 96, weight: .thin))
+                                .foregroundColor(timeOfDay == .night ? .black : .white)
                                 .padding(.leading, 10)
                         }
                         
