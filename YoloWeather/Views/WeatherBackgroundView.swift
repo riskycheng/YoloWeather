@@ -137,84 +137,10 @@ struct WeatherBackgroundView: View {
                 }
                 .offset(y: -geometry.size.height * 0.25)
                 .onAppear {
-                    // 随机生成 sparkles
-                    let count = Int.random(in: 2...4)
-                    sparkleScales = Array(repeating: 1.0, count: count)
-                    
-                    // 生成随机但均匀分布的位置，避开月亮区域
-                    var positions: [(CGFloat, CGFloat)] = []
-                    let sections = count + 1  // 将屏幕分成比sparkle数量多1的区域
-                    
-                    for i in 0..<count {
-                        let sectionWidth = 0.8 / CGFloat(sections)  // 总宽度使用80%屏幕
-                        let xStart = 0.1 + sectionWidth * CGFloat(i + 1)  // 从10%开始，留出边距
-                        let x = CGFloat.random(in: 
-                            xStart...(xStart + sectionWidth * 0.8)  // 在每个区域内随机，但保持一定间距
-                        )
-                        
-                        // y坐标避开月亮区域（月亮大约在 0.25 高度处）
-                        let y: CGFloat
-                        if x > 0.3 && x < 0.7 {  // 中间区域
-                            // 在上方或下方随机
-                            y = CGFloat.random(in: Bool.random() ? 0.1...0.15 : 0.35...0.4)
-                        } else {
-                            // 两侧区域可以使用更大范围
-                            y = CGFloat.random(in: 0.1...0.4)
-                        }
-                        
-                        positions.append((x, y))
-                    }
-                    
-                    sparklePositions = positions
-                    
-                    // 中央图标缩放动画
-                    withAnimation(
-                        .easeInOut(duration: 3)
-                        .repeatForever(autoreverses: true)
-                    ) {
-                        centerScale = 1.1
-                    }
-                    
-                    // 云朵移动动画（减慢速度）
-                    withAnimation(
-                        .linear(duration: 20)  // 从8秒增加到20秒
-                        .repeatForever(autoreverses: false)
-                    ) {
-                        cloudOffset1 = geometry.size.width
-                    }
-                    
-                    withAnimation(
-                        .linear(duration: 25)  // 从12秒增加到25秒
-                        .repeatForever(autoreverses: false)
-                    ) {
-                        cloudOffset2 = -geometry.size.width
-                    }
-                    
-                    // 星星闪烁动画
-                    for index in 0..<20 {
-                        let delay = Double.random(in: 0...3)
-                        let duration = Double.random(in: 1...2)
-                        
-                        withAnimation(
-                            .easeInOut(duration: duration)
-                            .repeatForever(autoreverses: true)
-                            .delay(delay)
-                        ) {
-                            sparkleOpacities[index] = Double.random(in: 0.3...0.7)
-                        }
-                    }
-                    
-                    // Sparkles 缩放动画
-                    for index in 0..<count {
-                        let delay = Double.random(in: 0...2)
-                        withAnimation(
-                            .easeInOut(duration: 2)
-                            .repeatForever(autoreverses: true)
-                            .delay(delay)
-                        ) {
-                            sparkleScales[index] = 0.7
-                        }
-                    }
+                    startAnimations(geometry: geometry)
+                }
+                .onChange(of: currentWeatherCondition) { _ in
+                    startAnimations(geometry: geometry)
                 }
                 
                 // 地面装饰
@@ -240,6 +166,95 @@ struct WeatherBackgroundView: View {
                     .padding(.trailing)
                 }
                 .padding(.bottom, 50)
+            }
+        }
+    }
+    
+    private func startAnimations(geometry: GeometryProxy) {
+        // 重置所有动画状态
+        centerScale = 1.0
+        cloudOffset1 = -200
+        cloudOffset2 = 200
+        sparkleOpacities = Array(repeating: 0.0, count: 20)
+        
+        // 延迟一帧后开始新的动画，确保状态重置生效
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            // 随机生成 sparkles
+            let count = Int.random(in: 2...4)
+            sparkleScales = Array(repeating: 1.0, count: count)
+            
+            // 生成随机但均匀分布的位置，避开月亮区域
+            var positions: [(CGFloat, CGFloat)] = []
+            let sections = count + 1  // 将屏幕分成比sparkle数量多1的区域
+            
+            for i in 0..<count {
+                let sectionWidth = 0.8 / CGFloat(sections)  // 总宽度使用80%屏幕
+                let xStart = 0.1 + sectionWidth * CGFloat(i + 1)  // 从10%开始，留出边距
+                let x = CGFloat.random(in: 
+                    xStart...(xStart + sectionWidth * 0.8)  // 在每个区域内随机，但保持一定间距
+                )
+                
+                // y坐标避开月亮区域（月亮大约在 0.25 高度处）
+                let y: CGFloat
+                if x > 0.3 && x < 0.7 {  // 中间区域
+                    // 在上方或下方随机
+                    y = CGFloat.random(in: Bool.random() ? 0.1...0.15 : 0.35...0.4)
+                } else {
+                    // 两侧区域可以使用更大范围
+                    y = CGFloat.random(in: 0.1...0.4)
+                }
+                
+                positions.append((x, y))
+            }
+            
+            sparklePositions = positions
+            
+            // 中央图标缩放动画
+            withAnimation(
+                .easeInOut(duration: 3)
+                .repeatForever(autoreverses: true)
+            ) {
+                centerScale = 1.1
+            }
+            
+            // 云朵移动动画（减慢速度）
+            withAnimation(
+                .linear(duration: 20)
+                .repeatForever(autoreverses: false)
+            ) {
+                cloudOffset1 = geometry.size.width
+            }
+            
+            withAnimation(
+                .linear(duration: 25)
+                .repeatForever(autoreverses: false)
+            ) {
+                cloudOffset2 = -geometry.size.width
+            }
+            
+            // 星星闪烁动画
+            for index in 0..<20 {
+                let delay = Double.random(in: 0...3)
+                let duration = Double.random(in: 1...2)
+                
+                withAnimation(
+                    .easeInOut(duration: duration)
+                    .repeatForever(autoreverses: true)
+                    .delay(delay)
+                ) {
+                    sparkleOpacities[index] = Double.random(in: 0.3...0.7)
+                }
+            }
+            
+            // Sparkles 缩放动画
+            for index in 0..<sparkleScales.count {
+                withAnimation(
+                    .easeInOut(duration: Double.random(in: 2...4))
+                    .repeatForever(autoreverses: true)
+                    .delay(Double.random(in: 0...2))
+                ) {
+                    sparkleScales[index] = CGFloat.random(in: 0.8...1.2)
+                }
             }
         }
     }
