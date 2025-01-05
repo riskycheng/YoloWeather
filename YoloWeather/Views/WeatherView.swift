@@ -137,18 +137,14 @@ struct WeatherView: View {
                         Spacer()
                         
                         // Right control - Day/Night toggle
-                        Button(action: {
-                            withAnimation {
-                                timeOfDay = timeOfDay == .day ? .night : .day
+                        DayNightToggle(isNight: Binding(
+                            get: { timeOfDay == .night },
+                            set: { isNight in
+                                withAnimation {
+                                    timeOfDay = isNight ? .night : .day
+                                }
                             }
-                        }) {
-                            Image(systemName: timeOfDay == .day ? "sun.max.fill" : "moon.fill")
-                                .font(.system(size: 22))
-                                .foregroundStyle(timeOfDay == .day ? .yellow : .gray)
-                                .frame(width: 44, height: 44)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
+                        ))
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 30)
@@ -161,12 +157,12 @@ struct WeatherView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(isUsingCurrentLocation ? locationService.locationName : selectedLocation.name)
                                 .font(.system(size: 34, weight: .medium))
-                                .foregroundColor(.gray.opacity(0.8))
+                                .foregroundColor(timeOfDay == .day ? .white : .gray.opacity(0.8))
                             
                             if let weather = weatherService.currentWeather {
                                 Text(weather.condition)
                                     .font(.system(size: 17))
-                                    .foregroundColor(.gray.opacity(0.8))
+                                    .foregroundColor(timeOfDay == .day ? .white : .gray.opacity(0.8))
                                     .opacity(0.8)
                             }
                         }
@@ -177,7 +173,7 @@ struct WeatherView: View {
                         if let weather = weatherService.currentWeather {
                             Text("\(Int(round(weather.temperature)))°")
                                 .font(.system(size: 96, weight: .thin))
-                                .foregroundColor(.gray.opacity(0.8))
+                                .foregroundColor(timeOfDay == .day ? .white : .gray.opacity(0.8))
                                 .padding(.leading, 10)
                         }
                         
