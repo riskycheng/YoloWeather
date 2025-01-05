@@ -79,10 +79,9 @@ struct WeatherView: View {
         let symbolName: String
         
         var body: some View {
-            Image(systemName: symbolName)
-                .symbolRenderingMode(.multicolor)
-                .foregroundStyle(.yellow, .white)
-                .font(.system(size: 25))
+            Image(symbolName)
+                .resizable()
+                .scaledToFit()
         }
     }
     

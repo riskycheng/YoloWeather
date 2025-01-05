@@ -20,8 +20,10 @@ struct HourlyForecastView: View {
                             Text("\(hour)时")
                                 .font(.system(.footnote, design: .monospaced))
                             
-                            Image(systemName: weather.symbolName)
-                                .font(.title2)
+                            Image(weather.symbolName)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 32, height: 32)
                             
                             Text("\(Int(round(weather.temperature)))°")
                                 .font(.system(.body, design: .monospaced))

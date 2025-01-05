@@ -152,50 +152,48 @@ class WeatherService: ObservableObject {
     
     // 获取天气图标名称
     private func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
-        let baseSymbol: String
         switch condition {
         case .clear:
-            baseSymbol = isNight ? "moon.stars.fill" : "sun.max.fill"
+            return isNight ? "moon_stars" : "sunny"
         case .cloudy:
-            baseSymbol = "cloud.fill"
+            return "cloudy"
         case .mostlyClear, .mostlyCloudy, .partlyCloudy:
-            baseSymbol = isNight ? "cloud.moon.fill" : "cloud.sun.fill"
+            return isNight ? "moon_cloudy" : "partly_cloudy_daytime"
         case .drizzle:
-            baseSymbol = "cloud.drizzle.fill"
+            return "light_rain"
         case .rain:
-            baseSymbol = "cloud.rain.fill"
+            return "moderate_rain"
         case .heavyRain:
-            baseSymbol = "cloud.heavyrain.fill"
+            return "heavy_rain"
         case .snow:
-            baseSymbol = "cloud.snow.fill"
+            return "moderate_snow"
         case .heavySnow:
-            baseSymbol = "cloud.snow.fill"
+            return "heavy_snow"
         case .sleet:
-            baseSymbol = "cloud.sleet.fill"
+            return "snow"  // 使用雪的图标代替雨夹雪
         case .freezingDrizzle:
-            baseSymbol = "cloud.hail.fill"
+            return "hail"
         case .strongStorms:
-            baseSymbol = "cloud.bolt.rain.fill"
+            return "thunderstorm"
         case .windy:
-            baseSymbol = "wind"
+            return "windy"
         case .foggy:
-            baseSymbol = "cloud.fog.fill"
+            return "fog"
         case .haze:
-            baseSymbol = "sun.haze.fill"
+            return "haze"
         case .hot:
-            baseSymbol = "sun.max.fill"
+            return "high_temperature"
         case .blizzard:
-            baseSymbol = "wind.snow"
+            return "blizzard"
         case .blowingDust:
-            baseSymbol = "sun.dust.fill"
+            return "blowing_sand"
         case .tropicalStorm:
-            baseSymbol = "tropicalstorm"
+            return "rainstorm"
         case .hurricane:
-            baseSymbol = "hurricane"
+            return "typhoon"
         default:
-            baseSymbol = isNight ? "cloud.moon.fill" : "cloud.sun.fill"
+            return isNight ? "moon_cloudy" : "partly_cloudy_daytime"
         }
-        return baseSymbol
     }
     
     // 判断是否为夜间
@@ -256,7 +254,7 @@ class WeatherService: ObservableObject {
             temperature: 25,
             feelsLike: 27,
             condition: "晴",
-            symbolName: "sun.max.fill",  // 使用静态图标名称
+            symbolName: "sunny",  // 使用静态图标名称
             windSpeed: 3.4,
             precipitationChance: 0.2,
             uvIndex: 5,
@@ -278,7 +276,7 @@ class WeatherService: ObservableObject {
             let calendar = Calendar.current
             let hourComponent = calendar.component(.hour, from: futureDate)
             let isNight = hourComponent < 6 || hourComponent >= 18
-            let symbol = isNight ? "moon.stars.fill" : "sun.max.fill"
+            let symbol = isNight ? "moon_stars" : "sunny"
             
             let forecast = HourlyForecast(
                 id: UUID(),
