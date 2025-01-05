@@ -139,7 +139,7 @@ struct WeatherBackgroundView: View {
                 .onAppear {
                     startAnimations(geometry: geometry)
                 }
-                .onChange(of: currentWeatherCondition) { _ in
+                .onChange(of: currentWeatherCondition) { oldValue, newValue in
                     startAnimations(geometry: geometry)
                 }
                 

@@ -21,8 +21,8 @@ struct RefreshableView<Content: View>: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                content
-                    .offset(y: max(dragOffset, 0))
+                Color.clear
+                    .contentShape(Rectangle())
                     .gesture(
                         DragGesture()
                             .onChanged { value in
@@ -51,6 +51,9 @@ struct RefreshableView<Content: View>: View {
                                 }
                             }
                     )
+                
+                content
+                    .offset(y: max(dragOffset, 0))
                 
                 if dragOffset > 0 || showRefreshView {
                     VStack(spacing: 12) {
