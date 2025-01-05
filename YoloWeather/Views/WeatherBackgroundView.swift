@@ -60,7 +60,7 @@ struct WeatherBackgroundView: View {
                         // 夜间显示月亮和云
                         ZStack {
                             // 月亮
-                            Image("full_moon")
+                            Image("moon_stars")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 140, height: 140)

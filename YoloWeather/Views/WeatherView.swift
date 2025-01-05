@@ -189,6 +189,7 @@ struct WeatherView: View {
                     }
                 }
             }
+            .environment(\.weatherTimeOfDay, timeOfDay)
             
             // Location picker sheet
             .sheet(isPresented: $showingLocationPicker) {

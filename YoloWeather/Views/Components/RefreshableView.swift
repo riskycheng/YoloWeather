@@ -4,6 +4,7 @@ struct RefreshableView<Content: View>: View {
     let content: Content
     let onRefresh: () async -> Void
     @Binding var isRefreshing: Bool
+    @Environment(\.weatherTimeOfDay) private var timeOfDay
     @State private var dragOffset: CGFloat = 0
     @State private var rotationAngle: Double = 0
     @State private var showRefreshView: Bool = false
@@ -34,7 +35,7 @@ struct RefreshableView<Content: View>: View {
                                 if dragOffset > refreshThreshold && !isRefreshing {
                                     withAnimation {
                                         showRefreshView = true
-                                        dragOffset = 80 // 保持刷新视图可见
+                                        dragOffset = 60
                                     }
                                     Task {
                                         await onRefresh()
@@ -52,38 +53,47 @@ struct RefreshableView<Content: View>: View {
                     )
                 
                 if dragOffset > 0 || showRefreshView {
-                    VStack(spacing: 8) {
+                    VStack(spacing: 12) {
                         ZStack {
-                            // 背景光晕
+                            // Glowing effect
                             Circle()
-                                .fill(.white.opacity(0.15))
-                                .frame(width: 60, height: 60)
-                                .blur(radius: 5)
+                                .fill(timeOfDay == .day ? Color.yellow.opacity(0.3) : Color.white.opacity(0.2))
+                                .frame(width: 40, height: 40)
+                                .blur(radius: 10)
                             
-                            if showRefreshView {
-                                // 刷新动画
-                                Image("sunny")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 32, height: 32)
-                                    .rotationEffect(.degrees(rotationAngle))
-                                    .onAppear {
-                                        withAnimation(.linear(duration: 1.5).repeatForever(autoreverses: false)) {
-                                            rotationAngle = 360
-                                        }
+                            Group {
+                                if timeOfDay == .night {
+                                    // Night mode - use full_moon animation
+                                    Image("full_moon")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 32, height: 32)
+                                        .rotationEffect(.degrees(rotationAngle))
+                                } else {
+                                    // Day mode - use sunny animation
+                                    Image("sunny")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 32, height: 32)
+                                        .rotationEffect(.degrees(rotationAngle))
+                                }
+                            }
+                            .onAppear {
+                                if showRefreshView {
+                                    withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+                                        rotationAngle = 360
                                     }
-                            } else {
-                                // 下拉时的动画
-                                Image("sunny")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 32, height: 32)
-                                    .rotationEffect(.degrees(rotationAngle))
+                                }
                             }
                         }
+                        
+                        Text("正在刷新...")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                            .opacity(showRefreshView ? 0.9 : 0.0)
                     }
-                    .frame(width: 80, height: 80)
-                    .offset(y: dragOffset > 0 ? dragOffset - 80 : -80)
+                    .frame(width: 100, height: 100)
+                    .offset(y: dragOffset > 0 ? dragOffset - 100 : -100)
                 }
             }
         }
