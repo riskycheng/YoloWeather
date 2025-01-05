@@ -116,7 +116,7 @@ struct WeatherView: View {
                             }) {
                                 Image(systemName: "location.fill")
                                     .font(.system(size: 22))
-                                    .foregroundStyle(.brown)
+                                    .foregroundStyle(.white)
                                     .frame(width: 44, height: 44)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Circle())
@@ -127,7 +127,7 @@ struct WeatherView: View {
                             }) {
                                 Image(systemName: "plus")
                                     .font(.system(size: 22))
-                                    .foregroundStyle(.brown)
+                                    .foregroundStyle(.white)
                                     .frame(width: 44, height: 44)
                                     .background(.ultraThinMaterial)
                                     .clipShape(Circle())
@@ -161,12 +161,12 @@ struct WeatherView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(isUsingCurrentLocation ? locationService.locationName : selectedLocation.name)
                                 .font(.system(size: 34, weight: .medium))
-                                .foregroundColor(timeOfDay == .night ? .black : .white)
+                                .foregroundColor(.gray.opacity(0.8))
                             
                             if let weather = weatherService.currentWeather {
                                 Text(weather.condition)
                                     .font(.system(size: 17))
-                                    .foregroundColor(timeOfDay == .night ? .black : .white)
+                                    .foregroundColor(.gray.opacity(0.8))
                                     .opacity(0.8)
                             }
                         }
@@ -177,7 +177,7 @@ struct WeatherView: View {
                         if let weather = weatherService.currentWeather {
                             Text("\(Int(round(weather.temperature)))°")
                                 .font(.system(size: 96, weight: .thin))
-                                .foregroundColor(timeOfDay == .night ? .black : .white)
+                                .foregroundColor(.gray.opacity(0.8))
                                 .padding(.leading, 10)
                         }
                         
