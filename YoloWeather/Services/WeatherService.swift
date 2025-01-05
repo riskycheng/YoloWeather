@@ -8,164 +8,241 @@ class WeatherService: ObservableObject {
     private let weatherService = WeatherKit.WeatherService.shared
     
     @Published private(set) var currentWeather: CurrentWeather?
-    @Published private(set) var hourlyForecast: [CurrentWeather] = []
+    @Published private(set) var hourlyForecast: [HourlyForecast] = []
     @Published private(set) var dailyForecast: [DayWeatherInfo] = []
     @Published private(set) var lastUpdateTime: Date?
     @Published var errorMessage: String?
     
-    private init() {}
+    private var location: CLLocation
+    
+    private init() {
+        location = CLLocation(latitude: 31.230416, longitude: 121.473701) // 默认上海
+    }
     
     func updateWeather(for location: CLLocation) async {
+        self.location = location
         do {
             let weather = try await weatherService.weather(for: location)
             
-            // 获取时区信息
-            let timezone = calculateTimezone(for: location)
-            
-            // 创建当前天气数据
-            let current = CurrentWeather(
-                date: Date(),  // 使用当前时间
-                temperature: weather.currentWeather.temperature.value,
-                feelsLike: weather.currentWeather.apparentTemperature.value,
-                condition: translateWeatherCondition(weather.currentWeather.condition),
-                symbolName: weather.currentWeather.symbolName,
-                windSpeed: weather.currentWeather.wind.speed.value,
-                precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
-                uvIndex: Int(weather.currentWeather.uvIndex.value),
-                humidity: weather.currentWeather.humidity,
-                pressure: weather.currentWeather.pressure.value,
-                visibility: weather.currentWeather.visibility.value,
-                airQualityIndex: 0,
-                timezone: timezone
-            )
-            
-            // 更新当前天气
-            currentWeather = current
-            
-            // 更新小时预报（24小时）
-            var hourlyWeatherData = [CurrentWeather]()
-            
-            // 添加当前天气作为第一项
-            hourlyWeatherData.append(current)
-            
-            // 添加未来23小时的预报
-            let futureForecasts = weather.hourlyForecast.forecast
-                .filter { $0.date > Date() }  // 只取未来的时间
-                .prefix(23)  // 取23小时（加上当前时刻共24小时）
-                .map { hour in
-                    CurrentWeather(
-                        date: hour.date,
-                        temperature: hour.temperature.value,
-                        feelsLike: hour.apparentTemperature.value,
-                        condition: translateWeatherCondition(hour.condition),
-                        symbolName: hour.symbolName,
-                        windSpeed: hour.wind.speed.value,
-                        precipitationChance: hour.precipitationChance,
-                        uvIndex: Int(hour.uvIndex.value),
-                        humidity: hour.humidity,
-                        pressure: hour.pressure.value,
-                        visibility: hour.visibility.value,
-                        airQualityIndex: 0,
-                        timezone: timezone
-                    )
-                }
-            
-            hourlyWeatherData.append(contentsOf: futureForecasts)
-            hourlyForecast = hourlyWeatherData
-            
-            // 更新每日预报
-            dailyForecast = weather.dailyForecast.forecast.prefix(7).map { day in
-                DayWeatherInfo(
-                    date: day.date,
-                    condition: translateWeatherCondition(day.condition),
-                    symbolName: day.symbolName,
-                    lowTemperature: day.lowTemperature.value,
-                    highTemperature: day.highTemperature.value
-                )
-            }
+            await updateCurrentWeather(from: weather)
+            await updateHourlyForecast(from: weather)
+            await updateDailyForecast(from: weather)
             
             lastUpdateTime = Date()
             errorMessage = nil
-            
         } catch {
-            print("Weather update error: \(error.localizedDescription)")
-            errorMessage = "获取天气信息失败：\(error.localizedDescription)"
+            errorMessage = error.localizedDescription
         }
     }
     
-    // 将 WeatherKit 的天气状况转换为图标名称
-    private func translateWeatherCondition(_ condition: WeatherCondition) -> String {
+    // 将 WeatherKit 的天气状况转换为中文描述
+    private func getWeatherConditionText(_ condition: WeatherCondition) -> String {
         switch condition {
         case .clear:
-            return "sunny"
+            return "晴"
         case .cloudy:
-            return "cloudy"
+            return "多云"
         case .mostlyClear:
-            return "sunny_cloudy"
+            return "晴间多云"
         case .mostlyCloudy, .partlyCloudy:
-            return "partly_cloudy_daytime"
+            return "多云转晴"
         case .drizzle:
-            return "light_rain"
+            return "小雨"
         case .rain:
-            return "moderate_rain"
+            return "中雨"
         case .heavyRain:
-            return "heavy_rain"
+            return "大雨"
         case .snow:
-            return "snow"
+            return "雪"
         case .heavySnow:
-            return "heavy_snow"
+            return "大雪"
         case .sleet:
-            return "snow"  // 雨夹雪使用 snow 图标
+            return "雨夹雪"
         case .freezingDrizzle:
-            return "hail"
+            return "冻雨"
         case .strongStorms:
-            return "thunderstorm"
+            return "暴风雨"
         case .windy:
-            return "typhoon"  // 大风使用台风图标
+            return "大风"
         case .foggy:
-            return "fog"
+            return "雾"
         case .haze:
-            return "haze"
+            return "霾"
         case .hot:
-            return "high_temperature"
+            return "炎热"
         case .blizzard:
-            return "blizzard"
+            return "暴风雪"
         case .blowingDust:
-            return "blowing_sand"
+            return "浮尘"
         case .tropicalStorm:
-            return "thunderstorm"
+            return "热带风暴"
         case .hurricane:
-            return "typhoon"
+            return "台风"
         default:
-            return "partly_cloudy_daytime"  // 默认使用多云图标
+            return "晴间多云"
         }
     }
     
     private func calculateTimezone(for location: CLLocation) -> TimeZone {
         // 根据经度计算时区
         let longitude = location.coordinate.longitude
-        let hourOffset = Int(round(longitude / 15.0))
-        let secondsFromGMT = hourOffset * 3600
-        
-        // 特殊时区处理
-        if longitude >= -25 && longitude <= -10 && // 冰岛经度范围
-           location.coordinate.latitude >= 63 && location.coordinate.latitude <= 67 { // 冰岛纬度范围
-            return TimeZone(identifier: "Atlantic/Reykjavik") ?? TimeZone(secondsFromGMT: 0)!
-        }
-        
-        // 尝试使用系统时区数据库
-        let timeZones = TimeZone.knownTimeZoneIdentifiers
-        for identifier in timeZones {
-            if let tz = TimeZone(identifier: identifier) {
-                let offset = Double(tz.secondsFromGMT()) / 3600.0
-                if abs(offset - Double(hourOffset)) < 0.5 {
-                    return tz
-                }
-            }
-        }
-        
-        // 如果找不到匹配的时区，使用计算的偏移
+        let secondsFromGMT = Int(longitude * 240) // 每经度4分钟，转换为秒
         return TimeZone(secondsFromGMT: secondsFromGMT) ?? TimeZone(identifier: "UTC")!
+    }
+    
+    // 更新当前天气
+    private func updateCurrentWeather(from weather: Weather) async {
+        let isNightTime = isNight(for: weather.currentWeather.date)
+        let symbolName = getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime)
+        
+        currentWeather = CurrentWeather(
+            date: weather.currentWeather.date,
+            temperature: weather.currentWeather.temperature.value,
+            feelsLike: weather.currentWeather.apparentTemperature.value,
+            condition: getWeatherConditionText(weather.currentWeather.condition),
+            symbolName: symbolName,
+            windSpeed: weather.currentWeather.wind.speed.value,
+            precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
+            uvIndex: Int(weather.currentWeather.uvIndex.value),
+            humidity: weather.currentWeather.humidity,
+            airQualityIndex: 0,
+            pressure: weather.currentWeather.pressure.value,
+            visibility: weather.currentWeather.visibility.value,
+            timezone: calculateTimezone(for: location)
+        )
+    }
+    
+    // 更新小时预报
+    private func updateHourlyForecast(from weather: Weather) async {
+        var forecasts: [HourlyForecast] = []
+        
+        for hour in weather.hourlyForecast.filter({ $0.date.timeIntervalSince(Date()) >= 0 }).prefix(24) {
+            let isNightTime = isNight(for: hour.date)
+            let symbolName = getWeatherSymbolName(condition: hour.condition, isNight: isNightTime)
+            
+            let forecast = HourlyForecast(
+                id: UUID(),
+                temperature: hour.temperature.value,
+                condition: hour.condition,
+                date: hour.date,
+                symbolName: symbolName,
+                conditionText: getWeatherConditionText(hour.condition)
+            )
+            forecasts.append(forecast)
+        }
+        
+        hourlyForecast = forecasts
+    }
+    
+    // 更新每日预报
+    private func updateDailyForecast(from weather: Weather) async {
+        dailyForecast = weather.dailyForecast.forecast.prefix(7).map { day in
+            let isNightTime = isNight(for: day.date)
+            let symbolName = getWeatherSymbolName(condition: day.condition, isNight: isNightTime)
+            
+            return DayWeatherInfo(
+                date: day.date,
+                condition: getWeatherConditionText(day.condition),
+                symbolName: symbolName,
+                lowTemperature: day.lowTemperature.value,
+                highTemperature: day.highTemperature.value
+            )
+        }
+    }
+    
+    // 获取天气图标名称
+    private func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
+        let baseSymbol: String
+        switch condition {
+        case .clear:
+            baseSymbol = isNight ? "moon.stars.fill" : "sun.max.fill"
+        case .cloudy:
+            baseSymbol = "cloud.fill"
+        case .mostlyClear, .mostlyCloudy, .partlyCloudy:
+            baseSymbol = isNight ? "cloud.moon.fill" : "cloud.sun.fill"
+        case .drizzle:
+            baseSymbol = "cloud.drizzle.fill"
+        case .rain:
+            baseSymbol = "cloud.rain.fill"
+        case .heavyRain:
+            baseSymbol = "cloud.heavyrain.fill"
+        case .snow:
+            baseSymbol = "cloud.snow.fill"
+        case .heavySnow:
+            baseSymbol = "cloud.snow.fill"
+        case .sleet:
+            baseSymbol = "cloud.sleet.fill"
+        case .freezingDrizzle:
+            baseSymbol = "cloud.hail.fill"
+        case .strongStorms:
+            baseSymbol = "cloud.bolt.rain.fill"
+        case .windy:
+            baseSymbol = "wind"
+        case .foggy:
+            baseSymbol = "cloud.fog.fill"
+        case .haze:
+            baseSymbol = "sun.haze.fill"
+        case .hot:
+            baseSymbol = "sun.max.fill"
+        case .blizzard:
+            baseSymbol = "wind.snow"
+        case .blowingDust:
+            baseSymbol = "sun.dust.fill"
+        case .tropicalStorm:
+            baseSymbol = "tropicalstorm"
+        case .hurricane:
+            baseSymbol = "hurricane"
+        default:
+            baseSymbol = isNight ? "cloud.moon.fill" : "cloud.sun.fill"
+        }
+        return baseSymbol
+    }
+    
+    // 判断是否为夜间
+    private func isNight(for date: Date) -> Bool {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: date)
+        return hour < 6 || hour >= 18
+    }
+    
+    // 小时预报结构体
+    struct HourlyForecast: Identifiable {
+        let id: UUID
+        let temperature: Double
+        let condition: WeatherCondition
+        let date: Date
+        let symbolName: String
+        let conditionText: String
+        
+        var formattedTime: String {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: date)
+        }
+    }
+    
+    struct CurrentWeather {
+        let date: Date
+        let temperature: Double
+        let feelsLike: Double
+        let condition: String
+        let symbolName: String
+        let windSpeed: Double
+        let precipitationChance: Double
+        let uvIndex: Int
+        let humidity: Double
+        let airQualityIndex: Int
+        let pressure: Double
+        let visibility: Double
+        let timezone: TimeZone
+    }
+    
+    struct DayWeatherInfo {
+        let date: Date
+        let condition: String
+        let symbolName: String
+        let lowTemperature: Double
+        let highTemperature: Double
     }
     
     static func mock() -> WeatherService {
@@ -173,45 +250,43 @@ class WeatherService: ObservableObject {
         let timezone = TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
         let now = Date()
         
-        // 当前天气
+        // 模拟当前天气
         service.currentWeather = CurrentWeather(
             date: now,
             temperature: 25,
             feelsLike: 27,
             condition: "晴",
-            symbolName: "sun.max",
+            symbolName: "sun.max.fill",  // 使用静态图标名称
             windSpeed: 3.4,
             precipitationChance: 0.2,
             uvIndex: 5,
             humidity: 0.65,
+            airQualityIndex: 75,
             pressure: 1013,
             visibility: 10,
-            airQualityIndex: 75,
             timezone: timezone
         )
         
         // 模拟24小时预报
-        var hourlyForecast: [CurrentWeather] = []
+        var hourlyForecast: [HourlyForecast] = []
         for hour in 0..<24 {
             let futureDate = Calendar.current.date(byAdding: .hour, value: hour, to: now) ?? now
             let temp = 25 - Double(hour) * 0.5 // 温度逐渐降低
             let condition = hour % 2 == 0 ? "晴" : "多云"
-            let symbol = hour % 2 == 0 ? "sun.max" : "cloud.sun"
             
-            let forecast = CurrentWeather(
-                date: futureDate,
+            // 根据小时判断使用的图标
+            let calendar = Calendar.current
+            let hourComponent = calendar.component(.hour, from: futureDate)
+            let isNight = hourComponent < 6 || hourComponent >= 18
+            let symbol = isNight ? "moon.stars.fill" : "sun.max.fill"
+            
+            let forecast = HourlyForecast(
+                id: UUID(),
                 temperature: temp,
-                feelsLike: temp + 2,
-                condition: condition,
+                condition: .clear,
+                date: futureDate,
                 symbolName: symbol,
-                windSpeed: 3.4,
-                precipitationChance: 0.2,
-                uvIndex: 5,
-                humidity: 0.65,
-                pressure: 1013,
-                visibility: 10,
-                airQualityIndex: 75,
-                timezone: timezone
+                conditionText: condition
             )
             hourlyForecast.append(forecast)
         }

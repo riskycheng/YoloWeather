@@ -51,6 +51,41 @@ struct WeatherView: View {
         updateTimeOfDay()
     }
     
+    private var hourlyForecastView: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 20) {
+                ForEach(weatherService.hourlyForecast) { forecast in
+                    VStack(spacing: 8) {
+                        Text(forecast.formattedTime)
+                            .font(.system(size: 15))
+                            .foregroundColor(.white)
+                        
+                        WeatherSymbol(symbolName: forecast.symbolName)
+                            .frame(width: 25, height: 25)
+                        
+                        Text("\(Int(round(forecast.temperature)))°")
+                            .font(.system(size: 20))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .padding()
+        }
+        .background(Color.black.opacity(0.2))
+        .cornerRadius(15)
+    }
+    
+    struct WeatherSymbol: View {
+        let symbolName: String
+        
+        var body: some View {
+            Image(systemName: symbolName)
+                .symbolRenderingMode(.multicolor)
+                .foregroundStyle(.yellow, .white)
+                .font(.system(size: 25))
+        }
+    }
+    
     var body: some View {
         ZStack {
             // 背景渐变
@@ -150,7 +185,7 @@ struct WeatherView: View {
                         
                         // Hourly forecast
                         if !weatherService.hourlyForecast.isEmpty {
-                            HourlyTemperatureTrendView(forecast: weatherService.hourlyForecast)
+                            hourlyForecastView
                                 .frame(height: 100)
                                 .padding(.horizontal)
                                 .padding(.bottom, 30)
