@@ -5,6 +5,7 @@ struct RefreshableView<Content: View>: View {
     let action: () async -> Void
     @Binding var isRefreshing: Bool
     @Environment(\.weatherTimeOfDay) private var timeOfDay
+    @StateObject private var weatherService = WeatherService.shared
     
     @GestureState private var dragOffset: CGFloat = 0
     private let threshold: CGFloat = 100
@@ -15,9 +16,13 @@ struct RefreshableView<Content: View>: View {
         self._isRefreshing = isRefreshing
     }
     
-    private var isNightTime: Bool {
+    private var isDayTime: Bool {
+        if let weather = weatherService.currentWeather {
+            return WeatherThemeManager.shared.determineTimeOfDay(for: Date(), in: weather.timezone) == .day
+        }
+        // Default to using local time if no weather data is available
         let hour = Calendar.current.component(.hour, from: Date())
-        return hour < 6 || hour >= 18
+        return hour >= 6 && hour < 18
     }
     
     var body: some View {
@@ -35,7 +40,7 @@ struct RefreshableView<Content: View>: View {
                     VStack {
                         if isRefreshing {
                             // 使用不同的图标基于时间
-                            Image(isNightTime ? "full_moon" : "sunny")
+                            Image(isDayTime ? "sunny" : "full_moon")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 32, height: 32)
@@ -46,7 +51,7 @@ struct RefreshableView<Content: View>: View {
                                     value: isRefreshing
                                 )
                         } else {
-                            Image(isNightTime ? "full_moon" : "sunny")
+                            Image(isDayTime ? "sunny" : "full_moon")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 32, height: 32)

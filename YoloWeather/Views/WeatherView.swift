@@ -27,8 +27,10 @@ struct WeatherView: View {
                 await weatherService.updateWeather(for: location)
             }
         } else {
-            locationService.locationName = selectedLocation.name
-            await weatherService.updateWeather(for: selectedLocation.location)
+            // Use the current location name and coordinates
+            if let currentLocation = locationService.currentLocation {
+                await weatherService.updateWeather(for: currentLocation)
+            }
         }
         lastRefreshTime = Date()
         updateTimeOfDay()
@@ -203,6 +205,7 @@ struct WeatherView: View {
             CityPickerView { location in
                 Task {
                     await updateLocation(nil)  // Clear current location
+                    isUsingCurrentLocation = false  // Set to use selected city
                     locationService.locationName = location.name
                     locationService.currentLocation = location.location
                     await weatherService.updateWeather(for: location.location)
