@@ -51,6 +51,26 @@ struct WeatherView: View {
         updateTimeOfDay()
     }
     
+    private func handleLocationButtonTap() {
+        Task {
+            // Request location authorization if needed
+            locationService.requestLocationPermission()
+            
+            // Start updating location
+            locationService.startUpdatingLocation()
+            
+            // Set to use current location
+            isUsingCurrentLocation = true
+            
+            // Update weather with current location when available
+            if let location = locationService.currentLocation {
+                await weatherService.updateWeather(for: location)
+                lastRefreshTime = Date()
+                updateTimeOfDay()
+            }
+        }
+    }
+    
     private var hourlyForecastView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
@@ -103,50 +123,29 @@ struct WeatherView: View {
             } content: {
                 VStack(spacing: 0) {
                     // Top bar with controls
-                    HStack(spacing: 20) {
-                        // Left controls
-                        HStack(spacing: 12) {
-                            Button(action: {
-                                Task {
-                                    if let location = locationService.currentLocation {
-                                        await updateLocation(location)
-                                    }
-                                }
-                            }) {
-                                Image(systemName: "location.fill")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 44, height: 44)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
+                    VStack {
+                        HStack {
+                            Button(action: { showingLocationPicker = true }) {
+                                toolbarButton("plus")
                             }
                             
-                            Button(action: {
-                                showingLocationPicker = true
-                            }) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 22))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 44, height: 44)
-                                    .background(.ultraThinMaterial)
-                                    .clipShape(Circle())
+                            Button(action: handleLocationButtonTap) {
+                                toolbarButton("location")
                             }
-                        }
-                        
-                        Spacer()
-                        
-                        // Right control - Day/Night toggle
-                        DayNightToggle(isNight: Binding(
-                            get: { timeOfDay == .night },
-                            set: { isNight in
-                                withAnimation {
-                                    timeOfDay = isNight ? .night : .day
+                            
+                            Spacer()
+                            
+                            DayNightToggle(isNight: Binding(
+                                get: { timeOfDay == .night },
+                                set: { isNight in
+                                    withAnimation {
+                                        timeOfDay = isNight ? .night : .day
+                                    }
                                 }
-                            }
-                        ))
+                            ))
+                        }
+                        .padding(.horizontal)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 30)
                     
                     Spacer()
                     
