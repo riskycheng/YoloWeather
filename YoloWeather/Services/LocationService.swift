@@ -8,6 +8,7 @@ class LocationService: NSObject, ObservableObject {
     @Published var authorizationStatus: CLAuthorizationStatus
     @Published var locationName: String = ""
     @Published var errorMessage: String?
+    @Published var isLocating: Bool = false
     
     private let locationManager: CLLocationManager
     private let logger = Logger(subsystem: "com.yoloweather.app", category: "LocationService")
@@ -102,11 +103,14 @@ class LocationService: NSObject, ObservableObject {
     func startUpdatingLocation() {
         logger.info("Starting location updates")
         retryCount = 0
+        isLocating = true
+        errorMessage = nil
         locationManager.requestLocation()
     }
     
     func stopUpdatingLocation() {
         logger.info("Stopping location updates")
+        isLocating = false
         locationManager.stopUpdatingLocation()
     }
     
@@ -120,11 +124,21 @@ class LocationService: NSObject, ObservableObject {
                 let placemarks = try await geocoder.reverseGeocodeLocation(location)
                 if let placemark = placemarks.first {
                     var name = ""
-                    if let locality = placemark.locality {
+                    
+                    // 优先使用区域名称
+                    if let subLocality = placemark.subLocality {
+                        name = subLocality
+                    }
+                    // 其次使用城市名称
+                    else if let locality = placemark.locality {
                         name = locality
-                    } else if let administrativeArea = placemark.administrativeArea {
+                    }
+                    // 再次使用行政区域
+                    else if let administrativeArea = placemark.administrativeArea {
                         name = administrativeArea
-                    } else if let country = placemark.country {
+                    }
+                    // 最后使用国家名称
+                    else if let country = placemark.country {
                         name = country
                     }
                     
@@ -135,6 +149,7 @@ class LocationService: NSObject, ObservableObject {
                     logger.info("Location name updated: \(name)")
                     self.locationName = name
                     self.errorMessage = nil
+                    self.isLocating = false
                     self.isUpdatingLocationName = false
                 } else {
                     throw NSError(domain: "LocationService", code: -1, userInfo: [NSLocalizedDescriptionKey: "无法获取位置信息"])
@@ -148,6 +163,7 @@ class LocationService: NSObject, ObservableObject {
                     self.updateLocationName(for: location)
                 } else {
                     self.errorMessage = "无法获取位置信息"
+                    self.isLocating = false
                     self.isUpdatingLocationName = false
                     // 如果多次重试失败，使用默认位置
                     self.useDefaultLocation()

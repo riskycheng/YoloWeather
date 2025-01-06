@@ -12,6 +12,7 @@ class WeatherService: ObservableObject {
     @Published private(set) var dailyForecast: [DayWeatherInfo] = []
     @Published private(set) var lastUpdateTime: Date?
     @Published var errorMessage: String?
+    @Published private(set) var isLoading: Bool = false
     
     private var location: CLLocation
     
@@ -21,6 +22,9 @@ class WeatherService: ObservableObject {
     
     func updateWeather(for location: CLLocation) async {
         self.location = location
+        isLoading = true
+        defer { isLoading = false }
+        
         do {
             let weather = try await weatherService.weather(for: location)
             

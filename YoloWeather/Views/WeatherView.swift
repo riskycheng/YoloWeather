@@ -105,6 +105,36 @@ struct WeatherView: View {
         }
     }
     
+    private var locationButton: some View {
+        Button {
+            handleLocationButtonTap()
+        } label: {
+            HStack(spacing: 4) {
+                if locationService.isLocating {
+                    ProgressView()
+                        .scaleEffect(0.7)
+                        .tint(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                } else {
+                    Image(systemName: "location.circle.fill")
+                        .font(.title2)
+                }
+            }
+            .frame(width: 44, height: 44)
+        }
+        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+    }
+    
+    private var cityPickerButton: some View {
+        Button {
+            showingLocationPicker = true
+        } label: {
+            Image(systemName: "plus.circle.fill")
+                .font(.title2)
+                .frame(width: 44, height: 44)
+        }
+        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+    }
+    
     var body: some View {
         ZStack {
             // 背景渐变
@@ -113,98 +143,74 @@ struct WeatherView: View {
                 weatherCondition: weatherService.currentWeather?.condition ?? "晴天"
             )
             .environment(\.weatherTimeOfDay, timeOfDay)
-            .environmentObject(weatherService)  // 添加 weatherService 作为环境对象
             
-            // 主内容
             RefreshableView(isRefreshing: $isRefreshing) {
-                Task {
-                    await refreshWeather()
-                }
+                await refreshWeather()
             } content: {
-                VStack(spacing: 0) {
-                    // Top bar with controls
-                    VStack {
-                        HStack {
-                            Button(action: { showingLocationPicker = true }) {
-                                toolbarButton("plus")
-                            }
-                            
-                            Button(action: handleLocationButtonTap) {
-                                toolbarButton("location")
-                            }
-                            
-                            Spacer()
-                            
-                            DayNightToggle(isNight: Binding(
-                                get: { timeOfDay == .night },
-                                set: { isNight in
-                                    withAnimation {
-                                        timeOfDay = isNight ? .night : .day
-                                    }
-                                }
-                            ))
-                        }
-                        .padding(.horizontal)
+                VStack(spacing: 20) {
+                    // 顶部工具栏
+                    HStack {
+                        locationButton
+                        cityPickerButton
+                        
+                        Spacer()
                     }
+                    .padding(.horizontal)
                     
                     Spacer()
                     
-                    // Weather information at the bottom
-                    VStack(alignment: .leading, spacing: 0) {
-                        // City name and condition
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(isUsingCurrentLocation ? locationService.locationName : selectedLocation.name)
-                                .font(.system(size: 34, weight: .medium))
-                                .foregroundColor(timeOfDay == .day ? .white : .gray.opacity(0.8))
-                            
-                            if let weather = weatherService.currentWeather {
+                    if let weather = weatherService.currentWeather {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // City name and condition
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(locationService.locationName)
+                                    .font(.system(size: 34, weight: .medium))
+                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                                
                                 Text(weather.condition)
                                     .font(.system(size: 17))
-                                    .foregroundColor(timeOfDay == .day ? .white : .gray.opacity(0.8))
-                                    .opacity(0.8)
+                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.8))
                             }
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 10)
-                        
-                        // Large temperature
-                        if let weather = weatherService.currentWeather {
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 10)
+                            
+                            // Large temperature
                             Text("\(Int(round(weather.temperature)))°")
                                 .font(.system(size: 96, weight: .thin))
-                                .foregroundColor(timeOfDay == .day ? .white : .gray.opacity(0.8))
+                                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
                                 .padding(.leading, 10)
+                            
+                            Spacer().frame(height: 30)
+                            
+                            // Hourly forecast
+                            if !weatherService.hourlyForecast.isEmpty {
+                                hourlyForecastView
+                                    .frame(height: 100)
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 30)
+                            }
                         }
-                        
-                        Spacer().frame(height: 30)
-                        
-                        // Hourly forecast
-                        if !weatherService.hourlyForecast.isEmpty {
-                            hourlyForecastView
-                                .frame(height: 100)
-                                .padding(.horizontal)
-                                .padding(.bottom, 30)
-                        }
+                    } else if isRefreshing || weatherService.isLoading {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(.white)
                     }
+                }
+                .padding(.vertical)
+            }
+        }
+        .sheet(isPresented: $showingLocationPicker) {
+            CityPickerView { location in
+                Task {
+                    await updateLocation(nil)  // Clear current location
+                    locationService.locationName = location.name
+                    locationService.currentLocation = location.location
+                    await weatherService.updateWeather(for: location.location)
+                    lastRefreshTime = Date()
+                    updateTimeOfDay()
                 }
             }
             .environment(\.weatherTimeOfDay, timeOfDay)
-            
-            // Location picker sheet
-            .sheet(isPresented: $showingLocationPicker) {
-                NavigationView {
-                    LocationPickerView(
-                        selectedLocation: $selectedLocation,
-                        locationService: locationService,
-                        isUsingCurrentLocation: $isUsingCurrentLocation,
-                        onLocationSelected: { location in
-                            showingLocationPicker = false
-                            Task {
-                                await updateLocation(location)
-                            }
-                        }
-                    )
-                }
-            }
         }
         .task {
             // 首次加载时更新天气

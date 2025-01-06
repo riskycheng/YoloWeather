@@ -2,103 +2,95 @@ import SwiftUI
 
 struct RefreshableView<Content: View>: View {
     let content: Content
-    let onRefresh: () async -> Void
+    let action: () async -> Void
     @Binding var isRefreshing: Bool
     @Environment(\.weatherTimeOfDay) private var timeOfDay
-    @State private var dragOffset: CGFloat = 0
-    @State private var rotationAngle: Double = 0
-    @State private var showRefreshView: Bool = false
-    private let refreshThreshold: CGFloat = 100
     
-    init(isRefreshing: Binding<Bool>,
-         onRefresh: @escaping () async -> Void,
-         @ViewBuilder content: () -> Content) {
+    @GestureState private var dragOffset: CGFloat = 0
+    private let threshold: CGFloat = 100
+    
+    init(isRefreshing: Binding<Bool>, action: @escaping () async -> Void, @ViewBuilder content: () -> Content) {
         self.content = content()
-        self.onRefresh = onRefresh
+        self.action = action
         self._isRefreshing = isRefreshing
+    }
+    
+    private var isNightTime: Bool {
+        let hour = Calendar.current.component(.hour, from: Date())
+        return hour < 6 || hour >= 18
     }
     
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
+                // Add a clear background to capture gestures across the entire screen
                 Color.clear
                     .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                if !isRefreshing {
-                                    dragOffset = value.translation.height
-                                    rotationAngle = Double(dragOffset / refreshThreshold) * 360
-                                }
-                            }
-                            .onEnded { value in
-                                if dragOffset > refreshThreshold && !isRefreshing {
-                                    withAnimation {
-                                        showRefreshView = true
-                                        dragOffset = 60
-                                    }
-                                    Task {
-                                        await onRefresh()
-                                        withAnimation {
-                                            showRefreshView = false
-                                            dragOffset = 0
-                                        }
-                                    }
-                                } else {
-                                    withAnimation {
-                                        dragOffset = 0
-                                    }
-                                }
-                            }
-                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 content
-                    .offset(y: max(dragOffset, 0))
+                    .offset(y: dragOffset > 0 ? dragOffset : 0)
                 
-                if dragOffset > 0 || showRefreshView {
-                    VStack(spacing: 12) {
-                        ZStack {
-                            // Glowing effect
-                            Circle()
-                                .fill(timeOfDay == .day ? Color.yellow.opacity(0.3) : Color.white.opacity(0.2))
-                                .frame(width: 40, height: 40)
-                                .blur(radius: 10)
-                            
-                            Group {
-                                if timeOfDay == .night {
-                                    // Night mode - use full_moon animation
-                                    Image("full_moon")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 32, height: 32)
-                                        .rotationEffect(.degrees(rotationAngle))
-                                } else {
-                                    // Day mode - use sunny animation
-                                    Image("sunny")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 32, height: 32)
-                                        .rotationEffect(.degrees(rotationAngle))
-                                }
-                            }
-                            .onAppear {
-                                if showRefreshView {
-                                    withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
-                                        rotationAngle = 360
-                                    }
-                                }
-                            }
+                if dragOffset > 0 || isRefreshing {
+                    VStack {
+                        if isRefreshing {
+                            // 使用不同的图标基于时间
+                            Image(isNightTime ? "full_moon" : "sunny")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 32, height: 32)
+                                .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                                .animation(
+                                    Animation.linear(duration: 1)
+                                        .repeatForever(autoreverses: false),
+                                    value: isRefreshing
+                                )
+                        } else {
+                            Image(isNightTime ? "full_moon" : "sunny")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 32, height: 32)
+                                .rotationEffect(.degrees(min((dragOffset / threshold as CGFloat) * CGFloat(180), 180)))
                         }
                         
-                        Text("正在刷新...")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white)
-                            .opacity(showRefreshView ? 0.9 : 0.0)
+                        Text(dragOffset > threshold ? "释放刷新" : "下拉刷新")
+                            .font(.subheadline)
+                            .foregroundStyle(.white)
                     }
-                    .frame(width: 100, height: 100)
-                    .offset(y: dragOffset > 0 ? dragOffset - 100 : -100)
+                    .frame(width: geometry.size.width)
+                    .frame(height: max(dragOffset, 0))
+                    .opacity(min(dragOffset / 50, 1.0))
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .gesture(
+                DragGesture()
+                    .updating($dragOffset) { value, state, _ in
+                        guard !isRefreshing else { return }
+                        if value.translation.height > 0 {
+                            state = value.translation.height
+                        }
+                    }
+                    .onEnded { value in
+                        guard !isRefreshing else { return }
+                        if value.translation.height > threshold {
+                            isRefreshing = true
+                            Task {
+                                await action()
+                                isRefreshing = false
+                            }
+                        }
+                    }
+            )
         }
     }
+}
+
+#Preview {
+    RefreshableView(isRefreshing: .constant(false)) {
+        // Refresh action
+    } content: {
+        Color.blue
+    }
+    .environment(\.weatherTimeOfDay, .day)
 }
