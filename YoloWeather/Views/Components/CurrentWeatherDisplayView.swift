@@ -1,16 +1,22 @@
 import SwiftUI
+import YoloWeather
 
 struct CurrentWeatherDisplayView: View {
-    let weather: CurrentWeather
+    let weather: WeatherService.CurrentWeather  // Use WeatherService.CurrentWeather type
     let timeOfDay: WeatherTimeOfDay
+    let animationTrigger: UUID?  // Add trigger parameter
     @State private var isAnimating = false
     
     var body: some View {
         VStack(spacing: 0) {
-            Text("\(Int(round(weather.temperature)))°")
-                .font(.system(size: 96, weight: .medium, design: .rounded))
-                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
+            FlipNumberView(
+                value: Int(round(weather.temperature)),
+                unit: "°",
+                color: WeatherThemeManager.shared.textColor(for: timeOfDay),
+                trigger: animationTrigger
+            )
+            .font(.system(size: 96, weight: .medium, design: .rounded))
+            .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
             
             HStack(spacing: 12) {
                 WeatherIconView(symbolName: weather.symbolName)

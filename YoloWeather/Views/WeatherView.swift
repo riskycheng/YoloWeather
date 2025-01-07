@@ -11,6 +11,7 @@ struct WeatherView: View {
     @State private var isUsingCurrentLocation = false
     @State private var timeOfDay: WeatherTimeOfDay = .night
     @State private var isLoadingWeather = false
+    @State private var animationTrigger = UUID()
     @AppStorage("showDailyForecast") private var showDailyForecast = false
     
     private func updateTimeOfDay() {
@@ -56,13 +57,16 @@ struct WeatherView: View {
     
     private func handleLocationButtonTap() {
         Task {
+            // Always trigger animation when location button is tapped
+            animationTrigger = UUID()
+            
             // 设置位置更新回调
             locationService.onLocationUpdated = { [weak locationService] location in
                 Task {
                     // 等待位置名称更新完成
                     await locationService?.waitForLocationNameUpdate()
                     
-                    // 更新天气信息
+                    // 更新天气信息并触发动画
                     await weatherService.updateWeather(for: location)
                     lastRefreshTime = Date()
                     updateTimeOfDay()
@@ -77,6 +81,13 @@ struct WeatherView: View {
             
             // 设置为使用当前位置
             isUsingCurrentLocation = true
+            
+            // If we already have a location, trigger an immediate refresh
+            if let currentLocation = locationService.currentLocation {
+                await weatherService.updateWeather(for: currentLocation)
+                lastRefreshTime = Date()
+                updateTimeOfDay()
+            }
         }
     }
     
@@ -94,7 +105,8 @@ struct WeatherView: View {
                         
                         FlipNumberView(
                             value: Int(round(forecast.temperature)),
-                            unit: "°"
+                            unit: "°",
+                            trigger: animationTrigger
                         )
                         .font(.system(size: 20))
                     }
@@ -196,20 +208,17 @@ struct WeatherView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(locationService.locationName ?? "未知位置")
                                 .font(.system(size: 34, weight: .medium))
-                            Text(weather.condition)
-                                .font(.system(size: 17))
-                                .opacity(0.8)
                         }
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
                         
                         // 温度显示
-                        FlipNumberView(
-                            value: Int(round(weather.temperature)),
-                            unit: "°"
+                        CurrentWeatherDisplayView(
+                            weather: weather,
+                            timeOfDay: timeOfDay,
+                            animationTrigger: animationTrigger
                         )
-                        .font(.system(size: 96, weight: .thin))
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.leading, 20)
                         .padding(.top, -10)
