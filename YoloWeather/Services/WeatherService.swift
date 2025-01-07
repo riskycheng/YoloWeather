@@ -112,7 +112,8 @@ class WeatherService: ObservableObject {
             airQualityIndex: 0,
             pressure: weather.currentWeather.pressure.value,
             visibility: weather.currentWeather.visibility.value,
-            timezone: calculateTimezone(for: location)
+            timezone: calculateTimezone(for: location),
+            weatherCondition: weather.currentWeather.condition
         )
     }
     
@@ -155,14 +156,14 @@ class WeatherService: ObservableObject {
     }
     
     // 获取天气图标名称
-    private func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
+    internal func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
         switch condition {
-        case .clear:
-            return isNight ? "moon_stars" : "sunny"
+        case .clear, .mostlyClear, .hot:
+            return isNight ? "full_moon" : "sunny"
         case .cloudy:
             return "cloudy"
-        case .mostlyClear, .mostlyCloudy, .partlyCloudy:
-            return isNight ? "moon_cloudy" : "partly_cloudy_daytime"
+        case .mostlyCloudy, .partlyCloudy:
+            return isNight ? "partly_cloudy_night" : "partly_cloudy_daytime"
         case .drizzle:
             return "light_rain"
         case .rain:
@@ -170,33 +171,25 @@ class WeatherService: ObservableObject {
         case .heavyRain:
             return "heavy_rain"
         case .snow:
-            return "moderate_snow"
-        case .heavySnow:
+            return "light_snow"
+        case .heavySnow, .blizzard:
             return "heavy_snow"
-        case .sleet:
-            return "snow"  // 使用雪的图标代替雨夹雪
-        case .freezingDrizzle:
-            return "hail"
-        case .strongStorms:
-            return "thunderstorm"
+        case .sleet, .freezingDrizzle:
+            return "wet"
         case .windy:
             return "windy"
         case .foggy:
             return "fog"
         case .haze:
             return "haze"
-        case .hot:
-            return "high_temperature"
-        case .blizzard:
-            return "blizzard"
         case .blowingDust:
             return "blowing_sand"
         case .tropicalStorm:
-            return "rainstorm"
+            return "thunderstorm"
         case .hurricane:
             return "typhoon"
         default:
-            return isNight ? "moon_cloudy" : "partly_cloudy_daytime"
+            return isNight ? "full_moon" : "sunny"
         }
     }
     
@@ -223,7 +216,7 @@ class WeatherService: ObservableObject {
         }
     }
     
-    struct CurrentWeather {
+    struct CurrentWeather: Equatable {
         let date: Date
         let temperature: Double
         let feelsLike: Double
@@ -237,6 +230,26 @@ class WeatherService: ObservableObject {
         let pressure: Double
         let visibility: Double
         let timezone: TimeZone
+        let weatherCondition: WeatherCondition
+        
+        static func mock(date: Date = Date(), temp: Double, condition: String, symbol: String) -> CurrentWeather {
+            CurrentWeather(
+                date: date,
+                temperature: temp,
+                feelsLike: temp + 2,
+                condition: condition,
+                symbolName: symbol,
+                windSpeed: 3.4,
+                precipitationChance: 0.2,
+                uvIndex: 5,
+                humidity: 0.65,
+                airQualityIndex: 75,
+                pressure: 1013,
+                visibility: 10,
+                timezone: TimeZone.current,
+                weatherCondition: .clear
+            )
+        }
     }
     
     struct DayWeatherInfo {
@@ -245,6 +258,16 @@ class WeatherService: ObservableObject {
         let symbolName: String
         let lowTemperature: Double
         let highTemperature: Double
+        
+        static func mock(low: Double, high: Double, condition: String, symbol: String, date: Date) -> DayWeatherInfo {
+            DayWeatherInfo(
+                date: date,
+                condition: condition,
+                symbolName: symbol,
+                lowTemperature: low,
+                highTemperature: high
+            )
+        }
     }
     
     static func mock() -> WeatherService {
@@ -258,7 +281,7 @@ class WeatherService: ObservableObject {
             temperature: 25,
             feelsLike: 27,
             condition: "晴",
-            symbolName: "sunny",  // 使用静态图标名称
+            symbolName: "sunny",
             windSpeed: 3.4,
             precipitationChance: 0.2,
             uvIndex: 5,
@@ -266,25 +289,24 @@ class WeatherService: ObservableObject {
             airQualityIndex: 75,
             pressure: 1013,
             visibility: 10,
-            timezone: timezone
+            timezone: timezone,
+            weatherCondition: .clear
         )
         
         // 模拟24小时预报
         var hourlyForecast: [HourlyForecast] = []
-        for hour in 0..<24 {
-            let futureDate = Calendar.current.date(byAdding: .hour, value: hour, to: now) ?? now
-            let temp = 25 - Double(hour) * 0.5 // 温度逐渐降低
-            let condition = hour % 2 == 0 ? "晴" : "多云"
-            
-            // 根据小时判断使用的图标
+        let condition = "晴"
+        
+        for i in 0..<24 {
+            let futureDate = Calendar.current.date(byAdding: .hour, value: i, to: now)!
             let calendar = Calendar.current
             let hourComponent = calendar.component(.hour, from: futureDate)
             let isNight = hourComponent < 6 || hourComponent >= 18
-            let symbol = isNight ? "moon_stars" : "sunny"
+            let symbol = isNight ? "full_moon" : "sunny"
             
             let forecast = HourlyForecast(
                 id: UUID(),
-                temperature: temp,
+                temperature: 25 + Double.random(in: -5...5),
                 condition: .clear,
                 date: futureDate,
                 symbolName: symbol,
@@ -292,7 +314,15 @@ class WeatherService: ObservableObject {
             )
             hourlyForecast.append(forecast)
         }
+        
         service.hourlyForecast = hourlyForecast
+        
+        // 模拟每日预报
+        service.dailyForecast = [
+            DayWeatherInfo.mock(low: 20, high: 30, condition: "晴", symbol: "sunny", date: now),
+            DayWeatherInfo.mock(low: 19, high: 29, condition: "多云", symbol: "cloudy", date: Calendar.current.date(byAdding: .day, value: 1, to: now)!),
+            DayWeatherInfo.mock(low: 18, high: 28, condition: "小雨", symbol: "rain", date: Calendar.current.date(byAdding: .day, value: 2, to: now)!)
+        ]
         
         return service
     }

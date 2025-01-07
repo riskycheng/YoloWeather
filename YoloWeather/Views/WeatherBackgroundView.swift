@@ -5,8 +5,6 @@ struct WeatherBackgroundView: View {
     @ObservedObject var weatherService: WeatherService
     let weatherCondition: String
     @State private var centerScale: CGFloat = 1.0
-    @State private var cloudOffset1: CGFloat = -200
-    @State private var cloudOffset2: CGFloat = 200
     @State private var sparkleOpacities: [Double] = Array(repeating: 0.0, count: 20)
     @State private var sparkleScales: [CGFloat] = []
     @State private var sparklePositions: [(CGFloat, CGFloat)] = []
@@ -53,119 +51,9 @@ struct WeatherBackgroundView: View {
                             )
                     }
                 }
-                
-                // 中央图标
-                Group {
-                    if timeOfDay == .night {
-                        // 夜间显示月亮和云
-                        ZStack {
-                            // 月亮
-                            Image("moon_stars")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 140, height: 140)
-                                .scaleEffect(centerScale)
-                            
-                            // 移动的云1
-                            Image("cloud")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 100)
-                                .opacity(0.6)
-                                .offset(x: cloudOffset1)
-                            
-                            // 移动的云2
-                            Image("cloud")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 80)
-                                .opacity(0.4)
-                                .offset(x: cloudOffset2, y: 50)
-                        }
-                        .offset(x: geometry.size.width * 0.1)
-                    } else {
-                        // 白天根据天气显示对应图标
-                        let condition = currentWeatherCondition.lowercased()
-                        switch condition {
-                        case let c where c.contains("sunny") || c.contains("clear"):
-                            Image("sunny")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 180, height: 180)
-                                .scaleEffect(centerScale)
-                        case let c where c.contains("cloud") || c.contains("overcast"):
-                            Image("cloud")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 180, height: 180)
-                                .scaleEffect(centerScale)
-                        case let c where c.contains("rain"):
-                            Image("rain")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 180, height: 180)
-                                .scaleEffect(centerScale)
-                        case let c where c.contains("snow"):
-                            Image("snow")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 180, height: 180)
-                                .scaleEffect(centerScale)
-                        case let c where c.contains("fog") || c.contains("haze"):
-                            Image("fog")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 180, height: 180)
-                                .scaleEffect(centerScale)
-                        default:
-                            // 如果不确定，根据是否包含 sunny 来决定
-                            if condition.contains("sunny") {
-                                Image("sunny")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 180, height: 180)
-                                    .scaleEffect(centerScale)
-                            } else {
-                                Image("cloudy")
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 180, height: 180)
-                                    .scaleEffect(centerScale)
-                            }
-                        }
-                    }
-                }
-                .offset(y: -geometry.size.height * 0.25)
-                .onAppear {
-                    startAnimations(geometry: geometry)
-                }
-                .onChange(of: currentWeatherCondition) { oldValue, newValue in
-                    startAnimations(geometry: geometry)
-                }
-                
-                // 地面装饰
-                HStack {
-                    // 左侧
-                    VStack {
-                        if timeOfDay == .night {
-                            Spacer()
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.leading)
-                    
-                    Spacer()
-                    
-                    // 右侧
-                    VStack {
-                        if timeOfDay == .night {
-                            Spacer()
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .padding(.trailing)
-                }
-                .padding(.bottom, 50)
+            }
+            .onAppear {
+                startAnimations(geometry: geometry)
             }
         }
     }
@@ -173,8 +61,6 @@ struct WeatherBackgroundView: View {
     private func startAnimations(geometry: GeometryProxy) {
         // 重置所有动画状态
         centerScale = 1.0
-        cloudOffset1 = -200
-        cloudOffset2 = 200
         sparkleOpacities = Array(repeating: 0.0, count: 20)
         
         // 延迟一帧后开始新的动画，确保状态重置生效
@@ -215,21 +101,6 @@ struct WeatherBackgroundView: View {
                 .repeatForever(autoreverses: true)
             ) {
                 centerScale = 1.1
-            }
-            
-            // 云朵移动动画（减慢速度）
-            withAnimation(
-                .linear(duration: 20)
-                .repeatForever(autoreverses: false)
-            ) {
-                cloudOffset1 = geometry.size.width
-            }
-            
-            withAnimation(
-                .linear(duration: 25)
-                .repeatForever(autoreverses: false)
-            ) {
-                cloudOffset2 = -geometry.size.width
             }
             
             // 星星闪烁动画

@@ -137,6 +137,21 @@ struct WeatherView: View {
         .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
     }
     
+    private var weatherIcon: some View {
+        Group {
+            if let weather = weatherService.currentWeather {
+                let isNight = WeatherThemeManager.shared.determineTimeOfDay(for: Date(), in: weather.timezone) == .night
+                let symbolName = weatherService.getWeatherSymbolName(condition: weather.weatherCondition, isNight: isNight)
+                
+                Image(symbolName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 200, height: 200)
+                    .offset(x: symbolName == "sunny" ? 30 : 0, y: symbolName == "sunny" ? -30 : 0) // Move sunny icon up and right
+            }
+        }
+    }
+    
     var body: some View {
         ZStack {
             // 背景渐变
@@ -153,14 +168,17 @@ struct WeatherView: View {
                     // 顶部工具栏
                     HStack {
                         locationButton
-                        cityPickerButton
-                        
                         Spacer()
+                        cityPickerButton
                     }
                     .padding(.horizontal)
                     
                     Spacer()
                     
+                    // 天气图标
+                    weatherIcon
+                    
+                    // 城市名称和天气状况
                     if let weather = weatherService.currentWeather {
                         VStack(alignment: .leading, spacing: 0) {
                             // City name and condition
