@@ -8,6 +8,7 @@ struct RefreshableView<Content: View>: View {
     @StateObject private var weatherService = WeatherService.shared
     
     @GestureState private var dragOffset: CGFloat = 0
+    @State private var hasTriggeredHaptic = false
     private let threshold: CGFloat = 100
     
     init(isRefreshing: Binding<Bool>, action: @escaping () async -> Void, @ViewBuilder content: () -> Content) {
@@ -74,10 +75,19 @@ struct RefreshableView<Content: View>: View {
                         guard !isRefreshing else { return }
                         if value.translation.height > 0 {
                             state = value.translation.height
+                            
+                            // 当达到阈值时触发触觉反馈
+                            if value.translation.height > threshold && !hasTriggeredHaptic {
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                impactFeedback.prepare()
+                                impactFeedback.impactOccurred()
+                                hasTriggeredHaptic = true
+                            }
                         }
                     }
                     .onEnded { value in
                         guard !isRefreshing else { return }
+                        hasTriggeredHaptic = false  // 重置触觉反馈状态
                         if value.translation.height > threshold {
                             isRefreshing = true
                             Task {

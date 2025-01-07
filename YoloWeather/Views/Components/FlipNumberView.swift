@@ -5,7 +5,6 @@ struct FlipNumberView: View {
     let unit: String
     let color: Color
     @State private var animationCount: Int
-    @State private var animationId = UUID()
     
     init(value: Int, unit: String = "", color: Color = .white) {
         self.value = value
@@ -19,7 +18,6 @@ struct FlipNumberView: View {
             Text("\(animationCount)")
                 .contentTransition(.numericText(value: Double(animationCount)))
                 .foregroundColor(color)
-                .id(animationId)
             
             if !unit.isEmpty {
                 Text(unit)
@@ -27,14 +25,7 @@ struct FlipNumberView: View {
             }
         }
         .onChange(of: value) { oldValue, newValue in
-            animationId = UUID()
-            withAnimation(
-                .spring(
-                    duration: 0.8,
-                    bounce: 0.4,
-                    blendDuration: 0.4
-                )
-            ) {
+            withAnimation(.spring(duration: 0.5, bounce: 0.3)) {
                 animationCount = newValue
             }
         }

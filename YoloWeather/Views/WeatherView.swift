@@ -56,9 +56,6 @@ struct WeatherView: View {
     
     private func handleLocationButtonTap() {
         Task {
-            isLoadingWeather = true
-            defer { isLoadingWeather = false }
-            
             // 设置位置更新回调
             locationService.onLocationUpdated = { [weak locationService] location in
                 Task {
