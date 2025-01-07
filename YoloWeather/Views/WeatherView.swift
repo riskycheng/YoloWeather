@@ -95,9 +95,11 @@ struct WeatherView: View {
                         WeatherSymbol(symbolName: forecast.symbolName)
                             .frame(width: 25, height: 25)
                         
-                        Text("\(Int(round(forecast.temperature)))°")
-                            .font(.system(size: 20))
-                            .foregroundColor(.white)
+                        FlipNumberView(
+                            value: Int(round(forecast.temperature)),
+                            unit: "°"
+                        )
+                        .font(.system(size: 20))
                     }
                 }
             }
@@ -206,12 +208,14 @@ struct WeatherView: View {
                         .padding(.horizontal, 20)
                         
                         // 温度显示
-                        Text("\(Int(round(weather.temperature)))°")
-                            .font(.system(size: 96, weight: .thin))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, 20)
-                            .padding(.top, -10)
+                        FlipNumberView(
+                            value: Int(round(weather.temperature)),
+                            unit: "°"
+                        )
+                        .font(.system(size: 96, weight: .thin))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 20)
+                        .padding(.top, -10)
                     } else {
                         // Loading indicator when weather is not available or refreshing
                         Spacer()
