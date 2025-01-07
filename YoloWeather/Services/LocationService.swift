@@ -9,6 +9,7 @@ class LocationService: NSObject, ObservableObject {
     @Published var locationName: String = ""
     @Published var errorMessage: String?
     @Published var isLocating: Bool = false
+    var onLocationUpdated: ((CLLocation) -> Void)?
     
     private let locationManager: CLLocationManager
     private let logger = Logger(subsystem: "com.yoloweather.app", category: "LocationService")
@@ -114,59 +115,44 @@ class LocationService: NSObject, ObservableObject {
         locationManager.stopUpdatingLocation()
     }
     
-    private func updateLocationName(for location: CLLocation) {
-        // 防止重复请求
+    func waitForLocationNameUpdate() async {
+        // 最多等待3秒钟
+        let startTime = Date()
+        while isUpdatingLocationName {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 等待0.1秒
+            if Date().timeIntervalSince(startTime) > 3.0 {
+                break
+            }
+        }
+    }
+    
+    func updateLocationName(for location: CLLocation) {
         guard !isUpdatingLocationName else { return }
         isUpdatingLocationName = true
         
-        Task { @MainActor in
-            do {
-                let placemarks = try await geocoder.reverseGeocodeLocation(location)
-                if let placemark = placemarks.first {
-                    var name = ""
-                    
-                    // 优先使用区域名称
-                    if let subLocality = placemark.subLocality {
-                        name = subLocality
-                    }
-                    // 其次使用城市名称
-                    else if let locality = placemark.locality {
-                        name = locality
-                    }
-                    // 再次使用行政区域
-                    else if let administrativeArea = placemark.administrativeArea {
-                        name = administrativeArea
-                    }
-                    // 最后使用国家名称
-                    else if let country = placemark.country {
-                        name = country
-                    }
-                    
-                    if name.isEmpty {
-                        name = "未知位置"
-                    }
-                    
-                    logger.info("Location name updated: \(name)")
-                    self.locationName = name
-                    self.errorMessage = nil
-                    self.isLocating = false
-                    self.isUpdatingLocationName = false
-                } else {
-                    throw NSError(domain: "LocationService", code: -1, userInfo: [NSLocalizedDescriptionKey: "无法获取位置信息"])
+        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+            Task { @MainActor in
+                defer { self?.isUpdatingLocationName = false }
+                
+                if let error = error {
+                    self?.logger.error("Geocoding error: \(error.localizedDescription)")
+                    self?.errorMessage = "无法获取位置信息"
+                    return
                 }
-            } catch {
-                logger.error("Geocoding error: \(error.localizedDescription)")
-                // 如果地理编码失败，尝试重试
-                if self.retryCount < self.maxRetries {
-                    self.retryCount += 1
-                    self.isUpdatingLocationName = false
-                    self.updateLocationName(for: location)
+                
+                if let placemark = placemarks?.first {
+                    // 优先使用区域名称，如果没有则使用城市名称
+                    if let locality = placemark.locality {
+                        self?.locationName = locality
+                    } else if let administrativeArea = placemark.administrativeArea {
+                        self?.locationName = administrativeArea
+                    } else {
+                        self?.locationName = "未知位置"
+                    }
+                    self?.logger.info("Location name updated: \(self?.locationName ?? "")")
                 } else {
-                    self.errorMessage = "无法获取位置信息"
-                    self.isLocating = false
-                    self.isUpdatingLocationName = false
-                    // 如果多次重试失败，使用默认位置
-                    self.useDefaultLocation()
+                    self?.locationName = "未知位置"
+                    self?.logger.warning("No placemark found")
                 }
             }
         }
@@ -195,6 +181,8 @@ extension LocationService: CLLocationManagerDelegate {
             self.currentLocation = location
             self.retryCount = 0 // 重置重试计数
             self.updateLocationName(for: location)
+            self.onLocationUpdated?(location)
+            self.isLocating = false
         }
     }
     

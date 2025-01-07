@@ -57,31 +57,29 @@ struct WeatherView: View {
     private func handleLocationButtonTap() {
         Task {
             isLoadingWeather = true
+            defer { isLoadingWeather = false }
             
-            // Request location authorization if needed
-            locationService.requestLocationPermission()
-            
-            // Start updating location
-            locationService.startUpdatingLocation()
-            
-            // Set to use current location
-            isUsingCurrentLocation = true
-            
-            // Update weather with current location when available
-            if let location = locationService.currentLocation {
-                // Create a new PresetLocation for current location
-                let locationName = locationService.locationName ?? "当前位置"
-                selectedLocation = PresetLocation(
-                    name: locationName,
-                    location: location
-                )
-                
-                await weatherService.updateWeather(for: location)
-                lastRefreshTime = Date()
-                updateTimeOfDay()
+            // 设置位置更新回调
+            locationService.onLocationUpdated = { [weak locationService] location in
+                Task {
+                    // 等待位置名称更新完成
+                    await locationService?.waitForLocationNameUpdate()
+                    
+                    // 更新天气信息
+                    await weatherService.updateWeather(for: location)
+                    lastRefreshTime = Date()
+                    updateTimeOfDay()
+                }
             }
             
-            isLoadingWeather = false
+            // 请求定位权限
+            locationService.requestLocationPermission()
+            
+            // 开始更新位置
+            locationService.startUpdatingLocation()
+            
+            // 设置为使用当前位置
+            isUsingCurrentLocation = true
         }
     }
     
