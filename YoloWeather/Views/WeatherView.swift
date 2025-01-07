@@ -146,8 +146,9 @@ struct WeatherView: View {
                 Image(symbolName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 200, height: 200)
-                    .offset(x: symbolName == "sunny" ? 30 : 0, y: symbolName == "sunny" ? -30 : 0) // Move sunny icon up and right
+                    .frame(width: 160, height: 160)
+                    .offset(x: 60, y: -120)
+                    .modifier(ScalingEffectModifier())
             }
         }
     }
@@ -261,5 +262,22 @@ struct WeatherView: View {
                     }
             }
             .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
+    }
+}
+
+struct ScalingEffectModifier: ViewModifier {
+    @State private var isScaling = false
+    
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(isScaling ? 1.05 : 1.0)
+            .animation(
+                Animation.easeInOut(duration: 3.0)
+                    .repeatForever(autoreverses: true),
+                value: isScaling
+            )
+            .onAppear {
+                isScaling = true
+            }
     }
 }
