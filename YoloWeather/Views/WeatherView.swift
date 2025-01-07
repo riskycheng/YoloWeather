@@ -123,14 +123,14 @@ struct WeatherView: View {
             HStack(spacing: 4) {
                 if locationService.isLocating {
                     ProgressView()
-                        .scaleEffect(0.7)
+                        .scaleEffect(1.0)
                         .tint(WeatherThemeManager.shared.textColor(for: timeOfDay))
                 } else {
                     Image(systemName: "location.circle.fill")
-                        .font(.title2)
+                        .font(.system(size: 32))
                 }
             }
-            .frame(width: 44, height: 44)
+            .frame(width: 64, height: 64)
         }
         .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
     }
@@ -140,9 +140,9 @@ struct WeatherView: View {
             showingLocationPicker = true
         } label: {
             Image(systemName: "plus.circle.fill")
-                .font(.system(size: 24))
+                .font(.system(size: 32))
                 .foregroundColor(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: 64, height: 64)
                 .contentShape(Rectangle())
         }
     }
