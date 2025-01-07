@@ -10,6 +10,7 @@ struct WeatherView: View {
     @State private var lastRefreshTime: Date = Date()
     @State private var isUsingCurrentLocation = false
     @State private var timeOfDay: WeatherTimeOfDay = .night
+    @State private var isLoadingWeather = false
     @AppStorage("showDailyForecast") private var showDailyForecast = false
     
     private func updateTimeOfDay() {
@@ -55,6 +56,8 @@ struct WeatherView: View {
     
     private func handleLocationButtonTap() {
         Task {
+            isLoadingWeather = true
+            
             // Request location authorization if needed
             locationService.requestLocationPermission()
             
@@ -66,10 +69,19 @@ struct WeatherView: View {
             
             // Update weather with current location when available
             if let location = locationService.currentLocation {
+                // Create a new PresetLocation for current location
+                let locationName = locationService.locationName ?? "当前位置"
+                selectedLocation = PresetLocation(
+                    name: locationName,
+                    location: location
+                )
+                
                 await weatherService.updateWeather(for: location)
                 lastRefreshTime = Date()
                 updateTimeOfDay()
             }
+            
+            isLoadingWeather = false
         }
     }
     
@@ -131,10 +143,11 @@ struct WeatherView: View {
             showingLocationPicker = true
         } label: {
             Image(systemName: "plus.circle.fill")
-                .font(.title2)
+                .font(.system(size: 24))
+                .foregroundColor(.white)
                 .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
-        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
     }
     
     private var weatherIcon: some View {
@@ -147,7 +160,7 @@ struct WeatherView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 160, height: 160)
-                    .offset(x: 60, y: -120)
+                    .offset(x: 60, y: 0)
                     .modifier(ScalingEffectModifier())
             }
         }
@@ -165,7 +178,7 @@ struct WeatherView: View {
             RefreshableView(isRefreshing: $isRefreshing) {
                 await refreshWeather()
             } content: {
-                VStack(spacing: 20) {
+                VStack(spacing: 0) {
                     // 顶部工具栏
                     HStack {
                         locationButton
@@ -173,75 +186,102 @@ struct WeatherView: View {
                         cityPickerButton
                     }
                     .padding(.horizontal)
-                    
-                    Spacer()
+                    .padding(.bottom, 20)
                     
                     // 天气图标
-                    weatherIcon
+                    if !isLoadingWeather {
+                        weatherIcon
+                            .frame(maxHeight: .infinity, alignment: .top)
+                    }
                     
                     // 城市名称和天气状况
-                    if let weather = weatherService.currentWeather {
-                        VStack(alignment: .leading, spacing: 0) {
-                            // City name and condition
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(locationService.locationName)
-                                    .font(.system(size: 34, weight: .medium))
-                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                                
-                                Text(weather.condition)
-                                    .font(.system(size: 17))
-                                    .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay).opacity(0.8))
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 10)
-                            
-                            // Large temperature
-                            Text("\(Int(round(weather.temperature)))°")
-                                .font(.system(size: 96, weight: .thin))
-                                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                                .padding(.leading, 10)
-                            
-                            Spacer().frame(height: 30)
-                            
-                            // Hourly forecast
-                            if !weatherService.hourlyForecast.isEmpty {
-                                hourlyForecastView
-                                    .frame(height: 100)
-                                    .padding(.horizontal)
-                                    .padding(.bottom, 30)
-                            }
+                    if let weather = weatherService.currentWeather, !isLoadingWeather {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(locationService.locationName ?? "未知位置")
+                                .font(.system(size: 34, weight: .medium))
+                            Text(weather.condition)
+                                .font(.system(size: 17))
+                                .opacity(0.8)
                         }
-                    } else if isRefreshing || weatherService.isLoading {
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 20)
+                        
+                        // 温度显示
+                        Text("\(Int(round(weather.temperature)))°")
+                            .font(.system(size: 96, weight: .thin))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, 20)
+                            .padding(.top, -10)
+                    } else {
+                        // Loading indicator when weather is not available or refreshing
+                        Spacer()
                         ProgressView()
                             .scaleEffect(1.5)
                             .tint(.white)
+                        Spacer()
+                    }
+                    
+                    Spacer()
+                    
+                    // 小时预报
+                    if weatherService.currentWeather != nil && !isLoadingWeather {
+                        hourlyForecastView
+                            .padding(.horizontal)
+                            .padding(.bottom, 30)
                     }
                 }
-                .padding(.vertical)
             }
         }
         .sheet(isPresented: $showingLocationPicker) {
-            CityPickerView { location in
-                Task {
-                    await updateLocation(nil)  // Clear current location
-                    isUsingCurrentLocation = false  // Set to use selected city
-                    locationService.locationName = location.name
-                    locationService.currentLocation = location.location
-                    await weatherService.updateWeather(for: location.location)
-                    lastRefreshTime = Date()
-                    updateTimeOfDay()
+            LocationPickerView(
+                selectedLocation: $selectedLocation,
+                locationService: locationService,
+                isUsingCurrentLocation: $isUsingCurrentLocation,
+                onLocationSelected: { location in
+                    Task {
+                        await updateLocation(location)
+                    }
                 }
-            }
-            .environment(\.weatherTimeOfDay, timeOfDay)
+            )
         }
         .task {
-            // 首次加载时更新天气
-            await updateLocation(selectedLocation.location)
+            // Request location permission and start updating location
+            locationService.requestLocationPermission()
+            locationService.startUpdatingLocation()
+            
+            // Wait for location to be available (with timeout)
+            let startTime = Date()
+            while locationService.currentLocation == nil {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
+                if Date().timeIntervalSince(startTime) > 5 {
+                    // Timeout after 5 seconds, use default location
+                    await updateLocation(selectedLocation.location)
+                    return
+                }
+            }
+            
+            // Use current location if available
+            if let location = locationService.currentLocation {
+                isUsingCurrentLocation = true
+                await updateLocation(location)
+            } else {
+                // Fallback to default location
+                await updateLocation(selectedLocation.location)
+            }
         }
         .onChange(of: selectedLocation) { oldValue, newValue in
-            // 切换城市时更新天气
+            // When city changes, update weather for the new city
             Task {
-                await updateLocation(newValue.location)
+                isLoadingWeather = true
+                isUsingCurrentLocation = false
+                locationService.locationName = newValue.name
+                locationService.currentLocation = newValue.location
+                await weatherService.updateWeather(for: newValue.location)
+                lastRefreshTime = Date()
+                updateTimeOfDay()
+                isLoadingWeather = false
             }
         }
     }

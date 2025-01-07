@@ -12,136 +12,168 @@ struct LocationPickerView: View {
     @State private var isRequestingLocation = false
     @State private var showLocationError = false
     @State private var locationErrorMessage = ""
-    
-    private let predefinedLocations = [
-        "北京市",
-        "上海市",
-        "广州市",
-        "深圳市",
-        "杭州市",
-        "成都市",
-        "武汉市",
-        "西安市",
-        "南京市",
-        "重庆市",
-        "冰岛"
-    ]
-    
-    var filteredLocations: [PresetLocation] {
-        if searchText.isEmpty {
-            return PresetLocation.presets
-        }
-        return PresetLocation.presets.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
-    }
+    @Environment(\.colorScheme) private var colorScheme
     
     var body: some View {
-        List {
-            Section {
-                Button {
-                    Task {
-                        // 防止重复请求
-                        guard !isRequestingLocation else { return }
-                        isRequestingLocation = true
-                        
-                        // 检查权限状态
-                        switch locationService.authorizationStatus {
-                        case .notDetermined:
-                            // 首次请求权限
-                            locationService.requestLocationPermission()
-                            // 等待用户授权
-                            try? await Task.sleep(nanoseconds: 1_000_000_000)
-                            
-                        case .denied, .restricted:
-                            // 用户拒绝或受限
-                            locationErrorMessage = "请在设置中允许访问位置信息"
-                            showLocationError = true
-                            isRequestingLocation = false
-                            return
-                            
-                        case .authorizedWhenInUse, .authorizedAlways:
-                            break
-                            
-                        @unknown default:
-                            return
-                        }
-                        
-                        // 开始更新位置
-                        locationService.startUpdatingLocation()
-                        
-                        // 等待位置更新（最多5秒）
-                        for _ in 0..<5 {
-                            if let location = locationService.currentLocation {
-                                await MainActor.run {
-                                    isUsingCurrentLocation = true
-                                    onLocationSelected(location)
-                                    dismiss()
-                                }
-                                return
-                            }
-                            try? await Task.sleep(nanoseconds: 1_000_000_000)
-                        }
-                        
-                        // 超时处理
-                        await MainActor.run {
-                            locationErrorMessage = "获取位置信息超时，请重试"
-                            showLocationError = true
-                            isRequestingLocation = false
-                        }
-                    }
-                } label: {
-                    HStack {
-                        Image(systemName: "location.fill")
-                            .foregroundStyle(.blue)
-                        Text("使用当前位置")
-                            .foregroundStyle(.primary)
-                        Spacer()
-                        if isUsingCurrentLocation && locationService.currentLocation != nil {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(.blue)
-                        } else if isRequestingLocation {
-                            ProgressView()
-                                .scaleEffect(0.8)
+        NavigationView {
+            VStack(spacing: 0) {
+                // Search Bar
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.gray)
+                    
+                    TextField("搜索城市", text: $searchText)
+                        .textFieldStyle(.plain)
+                    
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.gray)
                         }
                     }
                 }
-                .disabled(locationService.authorizationStatus == .denied || 
-                         locationService.authorizationStatus == .restricted)
-            }
-            
-            Section("已保存的位置") {
-                ForEach(filteredLocations) { location in
+                .padding()
+                .background(Color(uiColor: .secondarySystemBackground))
+                .cornerRadius(10)
+                .padding(.horizontal)
+                .padding(.top)
+                
+                // Current Location Button
+                if searchText.isEmpty {
                     Button {
-                        selectedLocation = location
-                        onLocationSelected(nil)
-                        dismiss()
+                        requestCurrentLocation()
                     } label: {
                         HStack {
-                            Text(location.name)
+                            Image(systemName: "location.fill")
+                                .foregroundStyle(.blue)
+                            Text("使用当前位置")
                                 .foregroundStyle(.primary)
                             Spacer()
-                            if location.id == selectedLocation.id && !isUsingCurrentLocation {
+                            if isUsingCurrentLocation && locationService.currentLocation != nil {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(.blue)
+                            } else if isRequestingLocation {
+                                ProgressView()
                             }
                         }
+                        .padding()
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .cornerRadius(10)
+                    }
+                    .padding(.horizontal)
+                    .padding(.top)
+                }
+                
+                // City Grid
+                if searchText.isEmpty {
+                    ScrollView {
+                        LazyVGrid(columns: [
+                            GridItem(.flexible()),
+                            GridItem(.flexible())
+                        ], spacing: 12) {
+                            ForEach(PresetLocation.presets) { location in
+                                Button {
+                                    selectedLocation = location
+                                    isUsingCurrentLocation = false
+                                    onLocationSelected(location.location)
+                                    dismiss()
+                                } label: {
+                                    Text(location.name)
+                                        .foregroundColor(.primary)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 12)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .fill(selectedLocation.id == location.id ? 
+                                                    Color.blue.opacity(0.2) : 
+                                                    Color(uiColor: .secondarySystemBackground))
+                                        )
+                                }
+                            }
+                        }
+                        .padding()
+                    }
+                } else {
+                    // Search Results
+                    List {
+                        ForEach(PresetLocation.presets.filter {
+                            $0.name.localizedCaseInsensitiveContains(searchText)
+                        }) { location in
+                            Button {
+                                selectedLocation = location
+                                isUsingCurrentLocation = false
+                                onLocationSelected(location.location)
+                                dismiss()
+                            } label: {
+                                Text(location.name)
+                                    .foregroundColor(.primary)
+                            }
+                        }
+                    }
+                    .listStyle(.plain)
+                }
+            }
+            .navigationTitle("选择城市")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("取消") {
+                        dismiss()
                     }
                 }
             }
         }
-        .navigationTitle("选择位置")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "搜索城市")
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button("完成") {
-                    dismiss()
-                }
-            }
-        }
-        .alert("位置获取失败", isPresented: $showLocationError) {
-            Button("确定", role: .cancel) { }
+        .alert("位置访问错误", isPresented: $showLocationError) {
+            Button("确定", role: .cancel) {}
         } message: {
             Text(locationErrorMessage)
         }
     }
-} 
+    
+    private func requestCurrentLocation() {
+        Task {
+            guard !isRequestingLocation else { return }
+            isRequestingLocation = true
+            
+            switch locationService.authorizationStatus {
+            case .notDetermined:
+                locationService.requestLocationPermission()
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                
+            case .denied, .restricted:
+                locationErrorMessage = "请在设置中允许访问位置信息"
+                showLocationError = true
+                isRequestingLocation = false
+                return
+                
+            case .authorizedWhenInUse, .authorizedAlways:
+                break
+                
+            @unknown default:
+                return
+            }
+            
+            locationService.startUpdatingLocation()
+            
+            for _ in 0..<5 {
+                if let location = locationService.currentLocation {
+                    await MainActor.run {
+                        isUsingCurrentLocation = true
+                        onLocationSelected(location)
+                        dismiss()
+                    }
+                    return
+                }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+            
+            await MainActor.run {
+                locationErrorMessage = "获取位置信息超时，请重试"
+                showLocationError = true
+                isRequestingLocation = false
+            }
+        }
+    }
+}
