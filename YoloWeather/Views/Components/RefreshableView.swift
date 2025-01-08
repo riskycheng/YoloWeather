@@ -9,6 +9,7 @@ struct RefreshableView<Content: View>: View {
     
     @GestureState private var dragOffset: CGFloat = 0
     @State private var hasTriggeredHaptic = false
+    @State private var animatedOffset: CGFloat = 0
     private let threshold: CGFloat = 100
     
     init(isRefreshing: Binding<Bool>, action: @escaping () async -> Void, @ViewBuilder content: () -> Content) {
@@ -35,7 +36,7 @@ struct RefreshableView<Content: View>: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 content
-                    .offset(y: dragOffset > 0 ? dragOffset : 0)
+                    .offset(y: max(dragOffset, animatedOffset))
                 
                 if dragOffset > 0 || isRefreshing {
                     VStack {
@@ -64,8 +65,8 @@ struct RefreshableView<Content: View>: View {
                             .foregroundStyle(.white)
                     }
                     .frame(width: geometry.size.width)
-                    .frame(height: max(dragOffset, 0))
-                    .opacity(min(dragOffset / 50, 1.0))
+                    .frame(height: max(dragOffset > 0 ? dragOffset : animatedOffset, 0))
+                    .opacity(min(max(dragOffset, animatedOffset) / 50, 1.0))
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -89,10 +90,20 @@ struct RefreshableView<Content: View>: View {
                         guard !isRefreshing else { return }
                         hasTriggeredHaptic = false  // 重置触觉反馈状态
                         if value.translation.height > threshold {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                animatedOffset = 60 // 设置一个固定的加载状态偏移量
+                            }
                             isRefreshing = true
                             Task {
                                 await action()
+                                withAnimation(.easeInOut(duration: 0.3)) {
+                                    animatedOffset = 0
+                                }
                                 isRefreshing = false
+                            }
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                animatedOffset = 0
                             }
                         }
                     }
