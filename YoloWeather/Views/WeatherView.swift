@@ -180,7 +180,7 @@ struct WeatherView: View {
             // 背景渐变
             WeatherBackgroundView(
                 weatherService: weatherService,
-                weatherCondition: weatherService.currentWeather?.condition ?? "晴天"
+                weatherCondition: weatherService.currentWeather?.weatherCondition.description ?? "晴天"
             )
             .environment(\.weatherTimeOfDay, timeOfDay)
             
@@ -206,7 +206,7 @@ struct WeatherView: View {
                     // 城市名称和天气状况
                     if let weather = weatherService.currentWeather, !isLoadingWeather {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(locationService.locationName ?? "未知位置")
+                            Text(locationService.locationName)
                                 .font(.system(size: 34, weight: .medium))
                         }
                         .foregroundColor(.white)

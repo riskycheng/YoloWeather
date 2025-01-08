@@ -1,5 +1,4 @@
 import SwiftUI
-import YoloWeather
 
 struct CurrentWeatherDisplayView: View {
     let weather: WeatherService.CurrentWeather  // Use WeatherService.CurrentWeather type
