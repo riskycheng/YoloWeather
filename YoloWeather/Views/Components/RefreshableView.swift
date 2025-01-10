@@ -9,7 +9,6 @@ struct RefreshableView<Content: View>: View {
     
     @GestureState private var dragOffset: CGFloat = 0
     @State private var hasTriggeredHaptic = false
-    @State private var animatedOffset: CGFloat = 0
     private let threshold: CGFloat = 100
     
     init(isRefreshing: Binding<Bool>, action: @escaping () async -> Void, @ViewBuilder content: () -> Content) {
@@ -22,7 +21,6 @@ struct RefreshableView<Content: View>: View {
         if let weather = weatherService.currentWeather {
             return WeatherThemeManager.shared.determineTimeOfDay(for: Date(), in: weather.timezone) == .day
         }
-        // Default to using local time if no weather data is available
         let hour = Calendar.current.component(.hour, from: Date())
         return hour >= 6 && hour < 18
     }
@@ -30,44 +28,30 @@ struct RefreshableView<Content: View>: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack(alignment: .top) {
-                // Add a clear background to capture gestures across the entire screen
                 Color.clear
                     .contentShape(Rectangle())
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
-                content
-                    .offset(y: max(dragOffset, animatedOffset))
-                
-                if dragOffset > 0 || isRefreshing {
-                    VStack {
-                        if isRefreshing {
-                            // 使用不同的图标基于时间
-                            Image(isDayTime ? "sunny" : "full_moon")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 32, height: 32)
-                                .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                                .animation(
-                                    Animation.linear(duration: 1)
-                                        .repeatForever(autoreverses: false),
-                                    value: isRefreshing
-                                )
-                        } else {
-                            Image(isDayTime ? "sunny" : "full_moon")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 32, height: 32)
-                                .rotationEffect(.degrees(min((dragOffset / threshold as CGFloat) * CGFloat(180), 180)))
-                        }
+                // 下拉刷新指示器
+                if dragOffset > 0 && !isRefreshing {
+                    VStack(spacing: 8) {
+                        Image(isDayTime ? "sunny" : "full_moon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 32, height: 32)
+                            .rotationEffect(.degrees(Double((dragOffset / threshold) * 180)))
                         
-                        Text(isRefreshing ? "正在刷新" : (dragOffset > threshold ? "释放刷新" : "下拉刷新"))
+                        Text(dragOffset > threshold ? "释放刷新" : "下拉刷新")
                             .font(.subheadline)
                             .foregroundStyle(.white)
                     }
                     .frame(width: geometry.size.width)
-                    .frame(height: max(dragOffset > 0 ? dragOffset : animatedOffset, 0))
-                    .opacity(min(max(dragOffset, animatedOffset) / 50, 1.0))
+                    .frame(height: dragOffset)
+                    .opacity(Double(min(dragOffset / 50, 1.0)))
                 }
+                
+                content
+                    .offset(y: dragOffset)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .gesture(
@@ -88,22 +72,16 @@ struct RefreshableView<Content: View>: View {
                     }
                     .onEnded { value in
                         guard !isRefreshing else { return }
-                        hasTriggeredHaptic = false  // 重置触觉反馈状态
+                        hasTriggeredHaptic = false
                         if value.translation.height > threshold {
                             withAnimation(.easeInOut(duration: 0.3)) {
-                                animatedOffset = 60 // 设置一个固定的加载状态偏移量
+                                isRefreshing = true
                             }
-                            isRefreshing = true
                             Task {
                                 await action()
                                 withAnimation(.easeInOut(duration: 0.3)) {
-                                    animatedOffset = 0
+                                    isRefreshing = false
                                 }
-                                isRefreshing = false
-                            }
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                animatedOffset = 0
                             }
                         }
                     }

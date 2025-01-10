@@ -212,47 +212,45 @@ struct WeatherView: View {
                         .padding(.horizontal)
                         .padding(.bottom, 20)
                         
-                        // 天气图标
-                        if !isLoadingWeather {
-                            weatherIcon
-                                .frame(maxHeight: .infinity, alignment: .top)
-                        }
-                        
-                        // 城市名称和天气状况
-                        if let weather = weatherService.currentWeather, !isLoadingWeather {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(locationService.locationName)
-                                    .font(.system(size: 34, weight: .medium))
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, 20)
-                            
-                            // 温度显示
-                            CurrentWeatherDisplayView(
-                                weather: weather,
-                                timeOfDay: timeOfDay,
-                                animationTrigger: animationTrigger
-                            )
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, 20)
-                            .padding(.top, -10)
+                        if isRefreshing {
+                            WeatherLoadingView()
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
-                            // Loading indicator when weather is not available or refreshing
+                            // 天气图标
+                            if !isLoadingWeather {
+                                weatherIcon
+                                    .frame(maxHeight: .infinity, alignment: .top)
+                            }
+                            
+                            // 城市名称和天气状况
+                            if let weather = weatherService.currentWeather, !isLoadingWeather {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(locationService.locationName)
+                                        .font(.system(size: 34, weight: .medium))
+                                }
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 20)
+                                
+                                // 温度显示
+                                CurrentWeatherDisplayView(
+                                    weather: weather,
+                                    timeOfDay: timeOfDay,
+                                    animationTrigger: animationTrigger
+                                )
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.leading, 20)
+                                .padding(.top, -10)
+                            }
+                            
                             Spacer()
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .tint(.white)
-                            Spacer()
-                        }
-                        
-                        Spacer()
-                        
-                        // 小时预报
-                        if weatherService.currentWeather != nil && !isLoadingWeather {
-                            hourlyForecastView
-                                .padding(.horizontal)
-                                .padding(.bottom, 30)
+                            
+                            // 小时预报
+                            if weatherService.currentWeather != nil && !isLoadingWeather {
+                                hourlyForecastView
+                                    .padding(.horizontal)
+                                    .padding(.bottom, 30)
+                            }
                         }
                     }
                 }
