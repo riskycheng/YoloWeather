@@ -24,6 +24,9 @@ struct WeatherView: View {
         isRefreshing = true
         defer { isRefreshing = false }
         
+        // 添加最小延迟时间，确保动画效果可见
+        let refreshStartTime = Date()
+        
         if isUsingCurrentLocation {
             if let location = locationService.currentLocation {
                 await weatherService.updateWeather(for: location)
@@ -34,6 +37,13 @@ struct WeatherView: View {
                 await weatherService.updateWeather(for: currentLocation)
             }
         }
+        
+        // 确保刷新动画至少显示1秒
+        let timeElapsed = Date().timeIntervalSince(refreshStartTime)
+        if timeElapsed < 1.0 {
+            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+        }
+        
         lastRefreshTime = Date()
         updateTimeOfDay()
     }
@@ -188,56 +198,62 @@ struct WeatherView: View {
                 await refreshWeather()
             } content: {
                 VStack(spacing: 0) {
-                    // 顶部工具栏
-                    HStack {
-                        locationButton
-                        Spacer()
-                        cityPickerButton
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
-                    
-                    // 天气图标
-                    if !isLoadingWeather {
-                        weatherIcon
-                            .frame(maxHeight: .infinity, alignment: .top)
-                    }
-                    
-                    // 城市名称和天气状况
-                    if let weather = weatherService.currentWeather, !isLoadingWeather {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(locationService.locationName)
-                                .font(.system(size: 34, weight: .medium))
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        
-                        // 温度显示
-                        CurrentWeatherDisplayView(
-                            weather: weather,
-                            timeOfDay: timeOfDay,
-                            animationTrigger: animationTrigger
-                        )
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 20)
-                        .padding(.top, -10)
-                    } else {
-                        // Loading indicator when weather is not available or refreshing
-                        Spacer()
-                        ProgressView()
-                            .scaleEffect(1.5)
-                            .tint(.white)
-                        Spacer()
-                    }
-                    
                     Spacer()
+                        .frame(height: 0)
+                        .padding(.top, -60)
                     
-                    // 小时预报
-                    if weatherService.currentWeather != nil && !isLoadingWeather {
-                        hourlyForecastView
-                            .padding(.horizontal)
-                            .padding(.bottom, 30)
+                    VStack(spacing: 0) {
+                        // 顶部工具栏
+                        HStack {
+                            locationButton
+                            Spacer()
+                            cityPickerButton
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 20)
+                        
+                        // 天气图标
+                        if !isLoadingWeather {
+                            weatherIcon
+                                .frame(maxHeight: .infinity, alignment: .top)
+                        }
+                        
+                        // 城市名称和天气状况
+                        if let weather = weatherService.currentWeather, !isLoadingWeather {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(locationService.locationName)
+                                    .font(.system(size: 34, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            
+                            // 温度显示
+                            CurrentWeatherDisplayView(
+                                weather: weather,
+                                timeOfDay: timeOfDay,
+                                animationTrigger: animationTrigger
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, 20)
+                            .padding(.top, -10)
+                        } else {
+                            // Loading indicator when weather is not available or refreshing
+                            Spacer()
+                            ProgressView()
+                                .scaleEffect(1.5)
+                                .tint(.white)
+                            Spacer()
+                        }
+                        
+                        Spacer()
+                        
+                        // 小时预报
+                        if weatherService.currentWeather != nil && !isLoadingWeather {
+                            hourlyForecastView
+                                .padding(.horizontal)
+                                .padding(.bottom, 30)
+                        }
                     }
                 }
             }

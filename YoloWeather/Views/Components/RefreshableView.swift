@@ -60,7 +60,7 @@ struct RefreshableView<Content: View>: View {
                                 .rotationEffect(.degrees(min((dragOffset / threshold as CGFloat) * CGFloat(180), 180)))
                         }
                         
-                        Text(dragOffset > threshold ? "释放刷新" : "下拉刷新")
+                        Text(isRefreshing ? "正在刷新" : (dragOffset > threshold ? "释放刷新" : "下拉刷新"))
                             .font(.subheadline)
                             .foregroundStyle(.white)
                     }
