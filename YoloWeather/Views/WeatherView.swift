@@ -103,7 +103,7 @@ struct WeatherView: View {
     
     private var hourlyForecastView: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 20) {
+            HStack(spacing: 15) {  
                 ForEach(weatherService.hourlyForecast) { forecast in
                     VStack(spacing: 8) {
                         Text(forecast.formattedTime)
@@ -120,12 +120,15 @@ struct WeatherView: View {
                         )
                         .font(.system(size: 20))
                     }
+                    .frame(width: 50)  
                 }
             }
-            .padding()
+            .padding(.horizontal, 15)  
+            .padding(.vertical, 15)
         }
         .background(Color.black.opacity(0.2))
         .cornerRadius(15)
+        .padding(.horizontal, 15)  
     }
     
     struct WeatherSymbol: View {
