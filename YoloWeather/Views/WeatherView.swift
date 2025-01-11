@@ -214,41 +214,6 @@ struct WeatherView: View {
             )
             .environment(\.weatherTimeOfDay, timeOfDay)
             
-            // 浮动气泡层 - 放在最底层，避开天气图标
-            GeometryReader { geometry in
-                ZStack {
-                    // 风速气泡 - 放在左侧中部空白区域
-                    GlassBubbleView(
-                        info: WeatherInfo(
-                            title: "风速",
-                            value: String(format: "%.1f", weatherService.currentWeather?.windSpeed ?? 0),
-                            unit: "km/h"
-                        )
-                    )
-                    .position(x: geometry.size.width * 0.15, y: geometry.size.height * 0.45)
-                    
-                    // 湿度气泡 - 放在右侧下部空白区域
-                    GlassBubbleView(
-                        info: WeatherInfo(
-                            title: "湿度",
-                            value: String(format: "%.0f", (weatherService.currentWeather?.humidity ?? 0) * 100),
-                            unit: "%"
-                        )
-                    )
-                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.6)
-                    
-                    // 降水气泡 - 放在左侧下部空白区域
-                    GlassBubbleView(
-                        info: WeatherInfo(
-                            title: "降水概率",
-                            value: String(format: "%.0f", (weatherService.currentWeather?.precipitationChance ?? 0) * 100),
-                            unit: "%"
-                        )
-                    )
-                    .position(x: geometry.size.width * 0.3, y: geometry.size.height * 0.55)
-                }
-            }
-            
             // 前景内容
             RefreshableView(isRefreshing: $isRefreshing) {
                 await refreshWeather()
@@ -312,6 +277,43 @@ struct WeatherView: View {
                         }
                     }
                 }
+            }
+            
+            // 浮动气泡层 - 放在RefreshableView之上
+            GeometryReader { geometry in
+                ZStack {
+                    // 风速气泡 - 放在左侧中部空白区域
+                    GlassBubbleView(
+                        info: WeatherInfo(
+                            title: "风速",
+                            value: String(format: "%.1f", weatherService.currentWeather?.windSpeed ?? 0),
+                            unit: "km/h"
+                        ),
+                        initialPosition: CGPoint(x: geometry.size.width * 0.15, y: geometry.size.height * 0.45)
+                    )
+                    
+                    // 湿度气泡 - 放在右侧下部空白区域
+                    GlassBubbleView(
+                        info: WeatherInfo(
+                            title: "湿度",
+                            value: String(format: "%.0f", (weatherService.currentWeather?.humidity ?? 0) * 100),
+                            unit: "%"
+                        ),
+                        initialPosition: CGPoint(x: geometry.size.width * 0.75, y: geometry.size.height * 0.6)
+                    )
+                    
+                    // 降水气泡 - 放在左侧下部空白区域
+                    GlassBubbleView(
+                        info: WeatherInfo(
+                            title: "降水概率",
+                            value: String(format: "%.0f", (weatherService.currentWeather?.precipitationChance ?? 0) * 100),
+                            unit: "%"
+                        ),
+                        initialPosition: CGPoint(x: geometry.size.width * 0.3, y: geometry.size.height * 0.55)
+                    )
+                }
+                .opacity(isRefreshing ? 0 : 1)  // 刷新时隐藏气泡
+                .animation(.easeInOut(duration: 0.3), value: isRefreshing)  // 添加淡入淡出动画
             }
         }
         .sheet(isPresented: $showingLocationPicker) {
