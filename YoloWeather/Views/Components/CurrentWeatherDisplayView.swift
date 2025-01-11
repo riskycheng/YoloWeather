@@ -16,15 +16,6 @@ struct CurrentWeatherDisplayView: View {
             )
             .font(.system(size: 96, weight: .medium, design: .rounded))
             .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
-            
-            HStack(spacing: 12) {
-                WeatherIconView(symbolName: weather.symbolName)
-                    .frame(width: 44, height: 44)
-                
-                Text(weather.condition)
-                    .font(.title3)
-            }
-            .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
         }
         .onAppear {
             withAnimation(Animation.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {

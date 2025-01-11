@@ -103,39 +103,49 @@ struct WeatherView: View {
     
     private var hourlyForecastView: some View {
         GeometryReader { geometry in
-            let sidePadding: CGFloat = 15
-            let containerWidth = geometry.size.width - (sidePadding * 2)
-            let itemWidth = containerWidth / 6
+            let totalWidth = geometry.size.width
+            let leftPadding: CGFloat = 20  // 保持与其他元素相同的左边距
+            let rightPadding: CGFloat = 20
+            let availableWidth = totalWidth - leftPadding - rightPadding
             
-            HStack(spacing: 0) {  
-                ForEach(Array(weatherService.hourlyForecast.prefix(6).enumerated()), id: \.element.id) { index, forecast in
-                    VStack(spacing: 4) {
-                        Text(forecast.formattedTime)
-                            .font(.system(size: 13))
-                            .foregroundColor(.white)
-                            .minimumScaleFactor(0.8)
-                            .lineLimit(1)
-                        
-                        WeatherSymbol(symbolName: forecast.symbolName)
-                            .frame(width: 20, height: 20)
-                        
-                        FlipNumberView(
-                            value: Int(round(forecast.temperature)),
-                            unit: "°",
-                            trigger: animationTrigger
-                        )
-                        .font(.system(size: 16))
+            // 计算项目宽度和间距，使得每个项目有相等的左右间距
+            let itemWidth: CGFloat = 55  // 固定项目宽度
+            let totalItemsWidth = itemWidth * 6
+            let remainingSpace = availableWidth - totalItemsWidth
+            let itemSpacing = remainingSpace / 7  // 分成7份：6个项目各自左边1份，最后1份给最后项目的右边
+            
+            ZStack {
+                Color.black.opacity(0.2)
+                
+                HStack(spacing: itemSpacing) {  
+                    ForEach(Array(weatherService.hourlyForecast.prefix(6).enumerated()), id: \.element.id) { index, forecast in
+                        VStack(spacing: 8) {
+                            Text(forecast.formattedTime)
+                                .font(.system(size: 15))
+                                .foregroundColor(.white)
+                                .minimumScaleFactor(0.8)
+                                .lineLimit(1)
+                            
+                            WeatherSymbol(symbolName: forecast.symbolName)
+                                .frame(width: 28, height: 28)
+                            
+                            FlipNumberView(
+                                value: Int(round(forecast.temperature)),
+                                unit: "°",
+                                trigger: animationTrigger
+                            )
+                            .font(.system(size: 20))
+                        }
+                        .frame(width: itemWidth)
                     }
-                    .frame(width: itemWidth)
                 }
+                .padding(.horizontal, itemSpacing)  // 添加与项目间距相同的左右padding
+                .padding(.horizontal, leftPadding)  // 再添加与其他元素对齐的padding
             }
-            .frame(width: containerWidth, height: 75)
-            .background(Color.black.opacity(0.2))
             .cornerRadius(15)
-            .frame(maxWidth: .infinity) // Center the container
-            .padding(.horizontal, sidePadding)
+            .frame(maxWidth: .infinity)
         }
-        .frame(height: 91)
+        .frame(height: 100)
     }
     
     struct WeatherSymbol: View {
@@ -219,7 +229,7 @@ struct WeatherView: View {
                             Spacer()
                             cityPickerButton
                         }
-                        .padding(.horizontal)
+                        .padding(.horizontal, 20)
                         .padding(.bottom, 20)
                         
                         if isRefreshing {
@@ -234,23 +244,25 @@ struct WeatherView: View {
                             
                             // 城市名称和天气状况
                             if let weather = weatherService.currentWeather, !isLoadingWeather {
-                                VStack(alignment: .leading, spacing: 4) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    // 温度显示
+                                    CurrentWeatherDisplayView(
+                                        weather: weather,
+                                        timeOfDay: timeOfDay,
+                                        animationTrigger: animationTrigger
+                                    )
+                                    .scaleEffect(1.2)
+                                    
                                     Text(locationService.locationName)
-                                        .font(.system(size: 34, weight: .medium))
+                                        .font(.system(size: 46, weight: .medium))
+                                        .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
                                 }
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(.horizontal, 20)
                                 
-                                // 温度显示
-                                CurrentWeatherDisplayView(
-                                    weather: weather,
-                                    timeOfDay: timeOfDay,
-                                    animationTrigger: animationTrigger
-                                )
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 20)
-                                .padding(.top, -10)
+                                Spacer()
+                                    .frame(height: 20)
                             }
                             
                             Spacer()
@@ -258,7 +270,7 @@ struct WeatherView: View {
                             // 小时预报
                             if weatherService.currentWeather != nil && !isLoadingWeather {
                                 hourlyForecastView
-                                    .padding(.horizontal)
+                                    .padding(.horizontal, 20)
                                     .padding(.bottom, 0)
                             }
                         }
@@ -335,21 +347,21 @@ struct WeatherView: View {
             }
             .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
     }
-}
-
-struct ScalingEffectModifier: ViewModifier {
-    @State private var isScaling = false
     
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(isScaling ? 1.05 : 1.0)
-            .animation(
-                Animation.easeInOut(duration: 3.0)
-                    .repeatForever(autoreverses: true),
-                value: isScaling
-            )
-            .onAppear {
-                isScaling = true
-            }
+    struct ScalingEffectModifier: ViewModifier {
+        @State private var isScaling = false
+        
+        func body(content: Content) -> some View {
+            content
+                .scaleEffect(isScaling ? 1.05 : 1.0)
+                .animation(
+                    Animation.easeInOut(duration: 3.0)
+                        .repeatForever(autoreverses: true),
+                    value: isScaling
+                )
+                .onAppear {
+                    isScaling = true
+                }
+        }
     }
 }
