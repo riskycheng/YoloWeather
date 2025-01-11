@@ -102,33 +102,40 @@ struct WeatherView: View {
     }
     
     private var hourlyForecastView: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 15) {  
-                ForEach(weatherService.hourlyForecast) { forecast in
-                    VStack(spacing: 8) {
+        GeometryReader { geometry in
+            let sidePadding: CGFloat = 15
+            let containerWidth = geometry.size.width - (sidePadding * 2)
+            let itemWidth = containerWidth / 6
+            
+            HStack(spacing: 0) {  
+                ForEach(Array(weatherService.hourlyForecast.prefix(6).enumerated()), id: \.element.id) { index, forecast in
+                    VStack(spacing: 4) {
                         Text(forecast.formattedTime)
-                            .font(.system(size: 15))
+                            .font(.system(size: 13))
                             .foregroundColor(.white)
+                            .minimumScaleFactor(0.8)
+                            .lineLimit(1)
                         
                         WeatherSymbol(symbolName: forecast.symbolName)
-                            .frame(width: 25, height: 25)
+                            .frame(width: 20, height: 20)
                         
                         FlipNumberView(
                             value: Int(round(forecast.temperature)),
                             unit: "°",
                             trigger: animationTrigger
                         )
-                        .font(.system(size: 20))
+                        .font(.system(size: 16))
                     }
-                    .frame(width: 50)  
+                    .frame(width: itemWidth)
                 }
             }
-            .padding(.horizontal, 15)  
-            .padding(.vertical, 15)
+            .frame(width: containerWidth, height: 75)
+            .background(Color.black.opacity(0.2))
+            .cornerRadius(15)
+            .frame(maxWidth: .infinity) // Center the container
+            .padding(.horizontal, sidePadding)
         }
-        .background(Color.black.opacity(0.2))
-        .cornerRadius(15)
-        .padding(.horizontal, 15)  
+        .frame(height: 91)
     }
     
     struct WeatherSymbol: View {
@@ -252,7 +259,7 @@ struct WeatherView: View {
                             if weatherService.currentWeather != nil && !isLoadingWeather {
                                 hourlyForecastView
                                     .padding(.horizontal)
-                                    .padding(.bottom, 30)
+                                    .padding(.bottom, 0)
                             }
                         }
                     }
