@@ -214,6 +214,42 @@ struct WeatherView: View {
             )
             .environment(\.weatherTimeOfDay, timeOfDay)
             
+            // 浮动气泡层 - 放在最底层，避开天气图标
+            GeometryReader { geometry in
+                ZStack {
+                    // 风速气泡 - 放在左侧中部空白区域
+                    WeatherBubbleView(
+                        info: WeatherInfo(
+                            title: "风速",
+                            value: "3.2",
+                            unit: "km/h"
+                        ),
+                        initialPosition: CGPoint(x: geometry.size.width * 0.15, y: geometry.size.height * 0.45)
+                    )
+                    
+                    // 湿度气泡 - 放在右侧下部空白区域
+                    WeatherBubbleView(
+                        info: WeatherInfo(
+                            title: "湿度",
+                            value: "85",
+                            unit: "%"
+                        ),
+                        initialPosition: CGPoint(x: geometry.size.width * 0.75, y: geometry.size.height * 0.6)
+                    )
+                    
+                    // 降水气泡 - 放在左侧下部空白区域
+                    WeatherBubbleView(
+                        info: WeatherInfo(
+                            title: "降水概率",
+                            value: "30",
+                            unit: "%"
+                        ),
+                        initialPosition: CGPoint(x: geometry.size.width * 0.3, y: geometry.size.height * 0.55)
+                    )
+                }
+            }
+            
+            // 前景内容
             RefreshableView(isRefreshing: $isRefreshing) {
                 await refreshWeather()
             } content: {
