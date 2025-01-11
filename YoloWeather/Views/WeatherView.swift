@@ -218,34 +218,34 @@ struct WeatherView: View {
             GeometryReader { geometry in
                 ZStack {
                     // 风速气泡 - 放在左侧中部空白区域
-                    WeatherBubbleView(
+                    GlassBubbleView(
                         info: WeatherInfo(
                             title: "风速",
-                            value: "3.2",
+                            value: String(format: "%.1f", weatherService.currentWeather?.windSpeed ?? 0),
                             unit: "km/h"
-                        ),
-                        initialPosition: CGPoint(x: geometry.size.width * 0.15, y: geometry.size.height * 0.45)
+                        )
                     )
+                    .position(x: geometry.size.width * 0.15, y: geometry.size.height * 0.45)
                     
                     // 湿度气泡 - 放在右侧下部空白区域
-                    WeatherBubbleView(
+                    GlassBubbleView(
                         info: WeatherInfo(
                             title: "湿度",
-                            value: "85",
+                            value: String(format: "%.0f", (weatherService.currentWeather?.humidity ?? 0) * 100),
                             unit: "%"
-                        ),
-                        initialPosition: CGPoint(x: geometry.size.width * 0.75, y: geometry.size.height * 0.6)
+                        )
                     )
+                    .position(x: geometry.size.width * 0.75, y: geometry.size.height * 0.6)
                     
                     // 降水气泡 - 放在左侧下部空白区域
-                    WeatherBubbleView(
+                    GlassBubbleView(
                         info: WeatherInfo(
                             title: "降水概率",
-                            value: "30",
+                            value: String(format: "%.0f", (weatherService.currentWeather?.precipitationChance ?? 0) * 100),
                             unit: "%"
-                        ),
-                        initialPosition: CGPoint(x: geometry.size.width * 0.3, y: geometry.size.height * 0.55)
+                        )
                     )
+                    .position(x: geometry.size.width * 0.3, y: geometry.size.height * 0.55)
                 }
             }
             
