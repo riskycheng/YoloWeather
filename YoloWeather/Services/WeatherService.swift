@@ -122,15 +122,12 @@ class WeatherService: ObservableObject {
         var forecasts: [HourlyForecast] = []
         
         for hour in weather.hourlyForecast.filter({ $0.date.timeIntervalSince(Date()) >= 0 }).prefix(24) {
-            let isNightTime = isNight(for: hour.date)
-            let symbolName = getWeatherSymbolName(condition: hour.condition, isNight: isNightTime)
-            
             let forecast = HourlyForecast(
                 id: UUID(),
                 temperature: hour.temperature.value,
                 condition: hour.condition,
                 date: hour.date,
-                symbolName: symbolName,
+                symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isNight(for: hour.date)),
                 conditionText: getWeatherConditionText(hour.condition)
             )
             forecasts.append(forecast)

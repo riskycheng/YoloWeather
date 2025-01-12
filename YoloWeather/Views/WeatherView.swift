@@ -47,15 +47,20 @@ private struct ScrollableHourlyForecastView: View {
         var dateComponents = calendar.dateComponents(in: timezone, from: forecast.date)
         
         return VStack(spacing: 8) {
+            // 时间显示
             Text(formatHour(from: forecast.date, in: timezone))
                 .font(.system(size: 15))
                 .foregroundColor(.white)
                 .minimumScaleFactor(0.8)
                 .lineLimit(1)
             
-            WeatherSymbol(symbolName: forecast.symbolName)
+            // 天气图标 - 使用实际天气状况的图标
+            Image(forecast.symbolName)  // 直接使用forecast中的symbolName，它已经包含了正确的天气状态
+                .resizable()
+                .scaledToFit()
                 .frame(width: 28, height: 28)
             
+            // 温度显示
             FlipNumberView(
                 value: Int(round(forecast.temperature)),
                 unit: "°",
