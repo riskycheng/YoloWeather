@@ -35,6 +35,39 @@ private struct ScrollableHourlyForecastView: View {
     let safeAreaInsets: EdgeInsets
     let animationTrigger: UUID
     
+    // 计算每个项目的宽度和间距
+    private func calculateItemLayout(for width: CGFloat) -> (itemWidth: CGFloat, spacing: CGFloat, visibleItems: Int) {
+        // 减小总体边距，给内容留出更多空间
+        let availableWidth = width - 40  // 减小总边距
+        
+        // 基础配置
+        let minItemWidth: CGFloat = 48   // 增加最小宽度
+        let minSpacing: CGFloat = 12     // 增加最小间距
+        let maxSpacing: CGFloat = 15     // 增加最大间距
+        let minVisibleItems = 5          // 保持最少显示5个项目
+        
+        // 计算最大可显示的完整项目数
+        var itemWidth = minItemWidth
+        var spacing = minSpacing
+        
+        // 优化计算逻辑，确保有足够空间显示所有项目
+        let maxPossibleItems = Int((availableWidth + spacing) / (minItemWidth + spacing))
+        let visibleItems = max(minVisibleItems, min(maxPossibleItems, 6)) // 限制最多显示6个
+        
+        // 计算实际的项目宽度和间距
+        let totalSpacing = (CGFloat(visibleItems) - 1) * spacing
+        itemWidth = (availableWidth - totalSpacing) / CGFloat(visibleItems)
+        
+        // 如果项目宽度过大，适当增加间距
+        if itemWidth > minItemWidth + 5 {
+            let extraSpace = (itemWidth - minItemWidth) * CGFloat(visibleItems)
+            spacing = min(maxSpacing, minSpacing + extraSpace / CGFloat(visibleItems - 1))
+            itemWidth = minItemWidth
+        }
+        
+        return (itemWidth, spacing, visibleItems)
+    }
+    
     private func formatHour(from date: Date, in timezone: TimeZone) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:00"
@@ -42,11 +75,8 @@ private struct ScrollableHourlyForecastView: View {
         return formatter.string(from: date)
     }
     
-    private func createForecastItem(for forecast: WeatherService.HourlyForecast, timezone: TimeZone) -> some View {
-        let calendar = Calendar.current
-        var dateComponents = calendar.dateComponents(in: timezone, from: forecast.date)
-        
-        return VStack(spacing: 8) {
+    private func createForecastItem(for forecast: WeatherService.HourlyForecast, timezone: TimeZone, itemWidth: CGFloat) -> some View {
+        VStack(spacing: 8) {
             // 时间显示
             Text(formatHour(from: forecast.date, in: timezone))
                 .font(.system(size: 15))
@@ -54,8 +84,8 @@ private struct ScrollableHourlyForecastView: View {
                 .minimumScaleFactor(0.8)
                 .lineLimit(1)
             
-            // 天气图标 - 使用实际天气状况的图标
-            Image(forecast.symbolName)  // 直接使用forecast中的symbolName，它已经包含了正确的天气状态
+            // 天气图标
+            Image(forecast.symbolName)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 28, height: 28)
@@ -68,20 +98,26 @@ private struct ScrollableHourlyForecastView: View {
             )
             .font(.system(size: 20))
         }
-        .frame(width: 55)
+        .frame(width: itemWidth)
     }
     
     var body: some View {
         GeometryReader { geometry in
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 15) {
+                let layout = calculateItemLayout(for: geometry.size.width)
+                
+                HStack(spacing: layout.spacing) {
                     if let currentWeather = weatherService.currentWeather {
                         ForEach(Array(weatherService.hourlyForecast.prefix(24).enumerated()), id: \.1.id) { index, forecast in
-                            createForecastItem(for: forecast, timezone: currentWeather.timezone)
+                            createForecastItem(
+                                for: forecast,
+                                timezone: currentWeather.timezone,
+                                itemWidth: layout.itemWidth
+                            )
                         }
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, 20) // 减小内部水平内边距
             }
             .frame(height: 100)
             .background(
@@ -92,7 +128,7 @@ private struct ScrollableHourlyForecastView: View {
         }
         .frame(height: 120)
         .padding(.bottom, 10)
-        .padding(.horizontal)
+        .padding(.horizontal, 16) // 调整外部水平内边距
     }
 }
 
