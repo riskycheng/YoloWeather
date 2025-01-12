@@ -192,6 +192,7 @@ struct WeatherView: View {
     private func updateTimeOfDay() {
         if let weather = weatherService.currentWeather {
             timeOfDay = WeatherThemeManager.shared.determineTimeOfDay(for: Date(), in: weather.timezone)
+            print("TimeZone: \(weather.timezone.identifier), Theme: \(timeOfDay)")
         }
     }
     
@@ -199,45 +200,42 @@ struct WeatherView: View {
         isRefreshing = true
         defer { isRefreshing = false }
         
-        // 添加最小延迟时间，确保动画效果可见
         let refreshStartTime = Date()
         
         if isUsingCurrentLocation {
             if let location = locationService.currentLocation {
                 await weatherService.updateWeather(for: location)
+                updateTimeOfDay()
             }
         } else {
-            // Use the current location name and coordinates
             if let currentLocation = locationService.currentLocation {
                 await weatherService.updateWeather(for: currentLocation)
+                updateTimeOfDay()
             }
         }
         
-        // 确保刷新动画至少显示1秒
         let timeElapsed = Date().timeIntervalSince(refreshStartTime)
         if timeElapsed < 1.0 {
             try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
         }
         
         lastRefreshTime = Date()
-        updateTimeOfDay()
     }
     
     private func updateLocation(_ location: CLLocation?) async {
         if let location = location {
-            // 使用当前位置
             isUsingCurrentLocation = true
             locationService.currentLocation = location
             await weatherService.updateWeather(for: location)
         } else {
-            // 使用预设位置
             isUsingCurrentLocation = false
             locationService.locationName = selectedLocation.name
             locationService.currentLocation = selectedLocation.location
             await weatherService.updateWeather(for: selectedLocation.location)
         }
+        
         lastRefreshTime = Date()
-        updateTimeOfDay()
+        updateTimeOfDay()  // 确保在位置更新后立即更新主题
     }
     
     private func handleLocationButtonTap() {
