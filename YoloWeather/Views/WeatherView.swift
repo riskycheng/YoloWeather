@@ -35,40 +35,48 @@ private struct ScrollableHourlyForecastView: View {
     let safeAreaInsets: EdgeInsets
     let animationTrigger: UUID
     
+    private func formatHour(from date: Date, in timezone: TimeZone) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:00"
+        formatter.timeZone = timezone
+        return formatter.string(from: date)
+    }
+    
+    private func createForecastItem(for forecast: WeatherService.HourlyForecast, timezone: TimeZone) -> some View {
+        let calendar = Calendar.current
+        var dateComponents = calendar.dateComponents(in: timezone, from: forecast.date)
+        
+        return VStack(spacing: 8) {
+            Text(formatHour(from: forecast.date, in: timezone))
+                .font(.system(size: 15))
+                .foregroundColor(.white)
+                .minimumScaleFactor(0.8)
+                .lineLimit(1)
+            
+            WeatherSymbol(symbolName: forecast.symbolName)
+                .frame(width: 28, height: 28)
+            
+            FlipNumberView(
+                value: Int(round(forecast.temperature)),
+                unit: "°",
+                trigger: animationTrigger
+            )
+            .font(.system(size: 20))
+        }
+        .frame(width: 55)
+    }
+    
     var body: some View {
         GeometryReader { geometry in
-            let totalWidth = geometry.size.width
-            let horizontalPadding: CGFloat = 20
-            let itemWidth: CGFloat = 55
-            let itemSpacing: CGFloat = 15
-            
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: itemSpacing) {
-                    ForEach(0..<24) { hour in
-                        if let date = Calendar.current.date(byAdding: .hour, value: hour, to: Date()),
-                           let forecast = weatherService.hourlyForecast[safe: hour] {
-                            VStack(spacing: 8) {
-                                Text(formatHour(from: date))
-                                    .font(.system(size: 15))
-                                    .foregroundColor(.white)
-                                    .minimumScaleFactor(0.8)
-                                    .lineLimit(1)
-                                
-                                WeatherSymbol(symbolName: forecast.symbolName)
-                                    .frame(width: 28, height: 28)
-                                
-                                FlipNumberView(
-                                    value: Int(round(forecast.temperature)),
-                                    unit: "°",
-                                    trigger: animationTrigger
-                                )
-                                .font(.system(size: 20))
-                            }
-                            .frame(width: itemWidth)
+                HStack(spacing: 15) {
+                    if let currentWeather = weatherService.currentWeather {
+                        ForEach(Array(weatherService.hourlyForecast.prefix(24).enumerated()), id: \.1.id) { index, forecast in
+                            createForecastItem(for: forecast, timezone: currentWeather.timezone)
                         }
                     }
                 }
-                .padding(.horizontal, horizontalPadding)
+                .padding(.horizontal, 20)
             }
             .frame(height: 100)
             .background(
@@ -80,12 +88,6 @@ private struct ScrollableHourlyForecastView: View {
         .frame(height: 120)
         .padding(.bottom, 10)
         .padding(.horizontal)
-    }
-    
-    private func formatHour(from date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:00"
-        return formatter.string(from: date)
     }
 }
 
