@@ -12,6 +12,7 @@ struct WeatherLoadingView: View {
         GeometryReader { geometry in
             let centerX = geometry.size.width / 2
             let centerY = geometry.size.height / 2
+                        
             
             ZStack {
                 // 主要天气图标（太阳/月亮）

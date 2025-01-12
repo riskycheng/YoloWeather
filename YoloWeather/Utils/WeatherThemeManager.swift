@@ -18,12 +18,20 @@ final class WeatherThemeManager {
         var calendar = Calendar.current
         calendar.timeZone = timezone
         
+        // 获取月份和小时来判断季节和时间
+        let month = calendar.component(.month, from: date)
         let hour = calendar.component(.hour, from: date)
-        return isDaytime(hour: hour) ? .day : .night
-    }
-    
-    private func isDaytime(hour: Int) -> Bool {
-        return hour >= 6 && hour < 18
+        
+        // 冰岛的大致日出日落时间（这里使用简化的判断）
+        // 冬季: 日出 11:00, 日落 15:30
+        // 夏季: 日出 3:00, 日落 23:00
+        let isSummer = month >= 4 && month <= 9
+        
+        if isSummer {
+            return hour >= 3 && hour < 23 ? .day : .night
+        } else {
+            return hour >= 11 && hour < 15 ? .day : .night
+        }
     }
     
     // 获取主背景颜色

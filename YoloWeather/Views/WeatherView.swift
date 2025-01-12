@@ -1,5 +1,173 @@
 import SwiftUI
 import CoreLocation
+import Foundation
+
+// MARK: - Weather Forecast Item View
+private struct HourlyForecastItemView: View {
+    let hour: Int
+    let date: Date
+    let temperature: Double
+    
+    var body: some View {
+        let hourString = Calendar.current.component(.hour, from: date)
+        let isNight = hourString >= 18 || hourString < 6
+        
+        VStack(spacing: 8) {
+            Text("\(hourString):00")
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+            
+            Image(systemName: isNight ? "moon.stars.fill" : "sun.max.fill")
+                .font(.system(size: 20))
+                .foregroundColor(isNight ? .purple : .yellow)
+            
+            Text("\(Int(round(temperature)))°")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.white)
+        }
+        .frame(width: 60)
+    }
+}
+
+// MARK: - Weather Forecast ScrollView
+private struct ScrollableHourlyForecastView: View {
+    let weatherService: WeatherService
+    let safeAreaInsets: EdgeInsets
+    let animationTrigger: UUID
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let totalWidth = geometry.size.width
+            let horizontalPadding: CGFloat = 20
+            let itemWidth: CGFloat = 55
+            let itemSpacing: CGFloat = 15
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: itemSpacing) {
+                    ForEach(0..<24) { hour in
+                        if let date = Calendar.current.date(byAdding: .hour, value: hour, to: Date()),
+                           let forecast = weatherService.hourlyForecast[safe: hour] {
+                            VStack(spacing: 8) {
+                                Text(formatHour(from: date))
+                                    .font(.system(size: 15))
+                                    .foregroundColor(.white)
+                                    .minimumScaleFactor(0.8)
+                                    .lineLimit(1)
+                                
+                                WeatherSymbol(symbolName: forecast.symbolName)
+                                    .frame(width: 28, height: 28)
+                                
+                                FlipNumberView(
+                                    value: Int(round(forecast.temperature)),
+                                    unit: "°",
+                                    trigger: animationTrigger
+                                )
+                                .font(.system(size: 20))
+                            }
+                            .frame(width: itemWidth)
+                        }
+                    }
+                }
+                .padding(.horizontal, horizontalPadding)
+            }
+            .frame(height: 100)
+            .background(
+                Color.black.opacity(0.2)
+                    .cornerRadius(15)
+            )
+            .position(x: geometry.size.width / 2, y: geometry.size.height - 50)
+        }
+        .frame(height: 120)
+        .padding(.bottom, 10)
+        .padding(.horizontal)
+    }
+    
+    private func formatHour(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:00"
+        return formatter.string(from: date)
+    }
+}
+
+private struct WeatherSymbol: View {
+    let symbolName: String
+    
+    var body: some View {
+        Image(symbolName)
+            .resizable()
+            .scaledToFit()
+    }
+}
+
+// MARK: - Weather Content View
+private struct WeatherContentView: View {
+    let weather: WeatherService.CurrentWeather
+    let timeOfDay: WeatherTimeOfDay
+    let locationName: String
+    let animationTrigger: UUID
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CurrentWeatherDisplayView(
+                weather: weather,
+                timeOfDay: timeOfDay,
+                animationTrigger: animationTrigger
+            )
+            .scaleEffect(1.2)
+            
+            Text(locationName)
+                .font(.system(size: 46, weight: .medium))
+                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+}
+
+// MARK: - Floating Bubbles View
+private struct FloatingBubblesView: View {
+    let weatherService: WeatherService
+    let timeOfDay: WeatherTimeOfDay
+    let geometry: GeometryProxy
+    
+    var body: some View {
+        ZStack {
+            // 风速气泡
+            GlassBubbleView(
+                info: WeatherInfo(
+                    title: "风速",
+                    value: String(format: "%.1f", weatherService.currentWeather?.windSpeed ?? 0),
+                    unit: "km/h"
+                ),
+                initialPosition: CGPoint(x: geometry.size.width * 0.22, y: geometry.size.height * 0.32),
+                timeOfDay: timeOfDay
+            )
+            
+            // 降水概率气泡
+            GlassBubbleView(
+                info: WeatherInfo(
+                    title: "降水概率",
+                    value: String(format: "%.0f", (weatherService.currentWeather?.precipitationChance ?? 0) * 100),
+                    unit: "%"
+                ),
+                initialPosition: CGPoint(x: geometry.size.width * 0.32, y: geometry.size.height * 0.52),
+                timeOfDay: timeOfDay
+            )
+            
+            // 湿度气泡
+            GlassBubbleView(
+                info: WeatherInfo(
+                    title: "湿度",
+                    value: String(format: "%.0f", (weatherService.currentWeather?.humidity ?? 0) * 100),
+                    unit: "%"
+                ),
+                initialPosition: CGPoint(x: geometry.size.width * 0.72, y: geometry.size.height * 0.42),
+                timeOfDay: timeOfDay
+            )
+        }
+    }
+}
 
 struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
@@ -101,63 +269,6 @@ struct WeatherView: View {
         }
     }
     
-    private var hourlyForecastView: some View {
-        GeometryReader { geometry in
-            let totalWidth = geometry.size.width
-            let leftPadding: CGFloat = 20  // 保持与其他元素相同的左边距
-            let rightPadding: CGFloat = 20
-            let availableWidth = totalWidth - leftPadding - rightPadding
-            
-            // 计算项目宽度和间距，使得每个项目有相等的左右间距
-            let itemWidth: CGFloat = 55  // 固定项目宽度
-            let totalItemsWidth = itemWidth * 6
-            let remainingSpace = availableWidth - totalItemsWidth
-            let itemSpacing = remainingSpace / 7  // 分成7份：6个项目各自左边1份，最后1份给最后项目的右边
-            
-            ZStack {
-                Color.black.opacity(0.2)
-                
-                HStack(spacing: itemSpacing) {  
-                    ForEach(Array(weatherService.hourlyForecast.prefix(6).enumerated()), id: \.element.id) { index, forecast in
-                        VStack(spacing: 8) {
-                            Text(forecast.formattedTime)
-                                .font(.system(size: 15))
-                                .foregroundColor(.white)
-                                .minimumScaleFactor(0.8)
-                                .lineLimit(1)
-                            
-                            WeatherSymbol(symbolName: forecast.symbolName)
-                                .frame(width: 28, height: 28)
-                            
-                            FlipNumberView(
-                                value: Int(round(forecast.temperature)),
-                                unit: "°",
-                                trigger: animationTrigger
-                            )
-                            .font(.system(size: 20))
-                        }
-                        .frame(width: itemWidth)
-                    }
-                }
-                .padding(.horizontal, itemSpacing)  // 添加与项目间距相同的左右padding
-                .padding(.horizontal, leftPadding)  // 再添加与其他元素对齐的padding
-            }
-            .cornerRadius(15)
-            .frame(maxWidth: .infinity)
-        }
-        .frame(height: 100)
-    }
-    
-    struct WeatherSymbol: View {
-        let symbolName: String
-        
-        var body: some View {
-            Image(symbolName)
-                .resizable()
-                .scaledToFit()
-        }
-    }
-    
     private var locationButton: some View {
         Button {
             handleLocationButtonTap()
@@ -206,114 +317,80 @@ struct WeatherView: View {
     }
     
     var body: some View {
-        ZStack {
-            // 背景渐变
-            WeatherBackgroundView(
-                weatherService: weatherService,
-                weatherCondition: weatherService.currentWeather?.weatherCondition.description ?? "晴天"
-            )
-            .environment(\.weatherTimeOfDay, timeOfDay)
-            
-            // 前景内容
-            RefreshableView(isRefreshing: $isRefreshing) {
-                await refreshWeather()
-            } content: {
-                VStack(spacing: 0) {
-                    Spacer()
-                        .frame(height: 0)
-                        .padding(.top, -60)
-                    
+        GeometryReader { geometry in
+            ZStack {
+                // 背景渐变
+                WeatherBackgroundView(
+                    weatherService: weatherService,
+                    weatherCondition: weatherService.currentWeather?.weatherCondition.description ?? "晴天"
+                )
+                .environment(\.weatherTimeOfDay, timeOfDay)
+                
+                // 前景内容
+                RefreshableView(isRefreshing: $isRefreshing) {
+                    await refreshWeather()
+                } content: {
                     VStack(spacing: 0) {
-                        // 顶部工具栏
-                        HStack {
-                            locationButton
-                            Spacer()
-                            cityPickerButton
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 20)
+                        Spacer()
+                            .frame(height: 0)
+                            .padding(.top, -60)
                         
-                        if isRefreshing {
-                            WeatherLoadingView()
-                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        } else {
-                            // 天气图标
-                            if !isLoadingWeather {
-                                weatherIcon
-                                    .frame(maxHeight: .infinity, alignment: .top)
+                        VStack(spacing: 0) {
+                            // 顶部工具栏
+                            HStack {
+                                locationButton
+                                Spacer()
+                                cityPickerButton
                             }
+                            .padding(.horizontal, 20)
+                            .padding(.bottom, 20)
                             
-                            // 城市名称和天气状况
-                            if let weather = weatherService.currentWeather, !isLoadingWeather {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    // 温度显示
-                                    CurrentWeatherDisplayView(
+                            if isRefreshing {
+                                WeatherLoadingView()
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            } else {
+                                if !isLoadingWeather {
+                                    weatherIcon
+                                        .frame(maxHeight: .infinity, alignment: .top)
+                                }
+                                
+                                if let weather = weatherService.currentWeather,
+                                   !isLoadingWeather {
+                                    WeatherContentView(
                                         weather: weather,
                                         timeOfDay: timeOfDay,
+                                        locationName: locationService.locationName,
                                         animationTrigger: animationTrigger
                                     )
-                                    .scaleEffect(1.2)
                                     
-                                    Text(locationService.locationName)
-                                        .font(.system(size: 46, weight: .medium))
-                                        .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+                                    Spacer()
+                                        .frame(height: 20)
                                 }
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 20)
                                 
                                 Spacer()
-                                    .frame(height: 20)
-                            }
-                            
-                            Spacer()
-                            
-                            // 小时预报
-                            if weatherService.currentWeather != nil && !isLoadingWeather {
-                                hourlyForecastView
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 0)
+                                
+                                if weatherService.currentWeather != nil && !isLoadingWeather {
+                                    ScrollableHourlyForecastView(
+                                        weatherService: weatherService,
+                                        safeAreaInsets: geometry.safeAreaInsets,
+                                        animationTrigger: animationTrigger
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
-            
-            // 浮动气泡层 - 放在RefreshableView之上
-            GeometryReader { geometry in
-                ZStack {
-                    // 风速气泡 - 放在左侧中部空白区域
-                    GlassBubbleView(
-                        info: WeatherInfo(
-                            title: "风速",
-                            value: String(format: "%.1f", weatherService.currentWeather?.windSpeed ?? 0),
-                            unit: "km/h"
-                        ),
-                        initialPosition: CGPoint(x: geometry.size.width * 0.15, y: geometry.size.height * 0.45)
+                
+                // 浮动气泡层
+                GeometryReader { geometry in
+                    FloatingBubblesView(
+                        weatherService: weatherService,
+                        timeOfDay: timeOfDay,
+                        geometry: geometry
                     )
-                    
-                    // 湿度气泡 - 放在右侧下部空白区域
-                    GlassBubbleView(
-                        info: WeatherInfo(
-                            title: "湿度",
-                            value: String(format: "%.0f", (weatherService.currentWeather?.humidity ?? 0) * 100),
-                            unit: "%"
-                        ),
-                        initialPosition: CGPoint(x: geometry.size.width * 0.75, y: geometry.size.height * 0.6)
-                    )
-                    
-                    // 降水气泡 - 放在左侧下部空白区域
-                    GlassBubbleView(
-                        info: WeatherInfo(
-                            title: "降水概率",
-                            value: String(format: "%.0f", (weatherService.currentWeather?.precipitationChance ?? 0) * 100),
-                            unit: "%"
-                        ),
-                        initialPosition: CGPoint(x: geometry.size.width * 0.3, y: geometry.size.height * 0.55)
-                    )
+                    .opacity(isRefreshing ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.3), value: isRefreshing)
                 }
-                .opacity(isRefreshing ? 0 : 1)  // 刷新时隐藏气泡
-                .animation(.easeInOut(duration: 0.3), value: isRefreshing)  // 添加淡入淡出动画
             }
         }
         .sheet(isPresented: $showingLocationPicker) {
@@ -401,5 +478,36 @@ struct WeatherView: View {
                     isScaling = true
                 }
         }
+    }
+}
+
+// MARK: - View Extensions
+extension View {
+    func weatherRefreshable(isRefreshing: Binding<Bool>, action: @escaping () async -> Void) -> some View {
+        modifier(WeatherRefreshModifier(isRefreshing: isRefreshing, action: action))
+    }
+}
+
+private struct WeatherRefreshModifier: ViewModifier {
+    @Binding var isRefreshing: Bool
+    let action: () async -> Void
+    
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: isRefreshing) { oldValue, newValue in
+                if newValue {
+                    Task {
+                        await action()
+                        isRefreshing = false
+                    }
+                }
+            }
+    }
+}
+
+// MARK: - Array Extension
+extension Array {
+    subscript(safe index: Index) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }
