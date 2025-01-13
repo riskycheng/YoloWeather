@@ -132,24 +132,76 @@ struct GlassBubbleView: View {
                     
                     if isExpanded, let description = extraDescription {
                         // 分割线
-                        Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        .white.opacity(0),
-                                        .white.opacity(timeOfDay == .day ? 0.5 : 0.3),
-                                        .white.opacity(0)
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                        HStack {
+                            Spacer()
+                                .frame(width: 12)
+                            
+                            Rectangle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: timeOfDay == .day ? [
+                                            .black.opacity(0.05),
+                                            .black.opacity(0.25),
+                                            .black.opacity(0.05)
+                                        ] : [
+                                            .white.opacity(0),
+                                            .white.opacity(0.3),
+                                            .white.opacity(0)
+                                        ],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .frame(height: 1)
-                            .padding(.vertical, 4)
+                                .frame(height: 1)
+                                .frame(maxWidth: bubbleSize * 0.75)
+                                .overlay(
+                                    timeOfDay == .day ?
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    Color(red: 1, green: 1, blue: 1, opacity: 0.3),
+                                                    Color(red: 1, green: 1, blue: 1, opacity: 0.8),
+                                                    Color(red: 1, green: 1, blue: 1, opacity: 0.3)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(height: 1)
+                                        .frame(maxWidth: bubbleSize * 0.75)
+                                        .blendMode(.softLight)
+                                    : nil
+                                )
+                                .background(
+                                    timeOfDay == .day ?
+                                    Rectangle()
+                                        .fill(
+                                            LinearGradient(
+                                                colors: [
+                                                    .black.opacity(0),
+                                                    .black.opacity(0.05),
+                                                    .black.opacity(0)
+                                                ],
+                                                startPoint: .leading,
+                                                endPoint: .trailing
+                                            )
+                                        )
+                                        .frame(height: 3)
+                                        .frame(maxWidth: bubbleSize * 0.8)
+                                        .blur(radius: 0.5)
+                                    : nil
+                                )
+                            
+                            Spacer()
+                                .frame(width: 12)
+                        }
+                        .padding(.vertical, 4)
                         
                         Text(description)
                             .font(.system(size: 10))
                             .foregroundColor(timeOfDay == .day ? .black.opacity(0.6) : .white.opacity(0.8))
+                            .padding(.top, 1)
                     }
                 }
             }
