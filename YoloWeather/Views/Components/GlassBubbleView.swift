@@ -7,16 +7,86 @@ struct GlassBubbleView: View {
     @State private var position: CGPoint
     @State private var isExpanded = false
     @State private var isLongPressed = false
+    @State private var autoCollapseTask: Task<Void, Never>?
     
     // 气泡尺寸范围
     private let bubbleSize: CGFloat = 75
     private let expandedScale: CGFloat = 1.2
+    private let autoCollapseDelay: TimeInterval = 3.0 // 3秒后自动收起
+    
+    // 获取额外描述信息
+    private var extraDescription: String? {
+        switch info.title {
+        case "风速":
+            if let speed = Double(info.value) {
+                if speed < 5 {
+                    return "微风"
+                } else if speed < 10 {
+                    return "和风"
+                } else if speed < 20 {
+                    return "清风"
+                } else if speed < 30 {
+                    return "强风"
+                } else {
+                    return "大风"
+                }
+            }
+        case "降水概率":
+            if let probability = Double(info.value) {
+                if probability == 0 {
+                    return "可能晴天"
+                } else if probability < 30 {
+                    return "可能降水"
+                } else if probability < 60 {
+                    return "较可能降水"
+                } else {
+                    return "很可能降水"
+                }
+            }
+        case "湿度":
+            if let humidity = Double(info.value) {
+                if humidity < 30 {
+                    return "干燥"
+                } else if humidity < 60 {
+                    return "适宜"
+                } else if humidity < 80 {
+                    return "潮湿"
+                } else {
+                    return "非常潮湿"
+                }
+            }
+        default:
+            return nil
+        }
+        return nil
+    }
     
     init(info: WeatherInfo, initialPosition: CGPoint, timeOfDay: WeatherTimeOfDay) {
         self.info = info
         self.initialPosition = initialPosition
         self.timeOfDay = timeOfDay
         self._position = State(initialValue: initialPosition)
+    }
+    
+    private func triggerHaptic() {
+        let generator = UIImpactFeedbackGenerator(style: .light)
+        generator.prepare()
+        generator.impactOccurred()
+    }
+    
+    private func scheduleAutoCollapse() {
+        // 取消之前的任务
+        autoCollapseTask?.cancel()
+        
+        // 创建新的自动收起任务
+        autoCollapseTask = Task {
+            try? await Task.sleep(nanoseconds: UInt64(autoCollapseDelay * 1_000_000_000))
+            if !Task.isCancelled {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    isExpanded = false
+                }
+            }
+        }
     }
     
     var body: some View {
@@ -59,6 +129,28 @@ struct GlassBubbleView: View {
                             .font(.system(size: 9))
                     }
                     .foregroundColor(timeOfDay == .day ? .black.opacity(0.5) : .white)
+                    
+                    if isExpanded, let description = extraDescription {
+                        // 分割线
+                        Rectangle()
+                            .fill(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0),
+                                        .white.opacity(timeOfDay == .day ? 0.5 : 0.3),
+                                        .white.opacity(0)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(height: 1)
+                            .padding(.vertical, 4)
+                        
+                        Text(description)
+                            .font(.system(size: 10))
+                            .foregroundColor(timeOfDay == .day ? .black.opacity(0.6) : .white.opacity(0.8))
+                    }
                 }
             }
             .frame(width: bubbleSize, height: bubbleSize)
@@ -71,8 +163,14 @@ struct GlassBubbleView: View {
                     }
             )
             .onTapGesture {
+                triggerHaptic()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
                     isExpanded.toggle()
+                }
+                if isExpanded {
+                    scheduleAutoCollapse()
+                } else {
+                    autoCollapseTask?.cancel()
                 }
             }
             .onLongPressGesture(minimumDuration: 0.5) {
