@@ -10,6 +10,7 @@ struct GlassBubbleView: View {
     
     // 气泡尺寸范围
     private let bubbleSize: CGFloat = 75
+    private let expandedScale: CGFloat = 1.2
     
     init(info: WeatherInfo, initialPosition: CGPoint, timeOfDay: WeatherTimeOfDay) {
         self.info = info
@@ -61,6 +62,7 @@ struct GlassBubbleView: View {
                 }
             }
             .frame(width: bubbleSize, height: bubbleSize)
+            .scaleEffect(isExpanded ? expandedScale : 1.0)
             .position(position)
             .gesture(
                 DragGesture()
@@ -68,6 +70,16 @@ struct GlassBubbleView: View {
                         position = value.location
                     }
             )
+            .onTapGesture {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    isExpanded.toggle()
+                }
+            }
+            .onLongPressGesture(minimumDuration: 0.5) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    isLongPressed.toggle()
+                }
+            }
         }
     }
 }

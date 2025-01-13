@@ -87,17 +87,86 @@ class WeatherService: ObservableObject {
         }
     }
     
-    private func calculateTimezone(for location: CLLocation) -> TimeZone {
-        // 根据经度计算时区
+    private func getDefaultTimezone(for location: CLLocation) -> TimeZone {
         let longitude = location.coordinate.longitude
-        let secondsFromGMT = Int(longitude * 240) // 每经度4分钟，转换为秒
-        return TimeZone(secondsFromGMT: secondsFromGMT) ?? TimeZone(identifier: "UTC")!
+        let latitude = location.coordinate.latitude
+        
+        // 基于经纬度范围判断时区
+        switch (longitude, latitude) {
+        // 北美洲
+        case (-140...(-100), 30...60):
+            if longitude <= -115 {
+                return TimeZone(identifier: "America/Los_Angeles")! // 太平洋时区
+            } else if longitude <= -100 {
+                return TimeZone(identifier: "America/Denver")! // 山地时区
+            } else {
+                return TimeZone(identifier: "America/Chicago")! // 中部时区
+            }
+        
+        // 欧洲
+        case (-10...40, 35...70):
+            if longitude <= 0 {
+                return TimeZone(identifier: "Europe/London")!
+            } else if longitude <= 15 {
+                return TimeZone(identifier: "Europe/Paris")!
+            } else {
+                return TimeZone(identifier: "Europe/Moscow")!
+            }
+        
+        // 亚洲
+        case (100...145, 20...50):
+            if longitude <= 120 {
+                return TimeZone(identifier: "Asia/Shanghai")!
+            } else if longitude <= 140 {
+                return TimeZone(identifier: "Asia/Tokyo")!
+            } else {
+                return TimeZone(identifier: "Asia/Seoul")!
+            }
+            
+        default:
+            // 如果无法确定，使用基于经度的粗略计算
+            let hourOffset = Int(round(longitude / 15.0))
+            if let timezone = TimeZone(secondsFromGMT: hourOffset * 3600) {
+                return timezone
+            }
+            return TimeZone(identifier: "UTC")!
+        }
+    }
+    
+    private func calculateTimezone(for location: CLLocation) async -> TimeZone {
+        let geocoder = CLGeocoder()
+        print("正在计算位置 (\(location.coordinate.latitude), \(location.coordinate.longitude)) 的时区")
+        
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            
+            if let placemark = placemarks.first {
+                if let placemarkTimezone = placemark.timeZone {
+                    print("从位置信息获取到时区: \(placemarkTimezone.identifier)")
+                    print("位置信息: \(placemark.locality ?? "未知城市"), \(placemark.administrativeArea ?? "未知地区"), \(placemark.country ?? "未知国家")")
+                    return placemarkTimezone
+                } else {
+                    let defaultTZ = getDefaultTimezone(for: location)
+                    print("位置信息中没有时区数据，使用计算得到的时区: \(defaultTZ.identifier)")
+                    return defaultTZ
+                }
+            } else {
+                let defaultTZ = getDefaultTimezone(for: location)
+                print("未能获取位置信息，使用计算得到的时区: \(defaultTZ.identifier)")
+                return defaultTZ
+            }
+        } catch {
+            let defaultTZ = getDefaultTimezone(for: location)
+            print("反地理编码错误: \(error.localizedDescription)，使用计算得到的时区: \(defaultTZ.identifier)")
+            return defaultTZ
+        }
     }
     
     // 更新当前天气
     private func updateCurrentWeather(from weather: Weather) async {
         let isNightTime = isNight(for: weather.currentWeather.date)
         let symbolName = getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime)
+        let timezone = await calculateTimezone(for: location)
         
         currentWeather = CurrentWeather(
             date: weather.currentWeather.date,
@@ -112,7 +181,7 @@ class WeatherService: ObservableObject {
             airQualityIndex: 0,
             pressure: weather.currentWeather.pressure.value,
             visibility: weather.currentWeather.visibility.value,
-            timezone: calculateTimezone(for: location),
+            timezone: timezone,
             weatherCondition: weather.currentWeather.condition
         )
     }
@@ -192,9 +261,13 @@ class WeatherService: ObservableObject {
     
     // 判断是否为夜间
     private func isNight(for date: Date) -> Bool {
-        let calendar = Calendar.current
+        guard let currentWeather = currentWeather else { return false }
+        
+        var calendar = Calendar.current
+        calendar.timeZone = currentWeather.timezone
+        
         let hour = calendar.component(.hour, from: date)
-        return hour < 6 || hour >= 18
+        return hour >= 18 || hour < 6
     }
     
     // 小时预报结构体

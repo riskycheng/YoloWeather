@@ -7,13 +7,28 @@ private struct HourlyForecastItemView: View {
     let hour: Int
     let date: Date
     let temperature: Double
+    let timezone: TimeZone
+    
+    private var hourComponent: Int {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone
+        return calendar.component(.hour, from: date)
+    }
+    
+    private var isNight: Bool {
+        hourComponent >= 18 || hourComponent < 6
+    }
+    
+    private func formatTime(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        formatter.timeZone = timezone
+        return formatter.string(from: date)
+    }
     
     var body: some View {
-        let hourString = Calendar.current.component(.hour, from: date)
-        let isNight = hourString >= 18 || hourString < 6
-        
         VStack(spacing: 8) {
-            Text("\(hourString):00")
+            Text(formatTime(from: date))
                 .font(.system(size: 14))
                 .foregroundColor(.white)
             
@@ -70,7 +85,7 @@ private struct ScrollableHourlyForecastView: View {
     
     private func formatHour(from date: Date, in timezone: TimeZone) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:00"
+        formatter.dateFormat = "HH:mm"
         formatter.timeZone = timezone
         return formatter.string(from: date)
     }
@@ -117,7 +132,7 @@ private struct ScrollableHourlyForecastView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 20) // 减小内部水平内边距
+                .padding(.horizontal, 20)
             }
             .frame(height: 100)
             .background(
@@ -128,7 +143,7 @@ private struct ScrollableHourlyForecastView: View {
         }
         .frame(height: 120)
         .padding(.bottom, 10)
-        .padding(.horizontal, 16) // 调整外部水平内边距
+        .padding(.horizontal, 16)
     }
 }
 
@@ -227,8 +242,23 @@ struct WeatherView: View {
     
     private func updateTimeOfDay() {
         if let weather = weatherService.currentWeather {
-            timeOfDay = WeatherThemeManager.shared.determineTimeOfDay(for: Date(), in: weather.timezone)
-            print("TimeZone: \(weather.timezone.identifier), Theme: \(timeOfDay)")
+            var calendar = Calendar.current
+            calendar.timeZone = weather.timezone
+            
+            let hour = calendar.component(.hour, from: Date())
+            let date = Date()
+            
+            // 创建格式化器显示完整时间
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            formatter.timeZone = weather.timezone
+            
+            timeOfDay = (hour >= 18 || hour < 6) ? .night : .day
+            print("城市: \(locationService.locationName)")
+            print("当前UTC时间: \(formatter.string(from: date))")
+            print("时区: \(weather.timezone.identifier) (偏移: \(weather.timezone.secondsFromGMT()/3600)小时)")
+            print("当地时间: \(formatter.string(from: date))")
+            print("小时数: \(hour), 主题: \(timeOfDay)")
         }
     }
     
