@@ -50,53 +50,15 @@ private struct ScrollableHourlyForecastView: View {
     let safeAreaInsets: EdgeInsets
     let animationTrigger: UUID
     
-    // 计算每个项目的宽度和间距
-    private func calculateItemLayout(for width: CGFloat) -> (itemWidth: CGFloat, spacing: CGFloat, visibleItems: Int) {
-        // 减小总体边距，给内容留出更多空间
-        let availableWidth = width - 40  // 减小总边距
-        
-        // 基础配置
-        let minItemWidth: CGFloat = 48   // 增加最小宽度
-        let minSpacing: CGFloat = 12     // 增加最小间距
-        let maxSpacing: CGFloat = 15     // 增加最大间距
-        let minVisibleItems = 5          // 保持最少显示5个项目
-        
-        // 计算最大可显示的完整项目数
-        var itemWidth = minItemWidth
-        var spacing = minSpacing
-        
-        // 优化计算逻辑，确保有足够空间显示所有项目
-        let maxPossibleItems = Int((availableWidth + spacing) / (minItemWidth + spacing))
-        let visibleItems = max(minVisibleItems, min(maxPossibleItems, 6)) // 限制最多显示6个
-        
-        // 计算实际的项目宽度和间距
-        let totalSpacing = (CGFloat(visibleItems) - 1) * spacing
-        itemWidth = (availableWidth - totalSpacing) / CGFloat(visibleItems)
-        
-        // 如果项目宽度过大，适当增加间距
-        if itemWidth > minItemWidth + 5 {
-            let extraSpace = (itemWidth - minItemWidth) * CGFloat(visibleItems)
-            spacing = min(maxSpacing, minSpacing + extraSpace / CGFloat(visibleItems - 1))
-            itemWidth = minItemWidth
-        }
-        
-        return (itemWidth, spacing, visibleItems)
-    }
+    private let itemWidth: CGFloat = 52
+    private let spacing: CGFloat = 8
     
-    private func formatHour(from date: Date, in timezone: TimeZone) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        formatter.timeZone = timezone
-        return formatter.string(from: date)
-    }
-    
-    private func createForecastItem(for forecast: WeatherService.HourlyForecast, timezone: TimeZone, itemWidth: CGFloat) -> some View {
+    private func createForecastItem(for forecast: WeatherService.HourlyForecast, timezone: TimeZone) -> some View {
         VStack(spacing: 8) {
             // 时间显示
             Text(formatHour(from: forecast.date, in: timezone))
-                .font(.system(size: 15))
+                .font(.system(size: 14))
                 .foregroundColor(.white)
-                .minimumScaleFactor(0.8)
                 .lineLimit(1)
             
             // 天气图标
@@ -111,39 +73,44 @@ private struct ScrollableHourlyForecastView: View {
                 unit: "°",
                 trigger: animationTrigger
             )
-            .font(.system(size: 20))
+            .font(.system(size: 16))
         }
         .frame(width: itemWidth)
     }
     
+    private func formatHour(from date: Date, in timezone: TimeZone) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        formatter.timeZone = timezone
+        return formatter.string(from: date)
+    }
+    
     var body: some View {
         GeometryReader { geometry in
+            let horizontalPadding: CGFloat = 16
+            let availableWidth = geometry.size.width - (horizontalPadding * 2)
+            
             ScrollView(.horizontal, showsIndicators: false) {
-                let layout = calculateItemLayout(for: geometry.size.width)
-                
-                HStack(spacing: layout.spacing) {
-                    if let currentWeather = weatherService.currentWeather {
+                if let currentWeather = weatherService.currentWeather {
+                    HStack(spacing: spacing) {
                         ForEach(Array(weatherService.hourlyForecast.prefix(24).enumerated()), id: \.1.id) { index, forecast in
                             createForecastItem(
                                 for: forecast,
-                                timezone: currentWeather.timezone,
-                                itemWidth: layout.itemWidth
+                                timezone: currentWeather.timezone
                             )
                         }
                     }
+                    .padding(.horizontal, horizontalPadding)
                 }
-                .padding(.horizontal, 20)
             }
-            .frame(height: 100)
+            .frame(width: geometry.size.width)
             .background(
-                Color.black.opacity(0.2)
-                    .cornerRadius(15)
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(.black.opacity(0.2))
+                    .padding(.horizontal, horizontalPadding)
             )
-            .position(x: geometry.size.width / 2, y: geometry.size.height - 50)
         }
-        .frame(height: 120)
-        .padding(.bottom, 10)
-        .padding(.horizontal, 16)
+        .frame(height: 110)
     }
 }
 

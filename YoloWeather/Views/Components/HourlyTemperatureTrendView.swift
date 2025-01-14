@@ -3,56 +3,65 @@ import SwiftUI
 struct HourlyTemperatureTrendView: View {
     let forecast: [CurrentWeather]
     
+    // 布局常量
+    private let minItemWidth: CGFloat = 46  // 进一步减小宽度
+    private let minSpacing: CGFloat = 6     // 减小间距
+    private let containerHeight: CGFloat = 128
+    
     var body: some View {
         GeometryReader { geometry in
-            HStack {
-                Spacer(minLength: 8)
-                ZStack {
-                    // 背景和边框
+            let availableWidth = geometry.size.width - 32  // 考虑左右各16点的安全区域
+            
+            // 容器视图
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.black.opacity(0.8))
+                .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.black.opacity(0.8))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
-                        )
-                    
+                        .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
+                )
+                .overlay(
                     // 滚动内容
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
-                            ForEach(forecast.indices, id: \.self) { index in
-                                let weather = forecast[index]
-                                VStack(spacing: 8) {
-                                    // 时间
-                                    Text(formatDateTime(weather.date))
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(.white.opacity(0.8))
-                                        .multilineTextAlignment(.center)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .frame(height: 36)  // 固定时间显示高度
-                                    
-                                    // 天气图标
-                                    Image(weather.condition)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 32, height: 32)
-                                    
-                                    // 温度
-                                    Text("\(Int(round(weather.temperature)))°")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundStyle(.white)
+                    ScrollViewReader { scrollProxy in
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            LazyHStack(spacing: minSpacing) {
+                                ForEach(forecast.indices, id: \.self) { index in
+                                    let weather = forecast[index]
+                                    VStack(spacing: 6) {
+                                        // 时间
+                                        Text(formatDateTime(weather.date))
+                                            .font(.system(size: 13))
+                                            .foregroundStyle(.white.opacity(0.8))
+                                            .multilineTextAlignment(.center)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                            .frame(height: 36)
+                                        
+                                        // 天气图标
+                                        Image(weather.condition)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 26, height: 26)  // 稍微减小图标
+                                        
+                                        // 温度
+                                        Text("\(Int(round(weather.temperature)))°")
+                                            .font(.system(size: 15, weight: .medium))
+                                            .foregroundStyle(.white)
+                                    }
+                                    .frame(width: minItemWidth)
+                                    .id(index)
                                 }
-                                .frame(width: 52)
                             }
+                            .padding(.horizontal, 8)  // 减小内边距
                         }
-                        .padding(.horizontal, 12)
+                        .onAppear {
+                            scrollProxy.scrollTo(0, anchor: .leading)
+                        }
                     }
-                }
-                .frame(width: min(geometry.size.width * 0.95, 360))
-                .frame(height: 128)
-                Spacer(minLength: 8)
-            }
+                )
+                .frame(width: availableWidth)
+                .frame(height: containerHeight)
+                .position(x: geometry.size.width / 2, y: containerHeight / 2)
         }
-        .frame(height: 128)
+        .frame(height: containerHeight)
     }
     
     private func formatDateTime(_ date: Date) -> String {
