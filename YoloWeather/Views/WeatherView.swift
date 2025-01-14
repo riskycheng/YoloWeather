@@ -50,14 +50,16 @@ private struct ScrollableHourlyForecastView: View {
     let safeAreaInsets: EdgeInsets
     let animationTrigger: UUID
     
-    private let itemWidth: CGFloat = 52
+    private let itemWidth: CGFloat = 50
     private let spacing: CGFloat = 8
+    private let verticalPadding: CGFloat = 6
+    private let horizontalPadding: CGFloat = 16
     
     private func createForecastItem(for forecast: WeatherService.HourlyForecast, timezone: TimeZone) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             // 时间显示
             Text(formatHour(from: forecast.date, in: timezone))
-                .font(.system(size: 14))
+                .font(.system(size: 15))
                 .foregroundColor(.white)
                 .lineLimit(1)
             
@@ -65,7 +67,7 @@ private struct ScrollableHourlyForecastView: View {
             Image(forecast.symbolName)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 28, height: 28)
+                .frame(width: 32, height: 32)
             
             // 温度显示
             FlipNumberView(
@@ -87,30 +89,37 @@ private struct ScrollableHourlyForecastView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            let horizontalPadding: CGFloat = 16
-            let availableWidth = geometry.size.width - (horizontalPadding * 2)
-            
-            ScrollView(.horizontal, showsIndicators: false) {
-                if let currentWeather = weatherService.currentWeather {
-                    HStack(spacing: spacing) {
-                        ForEach(Array(weatherService.hourlyForecast.prefix(24).enumerated()), id: \.1.id) { index, forecast in
-                            createForecastItem(
-                                for: forecast,
-                                timezone: currentWeather.timezone
-                            )
+            HStack {
+                Spacer(minLength: 0)
+                ZStack {
+                    // 背景
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(.black.opacity(0.2))
+                    
+                    // 滚动内容
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        if let currentWeather = weatherService.currentWeather {
+                            HStack(spacing: spacing) {
+                                ForEach(Array(weatherService.hourlyForecast.prefix(24).enumerated()), id: \.1.id) { index, forecast in
+                                    createForecastItem(
+                                        for: forecast,
+                                        timezone: currentWeather.timezone
+                                    )
+                                }
+                            }
+                            .padding(.horizontal, horizontalPadding)
+                            .padding(.vertical, verticalPadding)
+                            .padding(.trailing, 12)
                         }
                     }
-                    .padding(.horizontal, horizontalPadding)
                 }
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .frame(width: min(geometry.size.width - 32, 360), height: 115)
+                Spacer(minLength: 0)
             }
-            .frame(width: geometry.size.width)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(.black.opacity(0.2))
-                    .padding(.horizontal, horizontalPadding)
-            )
         }
-        .frame(height: 110)
+        .frame(height: 90)
+        .padding(.bottom, 4)
     }
 }
 
@@ -406,6 +415,8 @@ struct WeatherView: View {
                                 }
                                 
                                 Spacer()
+                                    .frame(minHeight: 0, maxHeight: .infinity)
+                                    .frame(height: 20)
                                 
                                 if weatherService.currentWeather != nil && !isLoadingWeather {
                                     ScrollableHourlyForecastView(
@@ -413,6 +424,7 @@ struct WeatherView: View {
                                         safeAreaInsets: geometry.safeAreaInsets,
                                         animationTrigger: animationTrigger
                                     )
+                                    .padding(.bottom, 20)
                                 }
                             }
                         }
