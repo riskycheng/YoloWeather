@@ -8,11 +8,16 @@ struct GlassBubbleView: View {
     @State private var isExpanded = false
     @State private var isLongPressed = false
     @State private var autoCollapseTask: Task<Void, Never>?
+    @State private var floatingOffset: CGSize = .zero
     
     // 气泡尺寸范围
     private let bubbleSize: CGFloat = 75
     private let expandedScale: CGFloat = 1.2
     private let autoCollapseDelay: TimeInterval = 3.0 // 3秒后自动收起
+    
+    // 浮动动画参数
+    private let floatingRange: CGFloat = 8
+    private let floatingDuration: Double = 3
     
     // 获取额外描述信息
     private var extraDescription: String? {
@@ -207,6 +212,7 @@ struct GlassBubbleView: View {
             }
             .frame(width: bubbleSize, height: bubbleSize)
             .scaleEffect(isExpanded ? expandedScale : 1.0)
+            .offset(floatingOffset)
             .position(position)
             .gesture(
                 DragGesture()
@@ -230,6 +236,21 @@ struct GlassBubbleView: View {
                     isLongPressed.toggle()
                 }
             }
+            .onAppear {
+                startFloatingAnimation()
+            }
+        }
+    }
+    
+    private func startFloatingAnimation() {
+        withAnimation(
+            .easeInOut(duration: floatingDuration)
+            .repeatForever(autoreverses: true)
+        ) {
+            floatingOffset = CGSize(
+                width: CGFloat.random(in: -floatingRange...floatingRange),
+                height: CGFloat.random(in: -floatingRange...floatingRange)
+            )
         }
     }
 }
