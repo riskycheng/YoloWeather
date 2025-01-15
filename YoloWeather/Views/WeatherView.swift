@@ -213,9 +213,67 @@ struct WeatherView: View {
     @State private var lastRefreshTime: Date = Date()
     @State private var isUsingCurrentLocation = false
     @State private var timeOfDay: WeatherTimeOfDay = .night
-    @State private var isLoadingWeather = false
+    @State private var isLoadingWeather = true
     @State private var animationTrigger = UUID()
+    @State private var showingSideMenu = false
+    @AppStorage("lastSelectedLocation") private var lastSelectedLocationName: String?
     @AppStorage("showDailyForecast") private var showDailyForecast = false
+    
+    private func ensureMinimumLoadingTime(startTime: Date) async {
+        let timeElapsed = Date().timeIntervalSince(startTime)
+        if timeElapsed < 1.0 {
+            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+        }
+    }
+    
+    private func loadInitialWeather() async {
+        isLoadingWeather = true
+        let startTime = Date()
+        
+        // 1. 尝试加载上次选择的城市
+        if let lastLocationName = lastSelectedLocationName,
+           let savedLocation = PresetLocation.presets.first(where: { location in
+               location.name == lastLocationName
+           }) {
+            selectedLocation = savedLocation
+            await weatherService.updateWeather(for: savedLocation.location)
+            locationService.locationName = savedLocation.name
+            updateTimeOfDay()
+            await ensureMinimumLoadingTime(startTime: startTime)
+            isLoadingWeather = false
+            return
+        }
+        
+        // 2. 尝试使用当前位置
+        locationService.requestLocationPermission()
+        locationService.startUpdatingLocation()
+        
+        // 等待位置信息（设置5秒超时）
+        let locationStartTime = Date()
+        while locationService.currentLocation == nil {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+            if Date().timeIntervalSince(locationStartTime) > 5 {
+                break
+            }
+        }
+        
+        if let currentLocation = locationService.currentLocation {
+            // 使用当前位置
+            isUsingCurrentLocation = true
+            await weatherService.updateWeather(for: currentLocation)
+            updateTimeOfDay()
+        } else {
+            // 使用默认城市（上海）
+            let defaultLocation = PresetLocation.presets[0]
+            selectedLocation = defaultLocation
+            await weatherService.updateWeather(for: defaultLocation.location)
+            locationService.locationName = defaultLocation.name
+            updateTimeOfDay()
+        }
+        
+        await ensureMinimumLoadingTime(startTime: startTime)
+        isLoadingWeather = false
+    }
     
     private func updateTimeOfDay() {
         if let weather = weatherService.currentWeather {
@@ -429,24 +487,31 @@ struct WeatherView: View {
                         VStack(spacing: 0) {
                             // 顶部工具栏
                             HStack {
-                                locationButton
+                                Button(action: {
+                                    withAnimation(.easeInOut) {
+                                        showingSideMenu.toggle()
+                                    }
+                                }) {
+                                    Image(systemName: "line.3.horizontal")
+                                        .font(.title2)
+                                        .foregroundColor(.white)
+                                }
+                                
                                 Spacer()
+                                
                                 cityPickerButton
                             }
                             .padding(.horizontal, 20)
                             .padding(.bottom, 20)
                             
-                            if isRefreshing {
+                            if isRefreshing || isLoadingWeather {
                                 WeatherLoadingView()
                                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                             } else {
-                                if !isLoadingWeather {
+                                if let weather = weatherService.currentWeather {
                                     weatherIcon
                                         .frame(maxHeight: .infinity, alignment: .top)
-                                }
-                                
-                                if let weather = weatherService.currentWeather,
-                                   !isLoadingWeather {
+                                    
                                     WeatherContentView(
                                         weather: weather,
                                         timeOfDay: timeOfDay,
@@ -456,13 +521,11 @@ struct WeatherView: View {
                                     
                                     Spacer()
                                         .frame(height: 20)
-                                }
-                                
-                                Spacer()
-                                    .frame(minHeight: 0, maxHeight: .infinity)
-                                    .frame(height: 20)
-                                
-                                if weatherService.currentWeather != nil && !isLoadingWeather {
+                                    
+                                    Spacer()
+                                        .frame(minHeight: 0, maxHeight: .infinity)
+                                        .frame(height: 20)
+                                    
                                     ScrollableHourlyForecastView(
                                         weatherService: weatherService,
                                         safeAreaInsets: geometry.safeAreaInsets,
@@ -482,60 +545,44 @@ struct WeatherView: View {
                         timeOfDay: timeOfDay,
                         geometry: geometry
                     )
-                    .opacity(isRefreshing ? 0 : 1)
+                    .opacity(isRefreshing || isLoadingWeather ? 0 : 1)
                     .animation(.easeInOut(duration: 0.3), value: isRefreshing)
+                    .animation(.easeInOut(duration: 0.3), value: isLoadingWeather)
                 }
-            }
-        }
-        .sheet(isPresented: $showingLocationPicker) {
-            LocationPickerView(
-                selectedLocation: $selectedLocation,
-                locationService: locationService,
-                isUsingCurrentLocation: $isUsingCurrentLocation,
-                onLocationSelected: { location in
+                
+                // 侧边栏菜单
+                SideMenuView(
+                    isShowing: $showingSideMenu,
+                    selectedLocation: $selectedLocation,
+                    locations: PresetLocation.presets
+                ) { location in
                     Task {
-                        await updateLocation(location)
+                        isLoadingWeather = true
+                        let startTime = Date()
+                        lastSelectedLocationName = location.name  // 保存选择的城市
+                        isUsingCurrentLocation = false
+                        await weatherService.updateWeather(for: location.location)
+                        locationService.locationName = location.name
+                        updateTimeOfDay()
+                        await ensureMinimumLoadingTime(startTime: startTime)
+                        isLoadingWeather = false
                     }
                 }
-            )
+                .animation(.easeInOut, value: showingSideMenu)
+            }
         }
-        .task {
-            // Request location permission and start updating location
-            locationService.requestLocationPermission()
-            locationService.startUpdatingLocation()
-            
-            // Wait for location to be available (with timeout)
-            let startTime = Date()
-            while locationService.currentLocation == nil {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5 second delay
-                if Date().timeIntervalSince(startTime) > 5 {
-                    // Timeout after 5 seconds, use default location
-                    await updateLocation(selectedLocation.location)
-                    return
+        .gesture(
+            DragGesture()
+                .onEnded { gesture in
+                    if gesture.translation.width < -50 {
+                        withAnimation(.easeInOut) {
+                            showingSideMenu = true
+                        }
+                    }
                 }
-            }
-            
-            // Use current location if available
-            if let location = locationService.currentLocation {
-                isUsingCurrentLocation = true
-                await updateLocation(location)
-            } else {
-                // Fallback to default location
-                await updateLocation(selectedLocation.location)
-            }
-        }
-        .onChange(of: selectedLocation) { oldValue, newValue in
-            // When city changes, update weather for the new city
-            Task {
-                isLoadingWeather = true
-                isUsingCurrentLocation = false
-                locationService.locationName = newValue.name
-                locationService.currentLocation = newValue.location
-                await weatherService.updateWeather(for: newValue.location)
-                lastRefreshTime = Date()
-                updateTimeOfDay()
-                isLoadingWeather = false
-            }
+        )
+        .task {
+            await loadInitialWeather()
         }
     }
     

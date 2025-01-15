@@ -7,6 +7,21 @@ enum WeatherTimeOfDay {
     var isDaytime: Bool {
         self == .day
     }
+    
+    var gradient: Gradient {
+        switch self {
+        case .day:
+            return Gradient(colors: [
+                Color(red: 0.4, green: 0.7, blue: 1.0),  // 浅蓝色
+                Color(red: 0.2, green: 0.5, blue: 0.9)   // 深蓝色
+            ])
+        case .night:
+            return Gradient(colors: [
+                Color(red: 0.1, green: 0.1, blue: 0.3),  // 深蓝色
+                Color(red: 0.05, green: 0.05, blue: 0.2) // 更深的蓝色
+            ])
+        }
+    }
 }
 
 final class WeatherThemeManager {
