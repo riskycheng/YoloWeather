@@ -218,6 +218,7 @@ struct WeatherView: View {
     @State private var showingSideMenu = false
     @AppStorage("lastSelectedLocation") private var lastSelectedLocationName: String?
     @AppStorage("showDailyForecast") private var showDailyForecast = false
+    @State private var dragOffset: CGFloat = 0
     
     private func ensureMinimumLoadingTime(startTime: Date) async {
         let timeElapsed = Date().timeIntervalSince(startTime)
@@ -487,6 +488,10 @@ struct WeatherView: View {
                         VStack(spacing: 0) {
                             // 顶部工具栏
                             HStack {
+                                cityPickerButton
+                                
+                                Spacer()
+                                
                                 Button(action: {
                                     withAnimation(.easeInOut) {
                                         showingSideMenu.toggle()
@@ -496,10 +501,6 @@ struct WeatherView: View {
                                         .font(.title2)
                                         .foregroundColor(.white)
                                 }
-                                
-                                Spacer()
-                                
-                                cityPickerButton
                             }
                             .padding(.horizontal, 20)
                             .padding(.bottom, 20)
@@ -538,6 +539,27 @@ struct WeatherView: View {
                     }
                 }
                 
+                // 添加一个透明的边缘手势检测视图
+                Color.clear
+                    .frame(width: 20)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 20)
+                            .onChanged { gesture in
+                                let translation = gesture.translation.width
+                                print("边缘滑动 - 滑动距离: \(translation)")
+                                
+                                if translation < -20 && !showingSideMenu {
+                                    print("触发侧边栏显示")
+                                    withAnimation(.easeInOut) {
+                                        showingSideMenu = true
+                                    }
+                                }
+                            }
+                    )
+                
                 // 浮动气泡层
                 GeometryReader { geometry in
                     FloatingBubblesView(
@@ -559,7 +581,7 @@ struct WeatherView: View {
                     Task {
                         isLoadingWeather = true
                         let startTime = Date()
-                        lastSelectedLocationName = location.name  // 保存选择的城市
+                        lastSelectedLocationName = location.name
                         isUsingCurrentLocation = false
                         await weatherService.updateWeather(for: location.location)
                         locationService.locationName = location.name
@@ -571,16 +593,6 @@ struct WeatherView: View {
                 .animation(.easeInOut, value: showingSideMenu)
             }
         }
-        .gesture(
-            DragGesture()
-                .onEnded { gesture in
-                    if gesture.translation.width < -50 {
-                        withAnimation(.easeInOut) {
-                            showingSideMenu = true
-                        }
-                    }
-                }
-        )
         .task {
             await loadInitialWeather()
         }
