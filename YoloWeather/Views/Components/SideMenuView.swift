@@ -10,12 +10,51 @@ struct SideMenuView: View {
     @State private var keyboardHeight: CGFloat = 0
     @StateObject private var citySearchService = CitySearchService.shared
     
+    @State private var searchResults: [PresetLocation] = []
+    @State private var isSearching = false
+    @State private var searchTask: Task<Void, Never>?
+    
     private var filteredLocations: [PresetLocation] {
         if searchText.isEmpty {
-            return locations
+            return []
         }
-        let results = citySearchService.searchCities(query: searchText)
-        return results
+        return searchResults
+    }
+    
+    private func performSearch() {
+        // 取消之前的搜索任务
+        searchTask?.cancel()
+        
+        // 如果搜索文本为空，直接清空结果
+        if searchText.isEmpty {
+            searchResults = []
+            isSearching = false
+            return
+        }
+        
+        // 创建新的搜索任务
+        searchTask = Task {
+            isSearching = true
+            
+            // 添加短暂延迟，避免频繁搜索
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            
+            // 检查任务是否已被取消
+            if Task.isCancelled {
+                return
+            }
+            
+            // 执行搜索
+            let results = await citySearchService.searchCities(query: searchText)
+            
+            // 确保在主线程更新 UI
+            await MainActor.run {
+                if !Task.isCancelled {
+                    searchResults = results
+                    isSearching = false
+                }
+            }
+        }
     }
     
     var body: some View {
@@ -41,16 +80,23 @@ struct SideMenuView: View {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(.gray)
                             
-                            TextField("搜索城市", text: $searchText)
+                            TextField("搜索全球城市", text: $searchText)
                                 .textFieldStyle(PlainTextFieldStyle())
                                 .foregroundColor(.white)
                                 .autocorrectionDisabled()
                                 .textInputAutocapitalization(.never)
                                 .submitLabel(.search)
+                                .onChange(of: searchText) { _, newValue in
+                                    performSearch()
+                                }
                             
-                            if !searchText.isEmpty {
+                            if isSearching {
+                                ProgressView()
+                                    .tint(.gray)
+                            } else if !searchText.isEmpty {
                                 Button(action: {
                                     searchText = ""
+                                    searchResults.removeAll()
                                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
                                                                  to: nil, from: nil, for: nil)
                                 }) {
@@ -69,20 +115,43 @@ struct SideMenuView: View {
                         ScrollView {
                             LazyVStack(spacing: 0) {
                                 if !searchText.isEmpty {
-                                    if filteredLocations.isEmpty {
+                                    if isSearching {
+                                        ProgressView()
+                                            .padding(.top, 20)
+                                    } else if searchResults.isEmpty {
                                         Text("未找到匹配的城市")
                                             .foregroundColor(.gray)
                                             .padding(.top, 20)
                                     } else {
-                                        ForEach(filteredLocations) { location in
+                                        ForEach(searchResults) { location in
                                             cityButton(for: location)
                                         }
                                     }
                                 } else {
-                                    ForEach(locations) { location in
-                                        cityButton(for: location)
+                                    // 最近搜索
+                                    if !citySearchService.recentSearches.isEmpty {
+                                        Text("最近搜索")
+                                            .font(.system(size: 13))
+                                            .foregroundColor(.gray)
+                                            .padding(.top, 20)
+                                            .padding(.horizontal, 20)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                        
+                                        ForEach(citySearchService.recentSearches) { location in
+                                            cityButton(for: location)
+                                        }
+                                        
+                                        Button(action: {
+                                            citySearchService.clearRecentSearches()
+                                        }) {
+                                            Text("清除搜索记录")
+                                                .font(.system(size: 15))
+                                                .foregroundColor(.gray)
+                                        }
+                                        .padding(.top, 10)
                                     }
                                     
+                                    // 热门城市
                                     Text("热门城市")
                                         .font(.system(size: 13))
                                         .foregroundColor(.gray)
@@ -91,13 +160,11 @@ struct SideMenuView: View {
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                     
                                     ForEach(citySearchService.getHotCities()) { city in
-                                        if !locations.contains(where: { $0.id == city.id }) {
-                                            cityButton(for: city)
-                                        }
+                                        cityButton(for: city)
                                     }
                                 }
                             }
-                            .padding(.bottom, keyboardHeight) // 添加底部padding以适应键盘
+                            .padding(.bottom, keyboardHeight)
                         }
                         .padding(.top, 10)
                     }
@@ -138,6 +205,7 @@ struct SideMenuView: View {
     private func cityButton(for location: PresetLocation) -> some View {
         Button(action: {
             selectedLocation = location
+            citySearchService.addToRecentSearches(location)
             onLocationSelected(location)
             searchText = ""
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),

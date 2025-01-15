@@ -1,10 +1,41 @@
 import Foundation
 import CoreLocation
 
-struct PresetLocation: Identifiable, Equatable {
-    let id = UUID()
+struct PresetLocation: Identifiable, Equatable, Codable {
+    private let _id: UUID
+    var id: UUID { _id }
     let name: String
     let location: CLLocation
+    
+    enum CodingKeys: String, CodingKey {
+        case id = "_id"
+        case name
+        case latitude
+        case longitude
+    }
+    
+    init(name: String, location: CLLocation) {
+        self._id = UUID()
+        self.name = name
+        self.location = location
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        _id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        let latitude = try container.decode(Double.self, forKey: .latitude)
+        let longitude = try container.decode(Double.self, forKey: .longitude)
+        location = CLLocation(latitude: latitude, longitude: longitude)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(_id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(location.coordinate.latitude, forKey: .latitude)
+        try container.encode(location.coordinate.longitude, forKey: .longitude)
+    }
     
     static func == (lhs: PresetLocation, rhs: PresetLocation) -> Bool {
         lhs.id == rhs.id
