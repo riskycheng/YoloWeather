@@ -1,6 +1,7 @@
 import SwiftUI
 import CoreLocation
 import Foundation
+import WeatherKit
 
 // MARK: - Weather Forecast Item View
 private struct HourlyForecastItemView: View {
@@ -347,19 +348,62 @@ struct WeatherView: View {
         }
     }
     
+    private func logTimeInfo(timezone: TimeZone, hour: Int, isNight: Bool) {
+        print("城市时区: \(timezone.identifier)")
+        print("当地时间: \(hour)点")
+        print("是否夜晚: \(isNight)")
+    }
+    
+    private func calculateWeatherSymbol(weather: WeatherService.CurrentWeather) -> (symbolName: String, hour: Int, isNight: Bool) {
+        let calendar = Calendar.current
+        var dateComponents = calendar.dateComponents([.hour], from: Date())
+        dateComponents.timeZone = weather.timezone
+        
+        let hour = dateComponents.hour ?? 0
+        let isNight = hour >= 18 || hour < 6
+        let symbolName = getWeatherSymbolName(condition: weather.weatherCondition, isNight: isNight)
+        
+        return (symbolName, hour, isNight)
+    }
+    
     private var weatherIcon: some View {
-        Group {
+        ZStack {
             if let weather = weatherService.currentWeather {
-                let isNight = WeatherThemeManager.shared.determineTimeOfDay(for: Date(), in: weather.timezone) == .night
-                let symbolName = weatherService.getWeatherSymbolName(condition: weather.weatherCondition, isNight: isNight)
-                
-                Image(symbolName)
+                let weatherInfo = calculateWeatherSymbol(weather: weather)
+                Image(weatherInfo.symbolName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 160, height: 160)
                     .offset(x: 60, y: 0)
                     .modifier(ScalingEffectModifier())
+                    .onAppear {
+                        print("城市时区: \(weather.timezone.identifier)")
+                        print("当地时间: \(weatherInfo.hour)点")
+                        print("是否夜晚: \(weatherInfo.isNight)")
+                        print("选择的图标: \(weatherInfo.symbolName)")
+                    }
             }
+        }
+    }
+    
+    private func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
+        if isNight {
+            return "full_moon"  // 使用自定义月亮图标
+        }
+        
+        switch condition {
+        case .clear, .mostlyClear, .hot:
+            return "sunny"
+        case .cloudy:
+            return "cloudy"
+        case .mostlyCloudy, .partlyCloudy:
+            return "partly_cloudy_daytime"
+        case .drizzle, .rain:
+            return "moderate_rain"
+        case .snow, .heavySnow, .blizzard:
+            return "heavy_snow"
+        default:
+            return "sunny"
         }
     }
     
