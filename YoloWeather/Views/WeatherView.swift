@@ -549,10 +549,9 @@ struct WeatherView: View {
                         DragGesture(minimumDistance: 20)
                             .onChanged { gesture in
                                 let translation = gesture.translation.width
-                                print("边缘滑动 - 滑动距离: \(translation)")
-                                
+                                // 只在首次触发时打印日志
                                 if translation < -20 && !showingSideMenu {
-                                    print("触发侧边栏显示")
+                                    print("触发右边缘滑动手势")
                                     withAnimation(.easeInOut) {
                                         showingSideMenu = true
                                     }
