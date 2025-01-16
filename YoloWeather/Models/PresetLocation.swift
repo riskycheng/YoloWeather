@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-struct PresetLocation: Identifiable, Equatable, Codable {
+struct PresetLocation: Identifiable, Codable, Hashable {
     private let _id: UUID
     var id: UUID { _id }
     let name: String
@@ -20,6 +20,16 @@ struct PresetLocation: Identifiable, Equatable, Codable {
         self.location = location
     }
     
+    // 实现 Encodable
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(_id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(location.coordinate.latitude, forKey: .latitude)
+        try container.encode(location.coordinate.longitude, forKey: .longitude)
+    }
+    
+    // 实现 Decodable
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         _id = try container.decode(UUID.self, forKey: .id)
@@ -29,16 +39,20 @@ struct PresetLocation: Identifiable, Equatable, Codable {
         location = CLLocation(latitude: latitude, longitude: longitude)
     }
     
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(_id, forKey: .id)
-        try container.encode(name, forKey: .name)
-        try container.encode(location.coordinate.latitude, forKey: .latitude)
-        try container.encode(location.coordinate.longitude, forKey: .longitude)
+    // 实现 Hashable
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(_id)
+        hasher.combine(name)
+        hasher.combine(location.coordinate.latitude)
+        hasher.combine(location.coordinate.longitude)
     }
     
+    // 实现 Equatable
     static func == (lhs: PresetLocation, rhs: PresetLocation) -> Bool {
-        lhs.id == rhs.id
+        return lhs._id == rhs._id &&
+               lhs.name == rhs.name &&
+               lhs.location.coordinate.latitude == rhs.location.coordinate.latitude &&
+               lhs.location.coordinate.longitude == rhs.location.coordinate.longitude
     }
     
     static let presets: [PresetLocation] = [

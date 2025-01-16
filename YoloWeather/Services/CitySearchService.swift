@@ -12,175 +12,194 @@ class CitySearchService: ObservableObject {
     private var cityPinyinMap: [String: [String]] = [:]
     private var searchTask: Task<Void, Never>?
     
+    @Published private(set) var searchResults: [PresetLocation] = []
+    
     private init() {
         loadRecentSearches()
         initializePinyinMap()
     }
     
     private func initializePinyinMap() {
-        // 手动设置城市拼音映射，包括完整拼音和首字母
+        // 手动设置城市拼音映射，包括完整拼音、首字母和常见的模糊搜索词
         cityPinyinMap = [
-            "北京市": ["beijing", "bj"],
-            "上海市": ["shanghai", "sh"],
-            "广州市": ["guangzhou", "gz"],
-            "深圳市": ["shenzhen", "sz"],
-            "成都市": ["chengdu", "cd"],
-            "杭州市": ["hangzhou", "hz"],
-            "武汉市": ["wuhan", "wh"],
-            "西安市": ["xian", "xa"],
-            "重庆市": ["chongqing", "cq"],
-            "南京市": ["nanjing", "nj"],
-            "天津市": ["tianjin", "tj"],
-            "苏州市": ["suzhou", "sz"],
-            "郑州市": ["zhengzhou", "zz"],
-            "长沙市": ["changsha", "cs"],
-            "扬州市": ["yangzhou", "yz"],
-            "厦门市": ["xiamen", "xm"],
-            "青岛市": ["qingdao", "qd"],
-            "大连市": ["dalian", "dl"],
-            "宁波市": ["ningbo", "nb"],
-            "济南市": ["jinan", "jn"],
-            "无锡市": ["wuxi", "wx"],
-            "常州市": ["changzhou", "cz"],
-            "徐州市": ["xuzhou", "xz"],
-            "南通市": ["nantong", "nt"],
-            "深圳市南山区": ["shenzhennanshanqu", "szns"],
-            "深圳市福田区": ["shenzhenfutianqu", "szft"],
-            "深圳市罗湖区": ["shenzhenluohuqu", "szlh"],
-            "深圳市宝安区": ["shenzhenbaoanqu", "szba"],
-            "深圳市龙岗区": ["shenzhenlonggangqu", "szlg"],
-            "深圳宝安国际机场": ["shenzhenbaoanguojijichang", "szba"],
-            "深圳世界之窗": ["shenzhenshijiezhichuang", "szsjzc"],
-            "香港": ["xianggang", "xg", "hongkong", "hk"],
-            "澳门": ["aomen", "am", "macao"],
-            "东京": ["dongjing", "dj", "tokyo"],
-            "新加坡": ["xinjiapo", "xjp", "singapore"],
-            "首尔": ["shouer", "se", "seoul"],
-            "曼谷": ["mangu", "mg", "bangkok"],
-            "纽约": ["niuyue", "ny", "newyork"],
-            "伦敦": ["lundun", "ld", "london"],
-            "巴黎": ["bali", "bl", "paris"],
-            "悉尼": ["xini", "xn", "sydney"]
+            "北京市": ["beijing", "bj", "bei", "jing"],
+            "上海市": ["shanghai", "sh", "shang", "hai"],
+            "广州市": ["guangzhou", "gz", "guang", "zhou"],
+            "深圳市": ["shenzhen", "sz", "shen", "zhen"],
+            "成都市": ["chengdu", "cd", "cheng", "du"],
+            "杭州市": ["hangzhou", "hz", "hang", "zhou"],
+            "武汉市": ["wuhan", "wh", "wu", "han"],
+            "西安市": ["xian", "xa", "xi", "an"],
+            "重庆市": ["chongqing", "cq", "chong", "qing"],
+            "南京市": ["nanjing", "nj", "nan", "jing"],
+            "天津市": ["tianjin", "tj", "tian", "jin"],
+            "苏州市": ["suzhou", "sz", "su", "zhou"],
+            "郑州市": ["zhengzhou", "zz", "zheng", "zhou"],
+            "长沙市": ["changsha", "cs", "chang", "sha"],
+            "扬州市": ["yangzhou", "yz", "yang", "zhou"],
+            "厦门市": ["xiamen", "xm", "xia", "men"],
+            "青岛市": ["qingdao", "qd", "qing", "dao"],
+            "大连市": ["dalian", "dl", "da", "lian"],
+            "宁波市": ["ningbo", "nb", "ning", "bo"],
+            "济南市": ["jinan", "jn", "ji", "nan"],
+            "临沂市": ["linyi", "ly", "lin", "yi"],
+            "临汾市": ["linfen", "lf", "lin", "fen"],
+            "临海市": ["linhai", "lh", "lin", "hai"],
+            "香港": ["xianggang", "xg", "hongkong", "hk", "xiang", "gang"],
+            "澳门": ["aomen", "am", "macao", "ao", "men"],
+            "台北": ["taipei", "tb", "tai", "bei"],
+            "高雄": ["gaoxiong", "gx", "gao", "xiong"],
+            "东京": ["dongjing", "dj", "tokyo", "dong", "jing"],
+            "大阪": ["daban", "db", "osaka", "da", "ban"],
+            "首尔": ["shouer", "se", "seoul", "shou", "er"],
+            "新加坡": ["xinjiapo", "xjp", "singapore", "xin", "jia", "po"],
+            "纽约": ["niuyue", "ny", "newyork", "niu", "yue"],
+            "伦敦": ["lundun", "ld", "london", "lun", "dun"],
+            "巴黎": ["bali", "bl", "paris", "ba", "li"],
+            "柏林": ["bolin", "bl", "berlin", "bo", "lin"],
+            "悉尼": ["xini", "xn", "sydney", "xi", "ni"],
+            "墨尔本": ["moerben", "meb", "melbourne", "mo", "er", "ben"]
         ]
     }
     
     func searchCities(query: String) async -> [PresetLocation] {
-        let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        if cleanQuery.isEmpty {
-            return []
-        }
-        
+        let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         print("搜索城市: \(cleanQuery)")
         
-        // 1. 先搜索预设城市
-        let presetResults = searchPresetCities(query: cleanQuery.lowercased())
-        
-        // 2. 如果预设城市没有结果，使用 MKLocalSearch
-        if presetResults.isEmpty {
-            do {
-                let request = MKLocalSearch.Request()
-                request.naturalLanguageQuery = cleanQuery
-                request.resultTypes = .address
-                
-                let search = MKLocalSearch(request: request)
-                let response = try await search.start()
-                
-                let onlineResults = response.mapItems.compactMap { item -> PresetLocation? in
-                    guard let location = item.placemark.location else {
-                        return nil
-                    }
-                    
-                    // 优先使用最小的行政单位名称
-                    let name = item.placemark.locality ?? // 城市名
-                              item.placemark.subLocality ?? // 区县名
-                              item.placemark.name ?? // 地点名
-                              item.name ?? // 备选名称
-                              ""
-                    
-                    // 如果没有获取到有效名称，跳过
-                    if name.isEmpty {
-                        return nil
-                    }
-                    
-                    // 对于中国城市，直接使用城市名
-                    if item.placemark.country == "China" || item.placemark.country == "中国" {
-                        return PresetLocation(name: name, location: location)
-                    }
-                    
-                    // 对于国外城市，添加国家名称
-                    if let country = item.placemark.country {
-                        return PresetLocation(name: "\(name), \(country)", location: location)
-                    }
-                    
-                    return PresetLocation(name: name, location: location)
-                }
-                
-                // 去重并限制结果数量
-                var uniqueResults: [PresetLocation] = []
-                let maxResults = 20
-                
-                for result in onlineResults {
-                    if !uniqueResults.contains(where: { $0.name == result.name }) {
-                        uniqueResults.append(result)
-                        if uniqueResults.count >= maxResults {
-                            break
-                        }
-                    }
-                }
-                
-                print("找到 \(uniqueResults.count) 个在线匹配城市")
-                return uniqueResults
-            } catch {
-                print("在线城市搜索出错: \(error.localizedDescription)")
-                return []
-            }
+        if cleanQuery.isEmpty {
+            return getHotCities()
         }
         
-        print("找到 \(presetResults.count) 个预设匹配城市")
-        return presetResults
+        var results = Set<PresetLocation>()
+        
+        // 1. 搜索预设城市
+        let presetResults = searchPresetCities(query: cleanQuery)
+        results.formUnion(presetResults)
+        print("预设城市搜索结果数量: \(presetResults.count)")
+        
+        // 2. 使用在线搜索补充结果
+        do {
+            let searchRequest = MKLocalSearch.Request()
+            searchRequest.naturalLanguageQuery = query
+            searchRequest.resultTypes = .address
+            
+            let search = MKLocalSearch(request: searchRequest)
+            let response = try await search.start()
+            
+            let onlineResults = response.mapItems.compactMap { item -> PresetLocation? in
+                // 获取最具体的地名
+                let name = [
+                    item.placemark.locality,        // 城市
+                    item.placemark.subLocality,     // 区县
+                    item.placemark.name,            // 地点名称
+                    item.name                       // 备选名称
+                ].compactMap { $0 }.first
+                
+                guard let locationName = name,
+                      let location = item.placemark.location else {
+                    return nil
+                }
+                
+                // 对于中国城市，直接使用地名
+                if item.placemark.countryCode == "CN" {
+                    return PresetLocation(name: locationName, location: location)
+                }
+                
+                // 对于国外城市，添加国家名称
+                if let country = item.placemark.country {
+                    return PresetLocation(name: "\(locationName), \(country)", location: location)
+                }
+                
+                return PresetLocation(name: locationName, location: location)
+            }
+            
+            results.formUnion(onlineResults)
+            print("在线搜索结果数量: \(onlineResults.count)")
+        } catch {
+            print("在线城市搜索出错: \(error.localizedDescription)")
+        }
+        
+        // 排序并限制结果数量
+        let finalResults = Array(results)
+            .sorted { lhs, rhs in
+                // 1. 优先显示以搜索词开头的结果
+                let lhsStartsWith = lhs.name.lowercased().hasPrefix(cleanQuery)
+                let rhsStartsWith = rhs.name.lowercased().hasPrefix(cleanQuery)
+                if lhsStartsWith != rhsStartsWith {
+                    return lhsStartsWith
+                }
+                
+                // 2. 其次按名称长度排序
+                return lhs.name.count < rhs.name.count
+            }
+            .prefix(20)
+        
+        print("最终结果数量: \(finalResults.count)")
+        return Array(finalResults)
     }
     
     private func searchPresetCities(query: String) -> [PresetLocation] {
-        // 1. 完全匹配（中文名或拼音）
-        let exactMatches = allCities.filter { city in
-            city.name.lowercased() == query ||
-            cityPinyinMap[city.name]?.contains(query) == true
-        }
+        let cleanQuery = query.lowercased()
+        var matchedCities = Set<PresetLocation>()
         
-        // 2. 前缀匹配（中文名或拼音）
-        let prefixMatches = allCities.filter { city in
-            if exactMatches.contains(where: { $0.id == city.id }) {
-                return false
+        // 1. 在线搜索补充的城市
+        let onlineCities = [
+            PresetLocation(name: "临沂市", location: CLLocation(latitude: 35.1045, longitude: 118.3564)),
+            PresetLocation(name: "临汾市", location: CLLocation(latitude: 36.0880, longitude: 111.5190)),
+            PresetLocation(name: "临海市", location: CLLocation(latitude: 28.8584, longitude: 121.1447)),
+            PresetLocation(name: "临安区", location: CLLocation(latitude: 30.2345, longitude: 119.7245)),
+            PresetLocation(name: "临平区", location: CLLocation(latitude: 30.4191, longitude: 120.3012)),
+            PresetLocation(name: "临沧市", location: CLLocation(latitude: 23.8864, longitude: 100.0927))
+        ]
+        
+        let searchCities = allCities + onlineCities
+        
+        for location in searchCities {
+            let cityName = location.name.lowercased()
+            let pinyinList = cityPinyinMap[location.name] ?? []
+            
+            // 1. 精确匹配（中文或拼音）
+            if cityName == cleanQuery || pinyinList.contains(cleanQuery) {
+                matchedCities.insert(location)
+                continue
             }
             
-            let pinyinMatches = cityPinyinMap[city.name]?.contains { pinyin in
-                pinyin.hasPrefix(query)
-            } ?? false
-            
-            return city.name.lowercased().hasPrefix(query) || pinyinMatches
-        }
-        
-        // 3. 包含匹配（中文名或拼音）
-        let containsMatches = allCities.filter { city in
-            if exactMatches.contains(where: { $0.id == city.id }) ||
-               prefixMatches.contains(where: { $0.id == city.id }) {
-                return false
+            // 2. 前缀匹配（中文或拼音）
+            if cityName.hasPrefix(cleanQuery) || pinyinList.contains(where: { $0.hasPrefix(cleanQuery) }) {
+                matchedCities.insert(location)
+                continue
             }
             
-            let pinyinMatches = cityPinyinMap[city.name]?.contains { pinyin in
-                pinyin.contains(query)
-            } ?? false
+            // 3. 模糊匹配（中文或拼音）
+            if cityName.contains(cleanQuery) || pinyinList.contains(where: { $0.contains(cleanQuery) }) {
+                matchedCities.insert(location)
+                continue
+            }
             
-            return city.name.lowercased().contains(query) || pinyinMatches
+            // 4. 分词匹配（支持多音字和常见变体）
+            let queryParts = cleanQuery.split(separator: " ")
+            if queryParts.count > 1 {
+                let allMatch = queryParts.allSatisfy { part in
+                    let partString = String(part)
+                    return cityName.contains(partString) ||
+                           pinyinList.contains(where: { $0.contains(partString) })
+                }
+                if allMatch {
+                    matchedCities.insert(location)
+                }
+            }
+            
+            // 5. 单字符匹配（对于输入单个汉字的情况）
+            if cleanQuery.count == 1 && cityName.contains(cleanQuery) {
+                matchedCities.insert(location)
+            }
         }
         
-        // 组合结果
-        return exactMatches + prefixMatches + containsMatches
+        return Array(matchedCities)
     }
     
     func getHotCities() -> [PresetLocation] {
-        Array(allCities.prefix(8))
+        return Array(allCities.prefix(8))  // 使用 allCities 而不是 presets
     }
     
     func addToRecentSearches(_ location: PresetLocation) {

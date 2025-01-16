@@ -414,13 +414,17 @@ struct WeatherView: View {
     }
     
     private func calculateWeatherSymbol(weather: WeatherService.CurrentWeather) -> (symbolName: String, hour: Int, isNight: Bool) {
-        let calendar = Calendar.current
-        var dateComponents = calendar.dateComponents([.hour], from: Date())
-        dateComponents.timeZone = weather.timezone
-        
-        let hour = dateComponents.hour ?? 0
+        var calendar = Calendar.current
+        calendar.timeZone = weather.timezone
+        let hour = calendar.component(.hour, from: weather.date)
         let isNight = hour >= 18 || hour < 6
         let symbolName = getWeatherSymbolName(condition: weather.weatherCondition, isNight: isNight)
+        
+        print("天气图标计算 - 城市: \(locationService.locationName)")
+        print("天气图标计算 - 当地时间: \(hour)点")
+        print("天气图标计算 - 是否夜晚: \(isNight)")
+        print("天气图标计算 - 天气状况: \(weather.weatherCondition)")
+        print("天气图标计算 - 选择的图标: \(symbolName)")
         
         return (symbolName, hour, isNight)
     }
@@ -446,23 +450,19 @@ struct WeatherView: View {
     }
     
     private func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
-        if isNight {
-            return "full_moon"  // 使用自定义月亮图标
-        }
-        
         switch condition {
         case .clear, .mostlyClear, .hot:
-            return "sunny"
+            return isNight ? "moon" : "sunny"
         case .cloudy:
-            return "cloudy"
+            return isNight ? "cloudy_night" : "cloudy"
         case .mostlyCloudy, .partlyCloudy:
-            return "partly_cloudy_daytime"
+            return isNight ? "partly_cloudy_night" : "partly_cloudy_daytime"
         case .drizzle, .rain:
             return "moderate_rain"
         case .snow, .heavySnow, .blizzard:
             return "heavy_snow"
         default:
-            return "sunny"
+            return isNight ? "moon" : "sunny"
         }
     }
     
