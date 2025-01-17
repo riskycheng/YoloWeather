@@ -207,15 +207,16 @@ private struct FloatingBubblesView: View {
 struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
     @StateObject private var locationService = LocationService()
+    @StateObject private var citySearchService = CitySearchService.shared
     @State private var selectedLocation: PresetLocation = PresetLocation.presets[0]
+    @State private var showingSideMenu = false
     @State private var showingLocationPicker = false
     @State private var isRefreshing = false
-    @State private var lastRefreshTime: Date = Date()
-    @State private var isUsingCurrentLocation = false
-    @State private var timeOfDay: WeatherTimeOfDay = .night
-    @State private var isLoadingWeather = true
+    @State private var isLoadingWeather = false
+    @State private var timeOfDay: WeatherTimeOfDay = .day
     @State private var animationTrigger = UUID()
-    @State private var showingSideMenu = false
+    @State private var lastRefreshTime = Date()
+    @State private var isUsingCurrentLocation = false
     @AppStorage("lastSelectedLocation") private var lastSelectedLocationName: String?
     @AppStorage("showDailyForecast") private var showDailyForecast = false
     @State private var dragOffset: CGFloat = 0
@@ -260,7 +261,6 @@ struct WeatherView: View {
         
         if let currentLocation = locationService.currentLocation {
             // 使用当前位置
-            isUsingCurrentLocation = true
             await weatherService.updateWeather(for: currentLocation)
             updateTimeOfDay()
         } else {
@@ -304,16 +304,9 @@ struct WeatherView: View {
         
         let refreshStartTime = Date()
         
-        if isUsingCurrentLocation {
-            if let location = locationService.currentLocation {
-                await weatherService.updateWeather(for: location)
-                updateTimeOfDay()
-            }
-        } else {
-            if let currentLocation = locationService.currentLocation {
-                await weatherService.updateWeather(for: currentLocation)
-                updateTimeOfDay()
-            }
+        if let currentLocation = locationService.currentLocation {
+            await weatherService.updateWeather(for: currentLocation)
+            updateTimeOfDay()
         }
         
         let timeElapsed = Date().timeIntervalSince(refreshStartTime)
@@ -326,11 +319,9 @@ struct WeatherView: View {
     
     private func updateLocation(_ location: CLLocation?) async {
         if let location = location {
-            isUsingCurrentLocation = true
             locationService.currentLocation = location
             await weatherService.updateWeather(for: location)
         } else {
-            isUsingCurrentLocation = false
             locationService.locationName = selectedLocation.name
             locationService.currentLocation = selectedLocation.location
             await weatherService.updateWeather(for: selectedLocation.location)
@@ -346,10 +337,10 @@ struct WeatherView: View {
             animationTrigger = UUID()
             
             // 设置位置更新回调
-            locationService.onLocationUpdated = { [weak locationService] location in
+            locationService.onLocationUpdated = { location in
                 Task {
                     // 等待位置名称更新完成
-                    await locationService?.waitForLocationNameUpdate()
+                    await locationService.waitForLocationNameUpdate()
                     
                     // 更新天气信息并触发动画
                     await weatherService.updateWeather(for: location)
@@ -466,130 +457,157 @@ struct WeatherView: View {
         }
     }
     
+    var addButton: some View {
+        Button(action: {
+            if !citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) {
+                // 如果当前城市不在收藏列表中，则添加到收藏
+                citySearchService.addToRecentSearches(selectedLocation)
+                // 显示添加成功提示
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                withAnimation {
+                    let banner = UIBanner(title: "添加成功", subtitle: "\(selectedLocation.name)已添加到收藏", type: .success)
+                    UIBannerPresenter.shared.show(banner)
+                }
+            }
+            withAnimation(.easeInOut) {
+                showingSideMenu = true
+            }
+        }) {
+            Image(systemName: citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) ? "list.bullet" : "plus")
+                .font(.system(size: 22))
+                .foregroundColor(.white)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+    }
+    
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
-                // 背景渐变
-                WeatherBackgroundView(
-                    weatherService: weatherService,
-                    weatherCondition: weatherService.currentWeather?.weatherCondition.description ?? "晴天"
-                )
-                .environment(\.weatherTimeOfDay, timeOfDay)
-                
-                // 前景内容
-                RefreshableView(isRefreshing: $isRefreshing) {
-                    await refreshWeather()
-                } content: {
-                    VStack(spacing: 0) {
-                        Spacer()
-                            .frame(height: 0)
-                            .padding(.top, -60)
-                        
+            BannerContainerView {
+                ZStack {
+                    // 背景渐变
+                    WeatherBackgroundView(
+                        weatherService: weatherService,
+                        weatherCondition: weatherService.currentWeather?.weatherCondition.description ?? "晴天"
+                    )
+                    .environment(\.weatherTimeOfDay, timeOfDay)
+                    
+                    // 前景内容
+                    RefreshableView(isRefreshing: $isRefreshing) {
+                        await refreshWeather()
+                    } content: {
                         VStack(spacing: 0) {
-                            // 顶部工具栏
-                            HStack {
-                                cityPickerButton
-                                
-                                Spacer()
-                                
-                                Button(action: {
-                                    withAnimation(.easeInOut) {
-                                        showingSideMenu.toggle()
-                                    }
-                                }) {
-                                    Image(systemName: "line.3.horizontal")
-                                        .font(.title2)
-                                        .foregroundColor(.white)
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.bottom, 20)
+                            Spacer()
+                                .frame(height: 0)
+                                .padding(.top, -60)
                             
-                            if isRefreshing || isLoadingWeather {
-                                WeatherLoadingView()
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            } else {
-                                if let weather = weatherService.currentWeather {
-                                    weatherIcon
-                                        .frame(maxHeight: .infinity, alignment: .top)
-                                    
-                                    WeatherContentView(
-                                        weather: weather,
-                                        timeOfDay: timeOfDay,
-                                        locationName: locationService.locationName,
-                                        animationTrigger: animationTrigger
-                                    )
+                            VStack(spacing: 0) {
+                                // 顶部工具栏
+                                HStack {
+                                    cityPickerButton
                                     
                                     Spacer()
-                                        .frame(height: 20)
                                     
-                                    Spacer()
-                                        .frame(minHeight: 0, maxHeight: .infinity)
-                                        .frame(height: 20)
-                                    
-                                    ScrollableHourlyForecastView(
-                                        weatherService: weatherService,
-                                        safeAreaInsets: geometry.safeAreaInsets,
-                                        animationTrigger: animationTrigger
-                                    )
-                                    .padding(.bottom, 20)
+                                    Button(action: {
+                                        withAnimation(.easeInOut) {
+                                            showingSideMenu.toggle()
+                                        }
+                                    }) {
+                                        Image(systemName: "line.3.horizontal")
+                                            .font(.title2)
+                                            .foregroundColor(.white)
+                                    }
+                                }
+                                .padding(.horizontal, 20)
+                                .padding(.bottom, 20)
+                                
+                                if isRefreshing || isLoadingWeather {
+                                    WeatherLoadingView()
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                } else {
+                                    if let weather = weatherService.currentWeather {
+                                        weatherIcon
+                                            .frame(maxHeight: .infinity, alignment: .top)
+                                        
+                                        WeatherContentView(
+                                            weather: weather,
+                                            timeOfDay: timeOfDay,
+                                            locationName: locationService.locationName,
+                                            animationTrigger: animationTrigger
+                                        )
+                                        
+                                        Spacer()
+                                            .frame(height: 20)
+                                        
+                                        Spacer()
+                                            .frame(minHeight: 0, maxHeight: .infinity)
+                                            .frame(height: 20)
+                                        
+                                        ScrollableHourlyForecastView(
+                                            weatherService: weatherService,
+                                            safeAreaInsets: geometry.safeAreaInsets,
+                                            animationTrigger: animationTrigger
+                                        )
+                                        .padding(.bottom, 20)
+                                    }
                                 }
                             }
                         }
                     }
-                }
-                
-                // 添加一个透明的边缘手势检测视图
-                Color.clear
-                    .frame(width: 20)
-                    .frame(maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                    .highPriorityGesture(
-                        DragGesture(minimumDistance: 20)
-                            .onChanged { gesture in
-                                let translation = gesture.translation.width
-                                // 只在首次触发时打印日志
-                                if translation < -20 && !showingSideMenu {
-                                    print("触发右边缘滑动手势")
-                                    withAnimation(.easeInOut) {
-                                        showingSideMenu = true
+                    
+                    // 添加一个透明的边缘手势检测视图
+                    Color.clear
+                        .frame(width: 20)
+                        .frame(maxHeight: .infinity)
+                        .contentShape(Rectangle())
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .highPriorityGesture(
+                            DragGesture(minimumDistance: 20)
+                                .onChanged { gesture in
+                                    let translation = gesture.translation.width
+                                    // 只在首次触发时打印日志
+                                    if translation < -20 && !showingSideMenu {
+                                        print("触发右边缘滑动手势")
+                                        withAnimation(.easeInOut) {
+                                            showingSideMenu = true
+                                        }
                                     }
                                 }
-                            }
-                    )
-                
-                // 浮动气泡层
-                GeometryReader { geometry in
-                    FloatingBubblesView(
-                        weatherService: weatherService,
-                        timeOfDay: timeOfDay,
-                        geometry: geometry
-                    )
-                    .opacity(isRefreshing || isLoadingWeather ? 0 : 1)
-                    .animation(.easeInOut(duration: 0.3), value: isRefreshing)
-                    .animation(.easeInOut(duration: 0.3), value: isLoadingWeather)
-                }
-                
-                // 侧边栏菜单
-                SideMenuView(
-                    isShowing: $showingSideMenu,
-                    selectedLocation: $selectedLocation,
-                    locations: PresetLocation.presets
-                ) { location in
-                    Task {
-                        isLoadingWeather = true
-                        let startTime = Date()
-                        lastSelectedLocationName = location.name
-                        isUsingCurrentLocation = false
-                        await weatherService.updateWeather(for: location.location)
-                        locationService.locationName = location.name
-                        updateTimeOfDay()
-                        await ensureMinimumLoadingTime(startTime: startTime)
-                        isLoadingWeather = false
+                        )
+                    
+                    // 浮动气泡层
+                    GeometryReader { geometry in
+                        FloatingBubblesView(
+                            weatherService: weatherService,
+                            timeOfDay: timeOfDay,
+                            geometry: geometry
+                        )
+                        .opacity(isRefreshing || isLoadingWeather ? 0 : 1)
+                        .animation(.easeInOut(duration: 0.3), value: isRefreshing)
+                        .animation(.easeInOut(duration: 0.3), value: isLoadingWeather)
                     }
+                    
+                    // 侧边栏菜单
+                    SideMenuView(
+                        isShowing: $showingSideMenu,
+                        selectedLocation: $selectedLocation,
+                        locations: PresetLocation.presets
+                    ) { location in
+                        Task {
+                            isLoadingWeather = true
+                            let startTime = Date()
+                            lastSelectedLocationName = location.name
+                            isUsingCurrentLocation = false
+                            await weatherService.updateWeather(for: location.location)
+                            locationService.locationName = location.name
+                            updateTimeOfDay()
+                            await ensureMinimumLoadingTime(startTime: startTime)
+                            isLoadingWeather = false
+                        }
+                    }
+                    .animation(.easeInOut, value: showingSideMenu)
                 }
-                .animation(.easeInOut, value: showingSideMenu)
             }
         }
         .task {

@@ -32,21 +32,38 @@ private struct WeatherInfoView: View {
 struct SavedCityCard: View {
     let location: PresetLocation
     let action: () -> Void
+    let onDelete: () -> Void
     @StateObject private var weatherService = WeatherService.shared
     @State private var timeOfDay: WeatherTimeOfDay = .day
-    @State private var currentWeather: WeatherService.CurrentWeather?
+    @State private var weather: WeatherService.CurrentWeather?
     
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 4) {
-                // 城市名称
-                Text(location.name)
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(.white)
+            VStack(spacing: 4) {
+                // 第一行：城市名和当前温度
+                HStack {
+                    Text(location.name)
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Text("\(Int(round(weather?.temperature ?? 0)))°")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.white)
+                }
                 
-                // 天气信息
-                if let weather = weatherService.currentWeather {
-                    WeatherInfoView(weather: weather)
+                // 第二行：天气状况和温度范围
+                HStack {
+                    Text(weather?.weatherCondition.description ?? "获取中...")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                    
+                    Spacer()
+                    
+                    Text("最高\(Int(round((weather?.temperature ?? 0) + 3)))° 最低\(Int(round((weather?.temperature ?? 0) - 3)))°")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
                 }
             }
             .padding(.horizontal, 16)
@@ -60,6 +77,19 @@ struct SavedCityCard: View {
                             .stroke(Color.white.opacity(0.1), lineWidth: 1)
                     )
             )
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+            .tint(.red)
+        }
+        .task {
+            // 只在卡片出现时获取一次天气数据
+            await weatherService.updateWeather(for: location.location)
+            weather = weatherService.currentWeather
         }
     }
 }
@@ -134,9 +164,23 @@ struct SideMenuView: View {
                                                 .padding(.horizontal)
                                             
                                             VStack(spacing: 8) {
-                                                ForEach(Array(Set(citySearchService.recentSearches))) { location in
-                                                    SavedCityCard(location: location) {
-                                                        handleLocationSelection(location)
+                                                ForEach(citySearchService.recentSearches) { location in
+                                                    SavedCityCard(
+                                                        location: location,
+                                                        action: {
+                                                            handleLocationSelection(location)
+                                                        },
+                                                        onDelete: {
+                                                            citySearchService.removeFromRecentSearches(location)
+                                                        }
+                                                    )
+                                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                                                        Button(role: .destructive) {
+                                                            citySearchService.removeFromRecentSearches(location)
+                                                        } label: {
+                                                            Label("删除", systemImage: "trash")
+                                                        }
+                                                        .tint(.red)
                                                     }
                                                 }
                                             }
@@ -159,9 +203,15 @@ struct SideMenuView: View {
                                     } else {
                                         VStack(spacing: 8) {
                                             ForEach(searchResults) { location in
-                                                SavedCityCard(location: location) {
-                                                    handleLocationSelection(location)
-                                                }
+                                                SavedCityCard(
+                                                    location: location,
+                                                    action: {
+                                                        handleLocationSelection(location)
+                                                    },
+                                                    onDelete: {
+                                                        citySearchService.removeFromRecentSearches(location)
+                                                    }
+                                                )
                                             }
                                         }
                                         .padding(.horizontal)
@@ -174,6 +224,15 @@ struct SideMenuView: View {
                     .frame(width: min(geometry.size.width * 0.75, 300))
                     .background(Color(UIColor.systemBackground))
                     .transition(.move(edge: .trailing))
+                }
+            }
+            .onChange(of: isShowing) { newValue in
+                if !newValue {
+                    // 当菜单关闭时，清空搜索状态
+                    searchText = ""
+                    searchResults = []
+                    showSearchResults = false
+                    isSearching = false
                 }
             }
         }
@@ -190,7 +249,7 @@ struct SideMenuView: View {
         withAnimation(.easeInOut) {
             isShowing = false
         }
-        citySearchService.addToRecentSearches(location)
+        // 不再自动添加到收藏列表
         onLocationSelected(location)
     }
 }

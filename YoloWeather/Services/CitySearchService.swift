@@ -221,29 +221,27 @@ class CitySearchService: ObservableObject {
     }
     
     func addToRecentSearches(_ location: PresetLocation) {
-        recentSearches.removeAll { $0.id == location.id }
-        recentSearches.insert(location, at: 0)
-        if recentSearches.count > maxRecentSearches {
-            recentSearches = Array(recentSearches.prefix(maxRecentSearches))
+        if !recentSearches.contains(where: { $0.name == location.name }) {
+            recentSearches.insert(location, at: 0)
+            saveRecentSearches()
         }
-        saveRecentSearches()
     }
     
-    func clearRecentSearches() {
-        recentSearches.removeAll()
+    func removeFromRecentSearches(_ location: PresetLocation) {
+        recentSearches.removeAll(where: { $0.name == location.name })
         saveRecentSearches()
-    }
-    
-    private func loadRecentSearches() {
-        if let data = UserDefaults.standard.data(forKey: "RecentSearches"),
-           let decoded = try? JSONDecoder().decode([PresetLocation].self, from: data) {
-            recentSearches = decoded
-        }
     }
     
     private func saveRecentSearches() {
         if let encoded = try? JSONEncoder().encode(recentSearches) {
-            UserDefaults.standard.set(encoded, forKey: "RecentSearches")
+            UserDefaults.standard.set(encoded, forKey: "recentSearches")
+        }
+    }
+    
+    private func loadRecentSearches() {
+        if let data = UserDefaults.standard.data(forKey: "recentSearches"),
+           let decoded = try? JSONDecoder().decode([PresetLocation].self, from: data) {
+            recentSearches = decoded
         }
     }
     
