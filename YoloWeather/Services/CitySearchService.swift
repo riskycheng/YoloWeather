@@ -87,26 +87,44 @@ class CitySearchService: ObservableObject {
             let response = try await search.start()
             
             let onlineResults = response.mapItems.compactMap { item -> PresetLocation? in
-                // 获取最具体的地名
-                let name = [
-                    item.placemark.locality,        // 城市
-                    item.placemark.subLocality,     // 区县
-                    item.placemark.name,            // 地点名称
-                    item.name                       // 备选名称
-                ].compactMap { $0 }.first
+                // 获取最精确的地名
+                let placemark = item.placemark
+                
+                // 优先使用最具体的地名
+                let name: String? = {
+                    // 1. 如果有具体的地点名称，优先使用
+                    if let specificName = placemark.name {
+                        return specificName
+                    }
+                    
+                    // 2. 其次使用区县级名称
+                    if let subLocality = placemark.subLocality {
+                        return subLocality
+                    }
+                    
+                    // 3. 最后使用城市名称
+                    return placemark.locality
+                }()
                 
                 guard let locationName = name,
-                      let location = item.placemark.location else {
+                      let location = placemark.location else {
                     return nil
                 }
                 
                 // 对于中国城市，直接使用地名
-                if item.placemark.countryCode == "CN" {
+                if placemark.countryCode == "CN" {
+                    // 如果地名不包含"市"、"区"、"县"等后缀，添加适当的后缀
+                    let suffixes = ["市", "区", "县", "自治州", "自治区"]
+                    if !suffixes.contains(where: { locationName.hasSuffix($0) }) {
+                        if locationName.count >= 2 {
+                            return PresetLocation(name: locationName + "市", location: location)
+                        }
+                    }
                     return PresetLocation(name: locationName, location: location)
                 }
                 
                 // 对于国外城市，添加国家名称
-                if let country = item.placemark.country {
+                if let country = placemark.country {
                     return PresetLocation(name: "\(locationName), \(country)", location: location)
                 }
                 
