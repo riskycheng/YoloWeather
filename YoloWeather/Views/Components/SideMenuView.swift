@@ -87,7 +87,7 @@ struct SavedCityCard: View {
             .tint(.red)
         }
         .task {
-            // 只在卡片出现时获取一次天气数据
+            // 只在卡片出现时获取一次天气数据，但不更新主界面的天气
             await weatherService.updateWeather(for: location.location)
             weather = weatherService.currentWeather
         }

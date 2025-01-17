@@ -331,45 +331,53 @@ struct WeatherView: View {
         updateTimeOfDay()  // 确保在位置更新后立即更新主题
     }
     
-    private func handleLocationButtonTap() {
-        Task {
-            // Always trigger animation when location button is tapped
-            animationTrigger = UUID()
-            
-            // 设置位置更新回调
-            locationService.onLocationUpdated = { location in
-                Task {
-                    // 等待位置名称更新完成
-                    await locationService.waitForLocationNameUpdate()
-                    
-                    // 更新天气信息并触发动画
-                    await weatherService.updateWeather(for: location)
-                    lastRefreshTime = Date()
-                    updateTimeOfDay()
-                }
-            }
-            
-            // 请求定位权限
-            locationService.requestLocationPermission()
-            
-            // 开始更新位置
-            locationService.startUpdatingLocation()
-            
-            // 设置为使用当前位置
-            isUsingCurrentLocation = true
-            
-            // If we already have a location, trigger an immediate refresh
-            if let currentLocation = locationService.currentLocation {
-                await weatherService.updateWeather(for: currentLocation)
+    private func handleLocationButtonTap() async {
+        // Always trigger animation when location button is tapped
+        animationTrigger = UUID()
+        
+        // 设置位置更新回调
+        locationService.onLocationUpdated = { location in
+            Task {
+                // 等待位置名称更新完成
+                await locationService.waitForLocationNameUpdate()
+                
+                // 更新天气信息并触发动画
+                await weatherService.updateWeather(for: location)
                 lastRefreshTime = Date()
                 updateTimeOfDay()
+                
+                // 显示定位成功的提示
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                withAnimation {
+                    let banner = UIBanner(title: "定位成功", subtitle: "已切换到当前位置", type: .success)
+                    UIBannerPresenter.shared.show(banner)
+                }
             }
+        }
+        
+        // 请求定位权限
+        locationService.requestLocationPermission()
+        
+        // 开始更新位置
+        locationService.startUpdatingLocation()
+        
+        // 设置为使用当前位置
+        isUsingCurrentLocation = true
+        
+        // If we already have a location, trigger an immediate refresh
+        if let currentLocation = locationService.currentLocation {
+            await weatherService.updateWeather(for: currentLocation)
+            lastRefreshTime = Date()
+            updateTimeOfDay()
         }
     }
     
     private var locationButton: some View {
         Button {
-            handleLocationButtonTap()
+            Task { @MainActor in
+                await handleLocationButtonTap()
+            }
         } label: {
             HStack(spacing: 4) {
                 if locationService.isLocating {
@@ -384,6 +392,7 @@ struct WeatherView: View {
             .frame(width: 64, height: 64)
         }
         .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
+        .disabled(locationService.isLocating) // 定位过程中禁用按钮
     }
     
     private var cityPickerButton: some View {
@@ -471,11 +480,56 @@ struct WeatherView: View {
                 }
             } else {
                 // 如果当前城市已在收藏列表中，则触发定位功能
-                handleLocationButtonTap()
+                let generator = UINotificationFeedbackGenerator()
+                generator.notificationOccurred(.success)
+                withAnimation {
+                    let banner = UIBanner(title: "定位中", subtitle: "正在获取当前位置...", type: .info)
+                    UIBannerPresenter.shared.show(banner)
+                }
+                
+                // 使用Task包装异步调用
+                Task { @MainActor in
+                    // 请求定位权限
+                    locationService.requestLocationPermission()
+                    
+                    // 开始更新位置
+                    locationService.startUpdatingLocation()
+                    
+                    // 设置为使用当前位置
+                    isUsingCurrentLocation = true
+                    
+                    // 设置位置更新回调
+                    locationService.onLocationUpdated = { location in
+                        Task { @MainActor in
+                            // 等待位置名称更新完成
+                            await locationService.waitForLocationNameUpdate()
+                            
+                            // 更新天气信息并触发动画
+                            await weatherService.updateWeather(for: location)
+                            lastRefreshTime = Date()
+                            updateTimeOfDay()
+                            
+                            // 显示定位成功的提示
+                            let generator = UINotificationFeedbackGenerator()
+                            generator.notificationOccurred(.success)
+                            withAnimation {
+                                let banner = UIBanner(title: "定位成功", subtitle: "已切换到当前位置", type: .success)
+                                UIBannerPresenter.shared.show(banner)
+                            }
+                        }
+                    }
+                    
+                    // If we already have a location, trigger an immediate refresh
+                    if let currentLocation = locationService.currentLocation {
+                        await weatherService.updateWeather(for: currentLocation)
+                        lastRefreshTime = Date()
+                        updateTimeOfDay()
+                    }
+                }
             }
         }) {
             Image(systemName: citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) ? "location.circle.fill" : "plus.circle.fill")
-                .font(.system(size: 22))
+                .font(.system(size: 24))
                 .foregroundColor(.white)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
