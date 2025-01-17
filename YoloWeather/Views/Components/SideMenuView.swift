@@ -1,5 +1,69 @@
 import SwiftUI
 
+// 天气信息视图组件
+private struct WeatherInfoView: View {
+    let weather: WeatherService.CurrentWeather
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            // 温度行
+            HStack {
+                Spacer()
+                Text("\(Int(round(weather.temperature)))°")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            
+            // 天气详情行
+            HStack {
+                Text(weather.weatherCondition.description)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
+                Spacer()
+                Text("最高\(Int(round(weather.temperature + 3)))° 最低\(Int(round(weather.temperature - 3)))°")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        }
+    }
+}
+
+// 城市卡片组件
+struct SavedCityCard: View {
+    let location: PresetLocation
+    let action: () -> Void
+    @StateObject private var weatherService = WeatherService.shared
+    @State private var timeOfDay: WeatherTimeOfDay = .day
+    @State private var currentWeather: WeatherService.CurrentWeather?
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 4) {
+                // 城市名称
+                Text(location.name)
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundColor(.white)
+                
+                // 天气信息
+                if let weather = weatherService.currentWeather {
+                    WeatherInfoView(weather: weather)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(WeatherThemeManager.shared.cardBackgroundColor(for: timeOfDay))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+            )
+        }
+    }
+}
+
 struct SideMenuView: View {
     @Binding var isShowing: Bool
     @Binding var selectedLocation: PresetLocation
@@ -11,7 +75,6 @@ struct SideMenuView: View {
     @State private var searchResults: [PresetLocation] = []
     @State private var isSearching = false
     @State private var showSearchResults = false
-    @State private var searchOpacity: Double = 1.0
     
     var body: some View {
         GeometryReader { geometry in
@@ -38,124 +101,74 @@ struct SideMenuView: View {
                                 .textFieldStyle(.plain)
                                 .submitLabel(.search)
                                 .onSubmit {
-                                    performSearch()
+                                    Task {
+                                        await performSearch()
+                                    }
                                 }
                             
                             if !searchText.isEmpty {
                                 Button(action: {
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        searchText = ""
-                                        searchResults = []
-                                        showSearchResults = false
-                                    }
+                                    searchText = ""
+                                    searchResults = []
+                                    showSearchResults = false
                                 }) {
                                     Image(systemName: "xmark.circle.fill")
                                         .foregroundColor(.gray)
-                                        .transition(.scale.combined(with: .opacity))
                                 }
-                            }
-                            
-                            if isSearching {
-                                ProgressView()
-                                    .scaleEffect(0.8)
-                                    .transition(.scale.combined(with: .opacity))
                             }
                         }
                         .padding(10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color(UIColor.systemGray6))
-                        )
+                        .background(Color(UIColor.systemGray6))
+                        .cornerRadius(8)
                         .padding()
                         
-                        // 内容区域
-                        ZStack {
-                            // 热门城市和最近搜索
-                            VStack(alignment: .leading, spacing: 8) {
-                                if !searchText.isEmpty && isSearching {
-                                    // 搜索加载动画
-                                    VStack(spacing: 16) {
-                                        ProgressView()
-                                            .scaleEffect(1.2)
-                                        Text("正在搜索...")
-                                            .foregroundColor(.gray)
-                                    }
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .transition(.opacity)
-                                } else if !searchText.isEmpty && showSearchResults {
-                                    // 搜索结果
-                                    ScrollView {
-                                        VStack(spacing: 0) {
-                                            if searchResults.isEmpty {
-                                                VStack(spacing: 12) {
-                                                    Image(systemName: "magnifyingglass")
-                                                        .font(.title)
-                                                        .foregroundColor(.gray)
-                                                    Text("未找到匹配的城市")
-                                                        .foregroundColor(.gray)
-                                                }
-                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                                .padding(.top, 40)
-                                            } else {
-                                                ForEach(searchResults) { location in
-                                                    LocationRow(location: location) {
-                                                        handleLocationSelection(location)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .transition(.opacity)
-                                } else {
-                                    // 默认显示内容
-                                    ScrollView {
-                                        VStack(alignment: .leading, spacing: 16) {
-                                            // 热门城市
-                                            VStack(alignment: .leading, spacing: 8) {
-                                                Text("热门城市")
-                                                    .font(.headline)
-                                                    .padding(.horizontal)
-                                                
-                                                ForEach(citySearchService.getHotCities()) { location in
-                                                    LocationRow(location: location) {
-                                                        handleLocationSelection(location)
-                                                    }
-                                                }
-                                            }
+                        ScrollView {
+                            VStack(spacing: 20) {
+                                if searchText.isEmpty {
+                                    // 收藏的城市
+                                    if !citySearchService.recentSearches.isEmpty {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            Text("收藏城市")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(.gray)
+                                                .padding(.horizontal)
                                             
-                                            // 最近搜索
-                                            if !citySearchService.recentSearches.isEmpty {
-                                                VStack(alignment: .leading, spacing: 8) {
-                                                    HStack {
-                                                        Text("最近搜索")
-                                                            .font(.headline)
-                                                        Spacer()
-                                                        Button(action: {
-                                                            withAnimation {
-                                                                citySearchService.clearRecentSearches()
-                                                            }
-                                                        }) {
-                                                            Text("清除")
-                                                                .font(.subheadline)
-                                                                .foregroundColor(.gray)
-                                                        }
-                                                    }
-                                                    .padding(.horizontal)
-                                                    
-                                                    ForEach(citySearchService.recentSearches) { location in
-                                                        LocationRow(location: location) {
-                                                            handleLocationSelection(location)
-                                                        }
+                                            VStack(spacing: 8) {
+                                                ForEach(Array(Set(citySearchService.recentSearches))) { location in
+                                                    SavedCityCard(location: location) {
+                                                        handleLocationSelection(location)
                                                     }
                                                 }
                                             }
+                                            .padding(.horizontal)
                                         }
-                                        .padding(.top)
                                     }
-                                    .transition(.opacity)
+                                } else {
+                                    // 搜索结果
+                                    if isSearching {
+                                        HStack {
+                                            Spacer()
+                                            ProgressView()
+                                                .padding()
+                                            Spacer()
+                                        }
+                                    } else if searchResults.isEmpty {
+                                        Text("未找到匹配的城市")
+                                            .foregroundColor(.gray)
+                                            .padding()
+                                    } else {
+                                        VStack(spacing: 8) {
+                                            ForEach(searchResults) { location in
+                                                SavedCityCard(location: location) {
+                                                    handleLocationSelection(location)
+                                                }
+                                            }
+                                        }
+                                        .padding(.horizontal)
+                                    }
                                 }
                             }
-                            .opacity(searchOpacity)
+                            .padding(.vertical)
                         }
                     }
                     .frame(width: min(geometry.size.width * 0.75, 300))
@@ -166,22 +179,11 @@ struct SideMenuView: View {
         }
     }
     
-    private func performSearch() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            isSearching = true
-            searchOpacity = 0.5
-        }
-        
-        Task {
-            let results = await citySearchService.searchCities(query: searchText)
-            
-            withAnimation(.easeInOut(duration: 0.3)) {
-                searchResults = results
-                isSearching = false
-                showSearchResults = true
-                searchOpacity = 1.0
-            }
-        }
+    private func performSearch() async {
+        isSearching = true
+        searchResults = await citySearchService.searchCities(query: searchText)
+        isSearching = false
+        showSearchResults = true
     }
     
     private func handleLocationSelection(_ location: PresetLocation) {
@@ -216,4 +218,4 @@ struct LocationRow: View {
             )
         }
     }
-} 
+}

@@ -39,20 +39,14 @@ struct PresetLocation: Identifiable, Codable, Hashable {
         location = CLLocation(latitude: latitude, longitude: longitude)
     }
     
-    // 实现 Hashable
+    // 实现 Hashable，只基于城市名称
     func hash(into hasher: inout Hasher) {
-        hasher.combine(_id)
         hasher.combine(name)
-        hasher.combine(location.coordinate.latitude)
-        hasher.combine(location.coordinate.longitude)
     }
     
-    // 实现 Equatable
+    // 实现 Equatable，只基于城市名称
     static func == (lhs: PresetLocation, rhs: PresetLocation) -> Bool {
-        return lhs._id == rhs._id &&
-               lhs.name == rhs.name &&
-               lhs.location.coordinate.latitude == rhs.location.coordinate.latitude &&
-               lhs.location.coordinate.longitude == rhs.location.coordinate.longitude
+        return lhs.name == rhs.name
     }
     
     static let presets: [PresetLocation] = [
