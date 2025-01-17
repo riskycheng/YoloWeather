@@ -174,14 +174,6 @@ struct SideMenuView: View {
                                                             citySearchService.removeFromRecentSearches(location)
                                                         }
                                                     )
-                                                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                                        Button(role: .destructive) {
-                                                            citySearchService.removeFromRecentSearches(location)
-                                                        } label: {
-                                                            Label("删除", systemImage: "trash")
-                                                        }
-                                                        .tint(.red)
-                                                    }
                                                 }
                                             }
                                             .padding(.horizontal)

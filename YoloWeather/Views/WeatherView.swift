@@ -469,17 +469,24 @@ struct WeatherView: View {
                     let banner = UIBanner(title: "添加成功", subtitle: "\(selectedLocation.name)已添加到收藏", type: .success)
                     UIBannerPresenter.shared.show(banner)
                 }
-            }
-            withAnimation(.easeInOut) {
-                showingSideMenu = true
+            } else {
+                // 如果当前城市已在收藏列表中，则触发定位功能
+                handleLocationButtonTap()
             }
         }) {
-            Image(systemName: citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) ? "list.bullet" : "plus")
+            Image(systemName: citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) ? "location.circle.fill" : "plus.circle.fill")
                 .font(.system(size: 22))
                 .foregroundColor(.white)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
+                .overlay {
+                    if locationService.isLocating {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                }
         }
+        .disabled(locationService.isLocating) // 定位过程中禁用按钮
     }
     
     var body: some View {
@@ -505,7 +512,7 @@ struct WeatherView: View {
                             VStack(spacing: 0) {
                                 // 顶部工具栏
                                 HStack {
-                                    cityPickerButton
+                                    addButton
                                     
                                     Spacer()
                                     
