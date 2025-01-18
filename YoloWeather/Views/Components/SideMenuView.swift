@@ -49,60 +49,98 @@ struct SavedCityCard: View {
     @StateObject private var weatherService = WeatherService.shared
     @State private var timeOfDay: WeatherTimeOfDay = .day
     @State private var weather: WeatherService.CurrentWeather?
+    @GestureState private var isDetectingLongPress = false
+    @Binding var isEditMode: Bool
     
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                // 第一行：城市名和当前温度
-                HStack {
-                    Text(location.name)
-                        .font(.system(size: 20, weight: .medium))
-                        .foregroundColor(.white)
-                    
-                    Spacer()
-                    
-                    Text("\(Int(round(weather?.temperature ?? 0)))°")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.white)
-                }
-                
-                // 第二行：天气状况和温度范围
-                HStack {
-                    Text(weather?.weatherCondition.description ?? "获取中...")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                    
-                    Spacer()
-                    
-                    Text("最高\(Int(round((weather?.temperature ?? 0) + 3)))° 最低\(Int(round((weather?.temperature ?? 0) - 3)))°")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                }
+        Button(action: {
+            if !isEditMode {
+                action()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.15))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+        }) {
+            cardContent
         }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            Button(role: .destructive) {
-                onDelete()
-            } label: {
-                Label("删除", systemImage: "trash")
-            }
-            .tint(.red)
-        }
+        .simultaneousGesture(longPressGesture)
+        .scaleEffect(isDetectingLongPress ? 0.95 : 1.0)
+        .animation(.easeInOut(duration: 0.2), value: isDetectingLongPress)
+        .overlay(deleteButton, alignment: .topLeading)
+        .modifier(ShakeEffect(isEditMode: isEditMode))
         .onAppear {
-            // 从缓存获取天气数据，不主动更新
             weather = weatherService.currentWeather
         }
+    }
+    
+    private var cardContent: some View {
+        VStack(spacing: 4) {
+            cityHeader
+            weatherInfo
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity)
+        .background(cardBackground)
+    }
+    
+    private var cityHeader: some View {
+        HStack {
+            Text(location.name)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundColor(.white)
+            
+            Spacer()
+            
+            Text("\(Int(round(weather?.temperature ?? 0)))°")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundColor(.white)
+        }
+    }
+    
+    private var weatherInfo: some View {
+        HStack {
+            Text(weather?.weatherCondition.description ?? "获取中...")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.8))
+            
+            Spacer()
+            
+            Text("最高\(Int(round((weather?.temperature ?? 0) + 3)))° 最低\(Int(round((weather?.temperature ?? 0) - 3)))°")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.8))
+        }
+    }
+    
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 12)
+            .fill(Color.white.opacity(0.15))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
+            )
+    }
+    
+    private var deleteButton: some View {
+        Group {
+            if isEditMode {
+                Image(systemName: "minus.circle.fill")
+                    .foregroundColor(.red)
+                    .background(Circle().fill(.white))
+                    .offset(x: -8, y: -8)
+            }
+        }
+    }
+    
+    private var longPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.5)
+            .updating($isDetectingLongPress) { currentState, gestureState, _ in
+                print("Long press updating for: \(location.name)")
+                gestureState = currentState
+            }
+            .onEnded { _ in
+                print("Long press ended for: \(location.name)")
+                withAnimation {
+                    isEditMode = true
+                }
+            }
     }
 }
 
@@ -117,6 +155,7 @@ struct SideMenuView: View {
     @State private var searchResults: [PresetLocation] = []
     @State private var isSearching = false
     @State private var showSearchResults = false
+    @State private var isEditMode = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -129,45 +168,60 @@ struct SideMenuView: View {
                         .onTapGesture {
                             withAnimation(.easeInOut) {
                                 isShowing = false
+                                isEditMode = false
                             }
                         }
                     
                     // 侧边栏内容
                     VStack(spacing: 0) {
-                        // 搜索框
+                        // 顶部栏
                         HStack {
-                            Image(systemName: "magnifyingglass")
-                                .foregroundColor(Color.white.opacity(0.4))
-                            
-                            TextField("搜索城市", text: $searchText)
-                                .textFieldStyle(.plain)
-                                .submitLabel(.search)
-                                .foregroundColor(.white)
-                                .accentColor(.white)
-                                .placeholder(when: searchText.isEmpty) {
-                                    Text("搜索城市")
-                                        .foregroundColor(Color.white.opacity(0.4))
-                                }
-                                .onSubmit {
-                                    Task {
-                                        await performSearch()
+                            if isEditMode {
+                                Button("完成") {
+                                    withAnimation {
+                                        isEditMode = false
                                     }
                                 }
-                            
-                            if !searchText.isEmpty {
-                                Button(action: {
-                                    searchText = ""
-                                    searchResults = []
-                                    showSearchResults = false
-                                }) {
-                                    Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.white)
+                                
+                                Spacer()
+                            } else {
+                                // 搜索框
+                                HStack {
+                                    Image(systemName: "magnifyingglass")
                                         .foregroundColor(Color.white.opacity(0.4))
+                                    
+                                    TextField("搜索城市", text: $searchText)
+                                        .textFieldStyle(.plain)
+                                        .submitLabel(.search)
+                                        .foregroundColor(.white)
+                                        .accentColor(.white)
+                                        .placeholder(when: searchText.isEmpty) {
+                                            Text("搜索城市")
+                                                .foregroundColor(Color.white.opacity(0.4))
+                                        }
+                                        .onSubmit {
+                                            Task {
+                                                await performSearch()
+                                            }
+                                        }
+                                    
+                                    if !searchText.isEmpty {
+                                        Button(action: {
+                                            searchText = ""
+                                            searchResults = []
+                                            showSearchResults = false
+                                        }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .foregroundColor(Color.white.opacity(0.4))
+                                        }
+                                    }
                                 }
+                                .padding(10)
+                                .background(Color.white.opacity(0.08))
+                                .cornerRadius(8)
                             }
                         }
-                        .padding(10)
-                        .background(Color.white.opacity(0.08))
-                        .cornerRadius(8)
                         .padding()
                         
                         ScrollView {
@@ -176,56 +230,28 @@ struct SideMenuView: View {
                                     // 收藏的城市
                                     if !citySearchService.recentSearches.isEmpty {
                                         VStack(alignment: .leading, spacing: 12) {
-                                            Text("收藏城市")
-                                                .font(.system(size: 14))
-                                                .foregroundColor(Color.white.opacity(0.6))
-                                                .padding(.horizontal)
-                                            
-                                            VStack(spacing: 8) {
-                                                ForEach(citySearchService.recentSearches) { location in
-                                                    SavedCityCard(
-                                                        location: location,
-                                                        action: {
-                                                            handleLocationSelection(location)
-                                                        },
-                                                        onDelete: {
-                                                            citySearchService.removeFromRecentSearches(location)
-                                                        }
-                                                    )
-                                                }
+                                            HStack {
+                                                Text("收藏城市")
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(Color.white.opacity(0.6))
+                                                Spacer()
                                             }
                                             .padding(.horizontal)
+                                            .onLongPressGesture {
+                                                withAnimation {
+                                                    isEditMode = true
+                                                }
+                                            }
+                                            
+                                            if isEditMode {
+                                                editableLocationsList
+                                            } else {
+                                                normalLocationsList
+                                            }
                                         }
                                     }
                                 } else {
-                                    // 搜索结果
-                                    if isSearching {
-                                        HStack {
-                                            Spacer()
-                                            ProgressView()
-                                                .padding()
-                                            Spacer()
-                                        }
-                                    } else if searchResults.isEmpty {
-                                        Text("未找到匹配的城市")
-                                            .foregroundColor(.gray)
-                                            .padding()
-                                    } else {
-                                        VStack(spacing: 8) {
-                                            ForEach(searchResults) { location in
-                                                SavedCityCard(
-                                                    location: location,
-                                                    action: {
-                                                        handleLocationSelection(location)
-                                                    },
-                                                    onDelete: {
-                                                        citySearchService.removeFromRecentSearches(location)
-                                                    }
-                                                )
-                                            }
-                                        }
-                                        .padding(.horizontal)
-                                    }
+                                    searchResultsList
                                 }
                             }
                             .padding(.vertical)
@@ -243,7 +269,80 @@ struct SideMenuView: View {
                     searchResults = []
                     showSearchResults = false
                     isSearching = false
+                    isEditMode = false
                 }
+            }
+        }
+    }
+    
+    private var normalLocationsList: some View {
+        VStack(spacing: 8) {
+            ForEach(citySearchService.recentSearches) { location in
+                SavedCityCard(
+                    location: location,
+                    action: {
+                        if !isEditMode {
+                            handleLocationSelection(location)
+                        }
+                    },
+                    onDelete: {
+                        citySearchService.removeFromRecentSearches(location)
+                    },
+                    isEditMode: $isEditMode
+                )
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var editableLocationsList: some View {
+        VStack(spacing: 8) {
+            ForEach(citySearchService.recentSearches) { location in
+                SavedCityCard(
+                    location: location,
+                    action: {},
+                    onDelete: {
+                        citySearchService.removeFromRecentSearches(location)
+                    },
+                    isEditMode: $isEditMode
+                )
+            }
+            .onMove { from, to in
+                citySearchService.recentSearches.move(fromOffsets: from, toOffset: to)
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var searchResultsList: some View {
+        Group {
+            if isSearching {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .padding()
+                    Spacer()
+                }
+            } else if searchResults.isEmpty {
+                Text("未找到匹配的城市")
+                    .foregroundColor(.gray)
+                    .padding()
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(searchResults) { location in
+                        SavedCityCard(
+                            location: location,
+                            action: {
+                                handleLocationSelection(location)
+                            },
+                            onDelete: {
+                                citySearchService.removeFromRecentSearches(location)
+                            },
+                            isEditMode: $isEditMode
+                        )
+                    }
+                }
+                .padding(.horizontal)
             }
         }
     }
@@ -259,8 +358,39 @@ struct SideMenuView: View {
         withAnimation(.easeInOut) {
             isShowing = false
         }
-        // 不再自动添加到收藏列表
         onLocationSelected(location)
+    }
+}
+
+// 抖动效果修饰符
+struct ShakeEffect: ViewModifier {
+    let isEditMode: Bool
+    
+    @State private var angle: Double = 0
+    
+    func body(content: Content) -> some View {
+        content
+            .rotationEffect(.degrees(angle))
+            .animation(
+                isEditMode ? 
+                    Animation.easeInOut(duration: 0.15)
+                    .repeatForever(autoreverses: true)
+                    .delay(Double.random(in: 0...0.1)) : 
+                    .default,
+                value: isEditMode
+            )
+            .onAppear {
+                if isEditMode {
+                    angle = [-1, 1][Int.random(in: 0...1)]
+                }
+            }
+            .onChange(of: isEditMode) { newValue in
+                if newValue {
+                    angle = [-1, 1][Int.random(in: 0...1)]
+                } else {
+                    angle = 0
+                }
+            }
     }
 }
 
