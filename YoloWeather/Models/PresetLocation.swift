@@ -6,18 +6,21 @@ struct PresetLocation: Identifiable, Codable, Hashable {
     var id: UUID { _id }
     let name: String
     let location: CLLocation
+    var currentTemperature: Double?
     
     enum CodingKeys: String, CodingKey {
         case id = "_id"
         case name
         case latitude
         case longitude
+        case currentTemperature
     }
     
-    init(name: String, location: CLLocation) {
+    init(name: String, location: CLLocation, currentTemperature: Double? = nil) {
         self._id = UUID()
         self.name = name
         self.location = location
+        self.currentTemperature = currentTemperature
     }
     
     // 实现 Encodable
@@ -27,6 +30,7 @@ struct PresetLocation: Identifiable, Codable, Hashable {
         try container.encode(name, forKey: .name)
         try container.encode(location.coordinate.latitude, forKey: .latitude)
         try container.encode(location.coordinate.longitude, forKey: .longitude)
+        try container.encode(currentTemperature, forKey: .currentTemperature)
     }
     
     // 实现 Decodable
@@ -37,6 +41,7 @@ struct PresetLocation: Identifiable, Codable, Hashable {
         let latitude = try container.decode(Double.self, forKey: .latitude)
         let longitude = try container.decode(Double.self, forKey: .longitude)
         location = CLLocation(latitude: latitude, longitude: longitude)
+        currentTemperature = try container.decode(Double?.self, forKey: .currentTemperature)
     }
     
     // 实现 Hashable，只基于城市名称

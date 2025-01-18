@@ -6,7 +6,7 @@ import MapKit
 class CitySearchService: ObservableObject {
     static let shared = CitySearchService()
     
-    @Published private(set) var recentSearches: [PresetLocation] = []
+    @Published var recentSearches: [PresetLocation] = []
     private let maxRecentSearches = 5
     
     private var cityPinyinMap: [String: [String]] = [:]

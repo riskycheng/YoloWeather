@@ -1,13 +1,7 @@
 import SwiftUI
+import Foundation
 
-enum WeatherTimeOfDay {
-    case day
-    case night
-    
-    var isDaytime: Bool {
-        self == .day
-    }
-    
+extension WeatherTimeOfDay {
     var gradient: Gradient {
         switch self {
         case .day:
@@ -18,7 +12,7 @@ enum WeatherTimeOfDay {
         case .night:
             return Gradient(colors: [
                 Color(red: 0.1, green: 0.1, blue: 0.3),  // 深蓝色
-                Color(red: 0.05, green: 0.05, blue: 0.2) // 更深的蓝色
+                Color(red: 0.05, green: 0.05, blue: 0.2) // 暗蓝色
             ])
         }
     }
