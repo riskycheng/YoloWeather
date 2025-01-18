@@ -79,6 +79,7 @@ struct SavedCityCard: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
         .background(cardBackground)
+        .contentShape(Rectangle())
     }
     
     private var cityHeader: some View {
@@ -121,10 +122,14 @@ struct SavedCityCard: View {
     private var deleteButton: some View {
         Group {
             if isEditMode {
-                Image(systemName: "minus.circle.fill")
-                    .foregroundColor(.red)
-                    .background(Circle().fill(.white))
-                    .offset(x: -8, y: -8)
+                Button(action: {
+                    onDelete()
+                }) {
+                    Image(systemName: "minus.circle.fill")
+                        .foregroundColor(.red)
+                        .background(Circle().fill(.white))
+                }
+                .offset(x: -8, y: -8)
             }
         }
     }
