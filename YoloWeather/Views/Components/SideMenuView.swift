@@ -311,9 +311,30 @@ struct SideMenuView: View {
                     },
                     isEditMode: $isEditMode
                 )
-            }
-            .onMove { from, to in
-                citySearchService.recentSearches.move(fromOffsets: from, toOffset: to)
+                .onDrag {
+                    // 创建拖拽数据，使用 UUID 的字符串表示
+                    NSItemProvider(object: location.id.uuidString as NSString)
+                } preview: {
+                    SavedCityCard(
+                        location: location,
+                        action: {},
+                        onDelete: {},
+                        isEditMode: .constant(true)
+                    )
+                    .frame(width: 250)
+                }
+                .onDrop(
+                    of: [.text],
+                    delegate: CityDropDelegate(
+                        item: location,
+                        items: citySearchService.recentSearches,
+                        onMove: { from, to in
+                            withAnimation {
+                                citySearchService.recentSearches.move(fromOffsets: IndexSet(integer: from), toOffset: to)
+                            }
+                        }
+                    )
+                )
             }
         }
         .padding(.horizontal)
@@ -421,5 +442,32 @@ struct LocationRow: View {
                     .contentShape(Rectangle())
             )
         }
+    }
+}
+
+// 添加拖拽代理
+private struct CityDropDelegate: DropDelegate {
+    let item: PresetLocation
+    let items: [PresetLocation]
+    let onMove: (Int, Int) -> Void
+    
+    func performDrop(info: DropInfo) -> Bool {
+        return true
+    }
+    
+    func dropEntered(info: DropInfo) {
+        guard let fromIndex = items.firstIndex(where: { $0.id == item.id }) else { return }
+        
+        let location = info.location
+        let geometry = info.location
+        let toIndex = Int(geometry.y / 80) // 假设每个卡片高度约为 80
+        
+        if fromIndex != toIndex {
+            onMove(fromIndex, toIndex)
+        }
+    }
+    
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        return DropProposal(operation: .move)
     }
 }
