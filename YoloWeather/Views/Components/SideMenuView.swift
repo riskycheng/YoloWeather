@@ -1,5 +1,18 @@
 import SwiftUI
 
+extension View {
+    func placeholder<Content: View>(
+        when shouldShow: Bool,
+        alignment: Alignment = .leading,
+        @ViewBuilder placeholder: () -> Content) -> some View {
+
+        ZStack(alignment: alignment) {
+            placeholder().opacity(shouldShow ? 1 : 0)
+            self
+        }
+    }
+}
+
 // 天气信息视图组件
 private struct WeatherInfoView: View {
     let weather: WeatherService.CurrentWeather
@@ -70,11 +83,11 @@ struct SavedCityCard: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(WeatherThemeManager.shared.cardBackgroundColor(for: timeOfDay))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.15))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 0.5)
                     )
             )
         }
@@ -125,11 +138,17 @@ struct SideMenuView: View {
                         // 搜索框
                         HStack {
                             Image(systemName: "magnifyingglass")
-                                .foregroundColor(.gray)
+                                .foregroundColor(Color.white.opacity(0.4))
                             
                             TextField("搜索城市", text: $searchText)
                                 .textFieldStyle(.plain)
                                 .submitLabel(.search)
+                                .foregroundColor(.white)
+                                .accentColor(.white)
+                                .placeholder(when: searchText.isEmpty) {
+                                    Text("搜索城市")
+                                        .foregroundColor(Color.white.opacity(0.4))
+                                }
                                 .onSubmit {
                                     Task {
                                         await performSearch()
@@ -143,12 +162,12 @@ struct SideMenuView: View {
                                     showSearchResults = false
                                 }) {
                                     Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(Color.white.opacity(0.4))
                                 }
                             }
                         }
                         .padding(10)
-                        .background(Color(UIColor.systemGray6))
+                        .background(Color.white.opacity(0.08))
                         .cornerRadius(8)
                         .padding()
                         
@@ -160,7 +179,7 @@ struct SideMenuView: View {
                                         VStack(alignment: .leading, spacing: 12) {
                                             Text("收藏城市")
                                                 .font(.system(size: 14))
-                                                .foregroundColor(.gray)
+                                                .foregroundColor(Color.white.opacity(0.6))
                                                 .padding(.horizontal)
                                             
                                             VStack(spacing: 8) {
@@ -214,7 +233,7 @@ struct SideMenuView: View {
                         }
                     }
                     .frame(width: min(geometry.size.width * 0.75, 300))
-                    .background(Color(UIColor.systemBackground))
+                    .background(Color(red: 0.25, green: 0.35, blue: 0.45))
                     .transition(.move(edge: .trailing))
                 }
             }

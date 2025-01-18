@@ -220,6 +220,7 @@ struct WeatherView: View {
     @AppStorage("lastSelectedLocation") private var lastSelectedLocationName: String?
     @AppStorage("showDailyForecast") private var showDailyForecast = false
     @State private var dragOffset: CGFloat = 0
+    @State private var showSuccessToast = false
     
     private func ensureMinimumLoadingTime(startTime: Date) async {
         let timeElapsed = Date().timeIntervalSince(startTime)
@@ -543,6 +544,43 @@ struct WeatherView: View {
         .disabled(locationService.isLocating) // 定位过程中禁用按钮
     }
     
+    var topLeftButton: some View {
+        Button(action: {
+            Task {
+                if citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) {
+                    // 如果城市已在收藏列表中,则作为定位按钮使用
+                    await handleLocationButtonTap()
+                } else {
+                    // 如果城市不在收藏列表中,添加到收藏
+                    let currentLocation = PresetLocation(
+                        name: locationService.locationName,
+                        location: locationService.currentLocation ?? CLLocation(latitude: 0, longitude: 0)
+                    )
+                    citySearchService.addToRecentSearches(currentLocation)
+                    
+                    // 显示成功提示
+                    let generator = UINotificationFeedbackGenerator()
+                    generator.notificationOccurred(.success)
+                    withAnimation {
+                        let banner = UIBanner(
+                            title: "添加成功",
+                            subtitle: "\(locationService.locationName)已添加到收藏",
+                            type: .success
+                        )
+                        UIBannerPresenter.shared.show(banner)
+                    }
+                }
+            }
+        }) {
+            Image(systemName: citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) 
+                ? "location.circle.fill" 
+                : "plus.circle.fill")
+                .font(.system(size: 24))
+                .foregroundColor(.white)
+        }
+        .disabled(locationService.isLocating)
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             BannerContainerView {
@@ -566,7 +604,7 @@ struct WeatherView: View {
                             VStack(spacing: 0) {
                                 // 顶部工具栏
                                 HStack {
-                                    addButton
+                                    topLeftButton
                                     
                                     Spacer()
                                     
@@ -668,6 +706,28 @@ struct WeatherView: View {
                         }
                     }
                     .animation(.easeInOut, value: showingSideMenu)
+                    
+                    // 成功提示
+                    if showSuccessToast {
+                        VStack {
+                            HStack(spacing: 12) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundColor(.green)
+                                    .font(.system(size: 20))
+                                Text("\(selectedLocation.name)已添加到收藏")
+                                    .foregroundColor(.white)
+                                    .font(.system(size: 16))
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 12)
+                            .background(Color.black.opacity(0.7))
+                            .cornerRadius(25)
+                        }
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                        .zIndex(1)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 100)
+                    }
                 }
             }
         }
