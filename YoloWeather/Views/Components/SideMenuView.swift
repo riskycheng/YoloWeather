@@ -149,6 +149,14 @@ struct SavedCityCard: View {
     }
 }
 
+// 添加拖拽状态
+private struct DragState {
+    var dragging: PresetLocation?
+    var translation: CGSize = .zero
+    var startLocation: CGPoint = .zero
+    var currentLocation: CGPoint = .zero
+}
+
 struct SideMenuView: View {
     @Binding var isShowing: Bool
     @Binding var selectedLocation: PresetLocation
@@ -161,6 +169,11 @@ struct SideMenuView: View {
     @State private var isSearching = false
     @State private var showSearchResults = false
     @State private var isEditMode = false
+    @State private var dragState = DragState()
+    @State private var draggingItem: PresetLocation?
+    @State private var itemHeights: [PresetLocation: CGFloat] = [:]
+    @State private var positions: [PresetLocation: CGPoint] = [:]
+    @GestureState private var isDragging = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -301,43 +314,92 @@ struct SideMenuView: View {
     }
     
     private var editableLocationsList: some View {
-        VStack(spacing: 8) {
-            ForEach(citySearchService.recentSearches) { location in
-                SavedCityCard(
-                    location: location,
-                    action: {},
-                    onDelete: {
-                        citySearchService.removeFromRecentSearches(location)
-                    },
-                    isEditMode: $isEditMode
-                )
-                .onDrag {
-                    // 创建拖拽数据，使用 UUID 的字符串表示
-                    NSItemProvider(object: location.id.uuidString as NSString)
-                } preview: {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 8) {
+                // 添加顶部空间
+                Color.clear.frame(height: 12)
+                
+                ForEach(citySearchService.recentSearches) { location in
                     SavedCityCard(
                         location: location,
                         action: {},
-                        onDelete: {},
-                        isEditMode: .constant(true)
+                        onDelete: {
+                            citySearchService.removeFromRecentSearches(location)
+                        },
+                        isEditMode: $isEditMode
                     )
-                    .frame(width: 250)
-                }
-                .onDrop(
-                    of: [.text],
-                    delegate: CityDropDelegate(
-                        item: location,
-                        items: citySearchService.recentSearches,
-                        onMove: { from, to in
-                            withAnimation {
-                                citySearchService.recentSearches.move(fromOffsets: IndexSet(integer: from), toOffset: to)
+                    .offset(y: offsetFor(location))
+                    .zIndex(draggingItem == location ? 1 : 0)
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                            .onChanged { gesture in
+                                guard isEditMode else { return }
+                                
+                                if draggingItem == nil {
+                                    draggingItem = location
+                                    dragState.startLocation = gesture.location
+                                }
+                                
+                                if draggingItem == location {
+                                    dragState.currentLocation = gesture.location
+                                    dragState.translation = CGSize(
+                                        width: 0,
+                                        height: gesture.location.y - dragState.startLocation.y
+                                    )
+                                    
+                                    // 计算当前位置和目标位置
+                                    if let currentIndex = citySearchService.recentSearches.firstIndex(of: location) {
+                                        let cardHeight: CGFloat = 98
+                                        let dragPosition = gesture.location.y
+                                        let startY = (cardHeight + 8) * CGFloat(currentIndex) + 12 // 考虑顶部边距
+                                        let delta = dragPosition - startY
+                                        let proposedIndex = Int(round(delta / (cardHeight + 8)))
+                                        let targetIndex = max(0, min(citySearchService.recentSearches.count - 1, proposedIndex))
+                                        
+                                        if targetIndex != currentIndex {
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                citySearchService.recentSearches.move(
+                                                    fromOffsets: IndexSet(integer: currentIndex),
+                                                    toOffset: targetIndex > currentIndex ? targetIndex + 1 : targetIndex
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        }
+                            .onEnded { _ in
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    dragState = DragState()
+                                    draggingItem = nil
+                                }
+                            }
                     )
-                )
+                    .animation(.interactiveSpring(), value: dragState.translation)
+                }
+                
+                // 添加底部空间
+                Color.clear.frame(height: 12)
             }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
+        .scrollDisabled(isEditMode) // 编辑模式下完全禁用滚动
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    // 吸收所有滚动手势
+                    if isEditMode {
+                        return
+                    }
+                }
+        )
+    }
+    
+    private func offsetFor(_ location: PresetLocation) -> CGFloat {
+        if draggingItem == location {
+            // 被拖拽的卡片跟随手指移动
+            return dragState.translation.height
+        }
+        return 0
     }
     
     private var searchResultsList: some View {
@@ -392,31 +454,16 @@ struct SideMenuView: View {
 struct ShakeEffect: ViewModifier {
     let isEditMode: Bool
     
-    @State private var angle: Double = 0
-    
     func body(content: Content) -> some View {
         content
-            .rotationEffect(.degrees(angle))
+            .scaleEffect(isEditMode ? 0.98 : 1.0)
             .animation(
                 isEditMode ? 
-                    Animation.easeInOut(duration: 0.15)
-                    .repeatForever(autoreverses: true)
-                    .delay(Double.random(in: 0...0.1)) : 
+                    Animation.easeInOut(duration: 0.5)
+                    .repeatForever(autoreverses: true) : 
                     .default,
                 value: isEditMode
             )
-            .onAppear {
-                if isEditMode {
-                    angle = [-1, 1][Int.random(in: 0...1)]
-                }
-            }
-            .onChange(of: isEditMode) { newValue in
-                if newValue {
-                    angle = [-1, 1][Int.random(in: 0...1)]
-                } else {
-                    angle = 0
-                }
-            }
     }
 }
 
@@ -445,29 +492,34 @@ struct LocationRow: View {
     }
 }
 
-// 添加拖拽代理
-private struct CityDropDelegate: DropDelegate {
+// 添加拖拽重定位代理
+private struct DragRelocateDelegate: DropDelegate {
     let item: PresetLocation
-    let items: [PresetLocation]
-    let onMove: (Int, Int) -> Void
+    @Binding var listData: [PresetLocation]
+    let draggedItem: PresetLocation
+    
+    func dropEntered(info: DropInfo) {
+        guard let fromIndex = listData.firstIndex(of: draggedItem),
+              let toIndex = listData.firstIndex(of: item),
+              fromIndex != toIndex else { return }
+        
+        withAnimation(.default) {
+            let fromOffset = IndexSet(integer: fromIndex)
+            let toOffset = toIndex > fromIndex ? toIndex + 1 : toIndex
+            listData.move(fromOffsets: fromOffset, toOffset: toOffset)
+        }
+    }
     
     func performDrop(info: DropInfo) -> Bool {
         return true
     }
+}
+
+// 添加拖拽位置偏好键
+private struct DragOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGRect = .zero
     
-    func dropEntered(info: DropInfo) {
-        guard let fromIndex = items.firstIndex(where: { $0.id == item.id }) else { return }
-        
-        let location = info.location
-        let geometry = info.location
-        let toIndex = Int(geometry.y / 80) // 假设每个卡片高度约为 80
-        
-        if fromIndex != toIndex {
-            onMove(fromIndex, toIndex)
-        }
-    }
-    
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        return DropProposal(operation: .move)
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        value = nextValue()
     }
 }
