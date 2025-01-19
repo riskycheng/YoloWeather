@@ -40,7 +40,7 @@ class WeatherService: ObservableObject {
     }
     
     // 将 WeatherKit 的天气状况转换为中文描述
-    private func getWeatherConditionText(_ condition: WeatherCondition) -> String {
+    internal func getWeatherConditionText(_ condition: WeatherCondition) -> String {
         switch condition {
         case .clear:
             return "晴"
@@ -182,7 +182,9 @@ class WeatherService: ObservableObject {
             pressure: weather.currentWeather.pressure.value,
             visibility: weather.currentWeather.visibility.value,
             timezone: timezone,
-            weatherCondition: weather.currentWeather.condition
+            weatherCondition: weather.currentWeather.condition,
+            highTemperature: weather.currentWeather.temperature.value + 3,
+            lowTemperature: weather.currentWeather.temperature.value - 3
         )
     }
     
@@ -260,14 +262,9 @@ class WeatherService: ObservableObject {
     }
     
     // 判断是否为夜间
-    private func isNight(for date: Date) -> Bool {
-        guard let currentWeather = currentWeather else { return false }
-        
-        var calendar = Calendar.current
-        calendar.timeZone = currentWeather.timezone
-        
-        let hour = calendar.component(.hour, from: date)
-        return hour >= 18 || hour < 6
+    internal func isNight(for date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour < 6 || hour >= 18
     }
     
     // 小时预报结构体
@@ -301,6 +298,8 @@ class WeatherService: ObservableObject {
         let visibility: Double
         let timezone: TimeZone
         let weatherCondition: WeatherCondition
+        let highTemperature: Double
+        let lowTemperature: Double
         
         static func mock(date: Date = Date(), temp: Double, condition: String, symbol: String) -> CurrentWeather {
             CurrentWeather(
@@ -317,7 +316,9 @@ class WeatherService: ObservableObject {
                 pressure: 1013,
                 visibility: 10,
                 timezone: TimeZone.current,
-                weatherCondition: .clear
+                weatherCondition: .clear,
+                highTemperature: temp + 3,
+                lowTemperature: temp - 3
             )
         }
     }
@@ -360,7 +361,9 @@ class WeatherService: ObservableObject {
             pressure: 1013,
             visibility: 10,
             timezone: timezone,
-            weatherCondition: .clear
+            weatherCondition: .clear,
+            highTemperature: 28,
+            lowTemperature: 24
         )
         
         // 模拟24小时预报

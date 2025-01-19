@@ -1,31 +1,54 @@
 import SwiftUI
 import CoreLocation
+import WeatherKit
 
 // 天气信息视图组件
 private struct WeatherInfoView: View {
-    let weather: WeatherService.CurrentWeather
+    let location: PresetLocation
+    @State private var weather: WeatherService.CurrentWeather?
+    @State private var isLoading = true
+    @StateObject private var weatherService = WeatherService.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // 温度行
             HStack {
                 Spacer()
-                Text("\(Int(round(weather.temperature)))°")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.white)
+                if isLoading {
+                    Text("获取中...")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.white)
+                } else if let weather = weather {
+                    Text("\(Int(round(weather.temperature)))°")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.white)
+                }
             }
             
             // 天气详情行
             HStack {
-                Text(weather.weatherCondition.description)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.8))
-                Spacer()
-                Text("最高\(Int(round(weather.temperature + 3)))° 最低\(Int(round(weather.temperature - 3)))°")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.8))
+                if let weather = weather {
+                    Text(weather.condition)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                    Spacer()
+                    Text("最高\(Int(round(weather.temperature + 3)))° 最低\(Int(round(weather.temperature - 3)))°")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                }
             }
         }
+        .task {
+            await loadWeather()
+        }
+    }
+    
+    private func loadWeather() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        await weatherService.updateWeather(for: location.location)
+        self.weather = weatherService.currentWeather
     }
 }
 
@@ -34,11 +57,10 @@ struct SavedCityCard: View {
     let location: PresetLocation
     let action: () -> Void
     let onDelete: () -> Void
-    @StateObject private var weatherService = WeatherService.shared
-    @State private var timeOfDay: WeatherTimeOfDay = .day
     @State private var weather: WeatherService.CurrentWeather?
-    @GestureState private var isDetectingLongPress = false
+    @State private var isLoading = true
     @Binding var isEditMode: Bool
+    @GestureState private var isDetectingLongPress = false
     
     var body: some View {
         Button(action: {
@@ -53,8 +75,8 @@ struct SavedCityCard: View {
         .animation(.easeInOut(duration: 0.2), value: isDetectingLongPress)
         .overlay(deleteButton, alignment: .topLeading)
         .modifier(ShakeEffect(isEditMode: isEditMode))
-        .onAppear {
-            weather = weatherService.currentWeather
+        .task {
+            await loadWeather()
         }
     }
     
@@ -78,23 +100,72 @@ struct SavedCityCard: View {
             
             Spacer()
             
-            Text("\(Int(round(weather?.temperature ?? 0)))°")
-                .font(.system(size: 24, weight: .medium))
-                .foregroundColor(.white)
+            if isLoading {
+                Text("获取中...")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.white)
+            } else {
+                Text("\(Int(round(weather?.temperature ?? 0)))°")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.white)
+            }
         }
     }
     
     private var weatherInfo: some View {
         HStack {
-            Text(weather?.weatherCondition.description ?? "获取中...")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.8))
+            if isLoading {
+                Text("获取中...")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
+            } else {
+                Text(weather?.condition ?? "")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
+                
+                Spacer()
+                
+                if let weather = weather {
+                    Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            }
+        }
+    }
+    
+    private func loadWeather() async {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            let weatherService = WeatherKit.WeatherService.shared
+            let weather = try await weatherService.weather(for: location.location)
+            let dailyForecast = weather.dailyForecast.forecast.first
             
-            Spacer()
-            
-            Text("最高\(Int(round((weather?.temperature ?? 0) + 3)))° 最低\(Int(round((weather?.temperature ?? 0) - 3)))°")
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.8))
+            self.weather = WeatherService.CurrentWeather(
+                date: weather.currentWeather.date,
+                temperature: weather.currentWeather.temperature.value,
+                feelsLike: weather.currentWeather.apparentTemperature.value,
+                condition: WeatherService.shared.getWeatherConditionText(weather.currentWeather.condition),
+                symbolName: WeatherService.shared.getWeatherSymbolName(
+                    condition: weather.currentWeather.condition,
+                    isNight: WeatherService.shared.isNight(for: weather.currentWeather.date)
+                ),
+                windSpeed: weather.currentWeather.wind.speed.value,
+                precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
+                uvIndex: Int(weather.currentWeather.uvIndex.value),
+                humidity: weather.currentWeather.humidity,
+                airQualityIndex: 0,
+                pressure: weather.currentWeather.pressure.value,
+                visibility: weather.currentWeather.visibility.value,
+                timezone: TimeZone.current,
+                weatherCondition: weather.currentWeather.condition,
+                highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
+                lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
+            )
+        } catch {
+            print("Failed to load weather for \(location.name): \(error)")
         }
     }
     
