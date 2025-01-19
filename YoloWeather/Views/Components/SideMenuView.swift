@@ -171,9 +171,8 @@ struct SideMenuView: View {
     @State private var isEditMode = false
     @State private var dragState = DragState()
     @State private var draggingItem: PresetLocation?
-    @State private var itemHeights: [PresetLocation: CGFloat] = [:]
-    @State private var positions: [PresetLocation: CGPoint] = [:]
-    @GestureState private var isDragging = false
+    private let cardHeight: CGFloat = 98
+    private let cardSpacing: CGFloat = 8
     
     var body: some View {
         GeometryReader { geometry in
@@ -315,14 +314,18 @@ struct SideMenuView: View {
     
     private var editableLocationsList: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 8) {
-                // 添加顶部空间
+            VStack(spacing: cardSpacing) {
                 Color.clear.frame(height: 12)
                 
                 ForEach(citySearchService.recentSearches) { location in
                     SavedCityCard(
                         location: location,
-                        action: {},
+                        action: {
+                            // 编辑模式下禁用点击动作
+                            if !isEditMode {
+                                handleLocationSelection(location)
+                            }
+                        },
                         onDelete: {
                             citySearchService.removeFromRecentSearches(location)
                         },
@@ -330,39 +333,71 @@ struct SideMenuView: View {
                     )
                     .offset(y: offsetFor(location))
                     .zIndex(draggingItem == location ? 1 : 0)
+                    .scaleEffect(draggingItem == location ? 1.05 : 1.0)
+                    .shadow(color: .black.opacity(draggingItem == location ? 0.2 : 0), radius: 10, x: 0, y: 5)
+                    .animation(
+                        .interactiveSpring(response: 0.35, dampingFraction: 0.86),
+                        value: offsetFor(location)
+                    )
                     .gesture(
-                        DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                        LongPressGesture(minimumDuration: 0.5)
+                            .onChanged { _ in
+                                if draggingItem == nil {
+                                    withAnimation {
+                                        isEditMode = true
+                                    }
+                                }
+                            }
+                    )
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 1, coordinateSpace: .global)  // 增加最小拖动距离，避免误触
                             .onChanged { gesture in
-                                guard isEditMode else { return }
+                                guard isEditMode && (draggingItem == nil || draggingItem == location) else { return }
                                 
                                 if draggingItem == nil {
                                     draggingItem = location
                                     dragState.startLocation = gesture.location
+                                    dragState.currentLocation = gesture.location
+                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                    impactFeedback.impactOccurred()
                                 }
                                 
                                 if draggingItem == location {
-                                    dragState.currentLocation = gesture.location
+                                    // 更新拖拽位置
                                     dragState.translation = CGSize(
                                         width: 0,
                                         height: gesture.location.y - dragState.startLocation.y
                                     )
+                                    dragState.currentLocation = gesture.location
                                     
-                                    // 计算当前位置和目标位置
+                                    // 计算目标位置
                                     if let currentIndex = citySearchService.recentSearches.firstIndex(of: location) {
-                                        let cardHeight: CGFloat = 98
-                                        let dragPosition = gesture.location.y
-                                        let startY = (cardHeight + 8) * CGFloat(currentIndex) + 12 // 考虑顶部边距
-                                        let delta = dragPosition - startY
-                                        let proposedIndex = Int(round(delta / (cardHeight + 8)))
+                                        let itemHeight = cardHeight + cardSpacing
+                                        let headerHeight: CGFloat = 12
+                                        
+                                        // 计算当前拖拽位置相对于起始位置的偏移
+                                        let startY = headerHeight + (itemHeight * CGFloat(currentIndex))
+                                        let currentY = startY + dragState.translation.height
+                                        
+                                        // 计算目标索引
+                                        let proposedIndex = Int(round((currentY - headerHeight) / itemHeight))
                                         let targetIndex = max(0, min(citySearchService.recentSearches.count - 1, proposedIndex))
                                         
-                                        if targetIndex != currentIndex {
-                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                        // 只有当移动足够距离时才触发位置交换
+                                        if targetIndex != currentIndex && abs(currentY - startY) > itemHeight / 2 {
+                                            withAnimation(.interactiveSpring(response: 0.2, dampingFraction: 0.7)) {
+                                                let fromOffset = IndexSet(integer: currentIndex)
+                                                let toOffset = targetIndex > currentIndex ? targetIndex + 1 : targetIndex
                                                 citySearchService.recentSearches.move(
-                                                    fromOffsets: IndexSet(integer: currentIndex),
-                                                    toOffset: targetIndex > currentIndex ? targetIndex + 1 : targetIndex
+                                                    fromOffsets: fromOffset,
+                                                    toOffset: toOffset
                                                 )
                                             }
+                                            // 更新起始位置
+                                            dragState.startLocation = gesture.location
+                                            dragState.translation = .zero
+                                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+                                            impactFeedback.impactOccurred()
                                         }
                                     }
                                 }
@@ -372,33 +407,50 @@ struct SideMenuView: View {
                                     dragState = DragState()
                                     draggingItem = nil
                                 }
+                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                                impactFeedback.impactOccurred()
                             }
                     )
-                    .animation(.interactiveSpring(), value: dragState.translation)
                 }
                 
-                // 添加底部空间
                 Color.clear.frame(height: 12)
             }
             .padding(.horizontal)
         }
-        .scrollDisabled(isEditMode) // 编辑模式下完全禁用滚动
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    // 吸收所有滚动手势
-                    if isEditMode {
-                        return
-                    }
-                }
-        )
+        .scrollDisabled(isEditMode)
     }
     
     private func offsetFor(_ location: PresetLocation) -> CGFloat {
+        let itemHeight = cardHeight + cardSpacing
+        
+        // 如果是被拖拽的卡片，直接跟随手指移动
         if draggingItem == location {
-            // 被拖拽的卡片跟随手指移动
             return dragState.translation.height
         }
+        
+        guard let currentIndex = citySearchService.recentSearches.firstIndex(of: location),
+              let draggingIndex = draggingItem.flatMap({ citySearchService.recentSearches.firstIndex(of: $0) }) else {
+            return 0
+        }
+        
+        // 计算补齐位置
+        let targetPosition = itemHeight * CGFloat(currentIndex)
+        let draggingPosition = itemHeight * CGFloat(draggingIndex) + dragState.translation.height
+        
+        if currentIndex > draggingIndex {
+            // 如果当前卡片在拖拽卡片下方
+            if draggingPosition > targetPosition {
+                // 如果拖拽的卡片移动到了当前卡片之后，当前卡片向上移动
+                return -itemHeight
+            }
+        } else if currentIndex < draggingIndex {
+            // 如果当前卡片在拖拽卡片上方
+            if draggingPosition < targetPosition {
+                // 如果拖拽的卡片移动到了当前卡片之前，当前卡片向下移动
+                return itemHeight
+            }
+        }
+        
         return 0
     }
     
