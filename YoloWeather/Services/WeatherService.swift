@@ -21,12 +21,16 @@ class WeatherService: ObservableObject {
     }
     
     func updateWeather(for location: CLLocation) async {
+        print("WeatherService - 开始获取天气数据")
+        print("WeatherService - 请求位置: 纬度 \(location.coordinate.latitude), 经度 \(location.coordinate.longitude)")
+        
         self.location = location
         isLoading = true
         defer { isLoading = false }
         
         do {
             let weather = try await weatherService.weather(for: location)
+            print("WeatherService - 成功获取天气数据")
             
             await updateCurrentWeather(from: weather)
             await updateHourlyForecast(from: weather)
@@ -34,7 +38,10 @@ class WeatherService: ObservableObject {
             
             lastUpdateTime = Date()
             errorMessage = nil
+            
+            print("WeatherService - 天气数据更新完成")
         } catch {
+            print("WeatherService - 获取天气数据失败: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
     }

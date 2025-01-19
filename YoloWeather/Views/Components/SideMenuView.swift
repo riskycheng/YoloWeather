@@ -7,7 +7,6 @@ private struct WeatherInfoView: View {
     let location: PresetLocation
     @State private var weather: WeatherService.CurrentWeather?
     @State private var isLoading = true
-    @StateObject private var weatherService = WeatherService.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -32,7 +31,7 @@ private struct WeatherInfoView: View {
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.8))
                     Spacer()
-                    Text("最高\(Int(round(weather.temperature + 3)))° 最低\(Int(round(weather.temperature - 3)))°")
+                    Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.8))
                 }
@@ -47,8 +46,40 @@ private struct WeatherInfoView: View {
         isLoading = true
         defer { isLoading = false }
         
-        await weatherService.updateWeather(for: location.location)
-        self.weather = weatherService.currentWeather
+        do {
+            let weatherKitService = WeatherKit.WeatherService.shared
+            let weather = try await weatherKitService.weather(for: location.location)
+            let dailyForecast = weather.dailyForecast.forecast.first
+            
+            // 获取城市所在时区
+            let geocoder = CLGeocoder()
+            let placemarks = try await geocoder.reverseGeocodeLocation(location.location)
+            let timezone = placemarks.first?.timeZone ?? TimeZone.current
+            
+            self.weather = WeatherService.CurrentWeather(
+                date: weather.currentWeather.date,
+                temperature: weather.currentWeather.temperature.value,
+                feelsLike: weather.currentWeather.apparentTemperature.value,
+                condition: WeatherService.shared.getWeatherConditionText(weather.currentWeather.condition),
+                symbolName: WeatherService.shared.getWeatherSymbolName(
+                    condition: weather.currentWeather.condition,
+                    isNight: WeatherService.shared.isNight(for: weather.currentWeather.date)
+                ),
+                windSpeed: weather.currentWeather.wind.speed.value,
+                precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
+                uvIndex: Int(weather.currentWeather.uvIndex.value),
+                humidity: weather.currentWeather.humidity,
+                airQualityIndex: 0,
+                pressure: weather.currentWeather.pressure.value,
+                visibility: weather.currentWeather.visibility.value,
+                timezone: timezone,
+                weatherCondition: weather.currentWeather.condition,
+                highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
+                lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
+            )
+        } catch {
+            print("Failed to load weather for \(location.name): \(error)")
+        }
     }
 }
 
@@ -76,7 +107,21 @@ struct SavedCityCard: View {
         .overlay(deleteButton, alignment: .topLeading)
         .modifier(ShakeEffect(isEditMode: isEditMode))
         .task {
-            await loadWeather()
+            if weather == nil {
+                await loadWeather()
+            }
+        }
+        .onAppear {
+            // 每次卡片出现时都刷新天气数据
+            Task {
+                await loadWeather()
+            }
+        }
+        .onChange(of: location) { oldValue, newValue in
+            // 当位置改变时刷新天气数据
+            Task {
+                await loadWeather()
+            }
         }
     }
     
@@ -135,13 +180,21 @@ struct SavedCityCard: View {
     }
     
     private func loadWeather() async {
+        print("开始加载城市天气 - \(location.name)")
+        print("城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
+        
         isLoading = true
         defer { isLoading = false }
         
         do {
-            let weatherService = WeatherKit.WeatherService.shared
-            let weather = try await weatherService.weather(for: location.location)
+            let weatherKitService = WeatherKit.WeatherService.shared
+            let weather = try await weatherKitService.weather(for: location.location)
             let dailyForecast = weather.dailyForecast.forecast.first
+            
+            // 获取城市所在时区
+            let geocoder = CLGeocoder()
+            let placemarks = try await geocoder.reverseGeocodeLocation(location.location)
+            let timezone = placemarks.first?.timeZone ?? TimeZone.current
             
             self.weather = WeatherService.CurrentWeather(
                 date: weather.currentWeather.date,
@@ -159,13 +212,15 @@ struct SavedCityCard: View {
                 airQualityIndex: 0,
                 pressure: weather.currentWeather.pressure.value,
                 visibility: weather.currentWeather.visibility.value,
-                timezone: TimeZone.current,
+                timezone: timezone,
                 weatherCondition: weather.currentWeather.condition,
                 highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
                 lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
             )
+            
+            print("城市天气加载完成 - \(location.name): \(Int(round(weather.currentWeather.temperature.value)))°")
         } catch {
-            print("Failed to load weather for \(location.name): \(error)")
+            print("加载城市天气失败 - \(location.name): \(error)")
         }
     }
     
@@ -566,9 +621,19 @@ struct SideMenuView: View {
     }
     
     private func handleLocationSelection(_ location: PresetLocation) {
-        withAnimation(.easeInOut) {
+        print("选中城市: \(location.name)")
+        print("城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
+        
+        // 先关闭侧边栏
+        withAnimation {
             isShowing = false
         }
+        
+        // 更新选中的城市
+        selectedLocation = location
+        
+        // 调用回调函数更新主视图
+        print("正在调用回调函数更新主视图的天气数据...")
         onLocationSelected(location)
     }
 }
