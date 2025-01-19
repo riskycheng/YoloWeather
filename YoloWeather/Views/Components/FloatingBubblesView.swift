@@ -25,7 +25,7 @@ struct FloatingBubblesView: View {
                     value: String(format: "%.0f", (weatherService.currentWeather?.humidity ?? 0) * 100),
                     unit: "%"
                 ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.72, y: geometry.size.height * 0.42),
+                initialPosition: CGPoint(x: geometry.size.width * 0.85, y: geometry.size.height * 0.45),
                 timeOfDay: timeOfDay
             )
             
@@ -36,7 +36,7 @@ struct FloatingBubblesView: View {
                     value: String(format: "%.1f", weatherService.currentWeather?.windSpeed ?? 0),
                     unit: "km/h"
                 ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.22, y: geometry.size.height * 0.32),
+                initialPosition: CGPoint(x: geometry.size.width * 0.2, y: geometry.size.height * 0.35),
                 timeOfDay: timeOfDay
             )
             
@@ -47,7 +47,7 @@ struct FloatingBubblesView: View {
                     value: String(format: "%.0f", (weatherService.currentWeather?.precipitationChance ?? 0) * 100),
                     unit: "%"
                 ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.32, y: geometry.size.height * 0.52),
+                initialPosition: CGPoint(x: geometry.size.width * 0.5, y: geometry.size.height * 0.55),
                 timeOfDay: timeOfDay
             )
             
@@ -58,7 +58,7 @@ struct FloatingBubblesView: View {
                     value: "\(weatherService.currentWeather?.uvIndex ?? 0)",
                     unit: ""
                 ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.62, y: geometry.size.height * 0.22),
+                initialPosition: CGPoint(x: geometry.size.width * 0.15, y: geometry.size.height * 0.2),
                 timeOfDay: timeOfDay
             )
             
@@ -69,7 +69,7 @@ struct FloatingBubblesView: View {
                     value: String(format: "%.0f", weatherService.currentWeather?.pressure ?? 0),
                     unit: "hPa"
                 ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.42, y: geometry.size.height * 0.62),
+                initialPosition: CGPoint(x: geometry.size.width * 0.35, y: geometry.size.height * 0.45),
                 timeOfDay: timeOfDay
             )
             
@@ -80,7 +80,7 @@ struct FloatingBubblesView: View {
                     value: String(format: "%.1f", (weatherService.currentWeather?.visibility ?? 0) / 1000),
                     unit: "km"
                 ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.82, y: geometry.size.height * 0.32),
+                initialPosition: CGPoint(x: geometry.size.width * 0.7, y: geometry.size.height * 0.25),
                 timeOfDay: timeOfDay
             )
         }

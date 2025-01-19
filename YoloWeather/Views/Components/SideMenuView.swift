@@ -164,20 +164,23 @@ struct SideMenuView: View {
     
     var body: some View {
         GeometryReader { geometry in
-            HStack(spacing: 0) {
+            ZStack(alignment: .trailing) {
+                // 半透明背景
                 if isShowing {
-                    // 背景遮罩
-                    Color.black
-                        .opacity(0.3)
+                    Color.black.opacity(0.3)
                         .ignoresSafeArea()
+                        .transition(.opacity)
                         .onTapGesture {
-                            withAnimation(.easeInOut) {
+                            withAnimation {
                                 isShowing = false
-                                isEditMode = false
                             }
                         }
+                }
+                
+                // 侧边栏主容器
+                HStack(spacing: 0) {
+                    Spacer()
                     
-                    // 侧边栏内容
                     VStack(spacing: 0) {
                         // 顶部栏
                         HStack {
@@ -229,58 +232,56 @@ struct SideMenuView: View {
                         }
                         .padding()
                         
-                        // 使用 GeometryReader 来实现固定布局
-                        GeometryReader { geometry in
-                            VStack(spacing: 0) {
-                                // 可滚动的城市列表区域
-                                ScrollView {
-                                    VStack(spacing: 20) {
-                                        if searchText.isEmpty {
-                                            // 收藏的城市
-                                            if !citySearchService.recentSearches.isEmpty {
-                                                VStack(alignment: .leading, spacing: 12) {
-                                                    HStack {
-                                                        Text("收藏城市")
-                                                            .font(.system(size: 14))
-                                                            .foregroundColor(Color.white.opacity(0.6))
-                                                        Spacer()
-                                                    }
-                                                    .padding(.horizontal)
-                                                    .onLongPressGesture {
-                                                        withAnimation {
-                                                            isEditMode = true
-                                                        }
-                                                    }
-                                                    
-                                                    if isEditMode {
-                                                        editableLocationsList
-                                                    } else {
-                                                        normalLocationsList
+                        // 主内容区域
+                        VStack(spacing: 0) {
+                            // 可滚动的城市列表区域
+                            ScrollView {
+                                VStack(spacing: 20) {
+                                    if searchText.isEmpty {
+                                        // 收藏的城市
+                                        if !citySearchService.recentSearches.isEmpty {
+                                            VStack(alignment: .leading, spacing: 12) {
+                                                HStack {
+                                                    Text("收藏城市")
+                                                        .font(.system(size: 14))
+                                                        .foregroundColor(Color.white.opacity(0.6))
+                                                    Spacer()
+                                                }
+                                                .padding(.horizontal)
+                                                .onLongPressGesture {
+                                                    withAnimation {
+                                                        isEditMode = true
                                                     }
                                                 }
+                                                
+                                                if isEditMode {
+                                                    editableLocationsList
+                                                } else {
+                                                    normalLocationsList
+                                                }
                                             }
-                                        } else {
-                                            searchResultsList
                                         }
+                                    } else {
+                                        searchResultsList
                                     }
-                                    .padding(.vertical)
                                 }
-                                .frame(height: geometry.size.height - 180) // 预留底部显示指标的空间
-                                
-                                // 固定在底部的显示指标设置
-                                WeatherBubbleSettingsView()
-                                    .padding(.bottom)
+                                .padding(.vertical)
                             }
+                            .frame(maxHeight: .infinity)
+                            
+                            // 固定在底部的显示指标设置
+                            WeatherBubbleSettingsView()
+                                .padding(.bottom)
                         }
                     }
                     .frame(width: min(geometry.size.width * 0.75, 300))
                     .background(Color(red: 0.25, green: 0.35, blue: 0.45))
-                    .transition(.move(edge: .trailing))
                 }
+                .offset(x: isShowing ? 0 : min(geometry.size.width * 0.75, 300))
+                .animation(.spring(response: 0.35, dampingFraction: 0.86), value: isShowing)
             }
             .onChange(of: isShowing) { newValue in
                 if !newValue {
-                    // 当菜单关闭时，清空搜索状态
                     searchText = ""
                     searchResults = []
                     showSearchResults = false
