@@ -3,72 +3,55 @@ import SwiftUI
 struct WeatherBubbleSettingsView: View {
     @StateObject private var settings = WeatherBubbleSettings.shared
     
-    private let columns = [
-        GridItem(.flexible()),
-        GridItem(.flexible())
-    ]
-    
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("显示指标")
-                .font(.headline)
-                .foregroundColor(.white)
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.6))
                 .padding(.horizontal)
             
-            LazyVGrid(columns: columns, spacing: 12) {
-                ForEach(settings.bubbleItems) { item in
-                    Button {
-                        settings.toggleBubble(id: item.id)
-                    } label: {
-                        HStack {
-                            Text(item.title)
-                                .font(.system(size: 17))
-                                .foregroundColor(.white)
-                            Spacer()
-                            Circle()
-                                .fill(item.isEnabled ? Color.green : Color.gray.opacity(0.3))
-                                .frame(width: 20, height: 20)
-                                .overlay {
-                                    if item.isEnabled {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(Color(white: 0.2, opacity: 0.3))
-                        .clipShape(Capsule())
-                    }
-                }
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 8) {
+                WeatherIndicatorToggle(title: "湿度", isEnabled: true)
+                WeatherIndicatorToggle(title: "风速", isEnabled: true)
+                WeatherIndicatorToggle(title: "降水概率", isEnabled: false)
+                WeatherIndicatorToggle(title: "紫外线", isEnabled: false)
+                WeatherIndicatorToggle(title: "气压", isEnabled: true)
+                WeatherIndicatorToggle(title: "能见度", isEnabled: false)
             }
             .padding(.horizontal)
         }
+        .padding(.vertical)
+        .background(Color.black.opacity(0.2))
     }
 }
 
-private struct CustomToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Button(action: { configuration.isOn.toggle() }) {
-            HStack {
-                configuration.label
-                Spacer()
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(configuration.isOn ? Color.green.opacity(0.5) : Color.gray.opacity(0.3))
-                        .frame(width: 24, height: 24)
-                    
-                    if configuration.isOn {
+struct WeatherIndicatorToggle: View {
+    let title: String
+    let isEnabled: Bool
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+            Spacer()
+            Circle()
+                .fill(isEnabled ? Color.green : Color.gray.opacity(0.3))
+                .frame(width: 16, height: 16)
+                .overlay {
+                    if isEnabled {
                         Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white)
                     }
                 }
-            }
-            .padding(8)
-            .background(Color.white.opacity(0.1))
-            .cornerRadius(12)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(8)
     }
 } 

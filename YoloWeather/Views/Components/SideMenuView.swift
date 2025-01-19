@@ -253,6 +253,10 @@ struct SideMenuView: View {
                                             } else {
                                                 normalLocationsList
                                             }
+                                            
+                                            // 添加天气指标设置面板
+                                            WeatherBubbleSettingsView()
+                                                .padding(.top, 20)
                                         }
                                     }
                                 } else {
