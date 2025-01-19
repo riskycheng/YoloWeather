@@ -26,7 +26,6 @@ struct WeatherBubbleSettingsView: View {
             .padding(.horizontal)
         }
         .padding(.vertical)
-        .background(Color.white.opacity(0.08))
     }
 }
 

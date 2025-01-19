@@ -229,41 +229,48 @@ struct SideMenuView: View {
                         }
                         .padding()
                         
-                        ScrollView {
-                            VStack(spacing: 20) {
-                                if searchText.isEmpty {
-                                    // 收藏的城市
-                                    if !citySearchService.recentSearches.isEmpty {
-                                        VStack(alignment: .leading, spacing: 12) {
-                                            HStack {
-                                                Text("收藏城市")
-                                                    .font(.system(size: 14))
-                                                    .foregroundColor(Color.white.opacity(0.6))
-                                                Spacer()
-                                            }
-                                            .padding(.horizontal)
-                                            .onLongPressGesture {
-                                                withAnimation {
-                                                    isEditMode = true
+                        // 使用 GeometryReader 来实现固定布局
+                        GeometryReader { geometry in
+                            VStack(spacing: 0) {
+                                // 可滚动的城市列表区域
+                                ScrollView {
+                                    VStack(spacing: 20) {
+                                        if searchText.isEmpty {
+                                            // 收藏的城市
+                                            if !citySearchService.recentSearches.isEmpty {
+                                                VStack(alignment: .leading, spacing: 12) {
+                                                    HStack {
+                                                        Text("收藏城市")
+                                                            .font(.system(size: 14))
+                                                            .foregroundColor(Color.white.opacity(0.6))
+                                                        Spacer()
+                                                    }
+                                                    .padding(.horizontal)
+                                                    .onLongPressGesture {
+                                                        withAnimation {
+                                                            isEditMode = true
+                                                        }
+                                                    }
+                                                    
+                                                    if isEditMode {
+                                                        editableLocationsList
+                                                    } else {
+                                                        normalLocationsList
+                                                    }
                                                 }
                                             }
-                                            
-                                            if isEditMode {
-                                                editableLocationsList
-                                            } else {
-                                                normalLocationsList
-                                            }
-                                            
-                                            // 添加天气指标设置面板
-                                            WeatherBubbleSettingsView()
-                                                .padding(.top, 20)
+                                        } else {
+                                            searchResultsList
                                         }
                                     }
-                                } else {
-                                    searchResultsList
+                                    .padding(.vertical)
                                 }
+                                .frame(height: geometry.size.height - 180) // 预留底部显示指标的空间
+                                
+                                // 固定在底部的显示指标设置
+                                WeatherBubbleSettingsView()
+                                    .padding(.bottom)
                             }
-                            .padding(.vertical)
                         }
                     }
                     .frame(width: min(geometry.size.width * 0.75, 300))
