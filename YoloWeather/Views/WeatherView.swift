@@ -160,50 +160,6 @@ private struct WeatherContentView: View {
     }
 }
 
-// MARK: - Floating Bubbles View
-private struct FloatingBubblesView: View {
-    let weatherService: WeatherService
-    let timeOfDay: WeatherTimeOfDay
-    let geometry: GeometryProxy
-    
-    var body: some View {
-        ZStack {
-            // 风速气泡
-            GlassBubbleView(
-                info: WeatherInfo(
-                    title: "风速",
-                    value: String(format: "%.1f", weatherService.currentWeather?.windSpeed ?? 0),
-                    unit: "km/h"
-                ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.22, y: geometry.size.height * 0.32),
-                timeOfDay: timeOfDay
-            )
-            
-            // 降水概率气泡
-            GlassBubbleView(
-                info: WeatherInfo(
-                    title: "降水概率",
-                    value: String(format: "%.0f", (weatherService.currentWeather?.precipitationChance ?? 0) * 100),
-                    unit: "%"
-                ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.32, y: geometry.size.height * 0.52),
-                timeOfDay: timeOfDay
-            )
-            
-            // 湿度气泡
-            GlassBubbleView(
-                info: WeatherInfo(
-                    title: "湿度",
-                    value: String(format: "%.0f", (weatherService.currentWeather?.humidity ?? 0) * 100),
-                    unit: "%"
-                ),
-                initialPosition: CGPoint(x: geometry.size.width * 0.72, y: geometry.size.height * 0.42),
-                timeOfDay: timeOfDay
-            )
-        }
-    }
-}
-
 struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
     @StateObject private var locationService = LocationService()

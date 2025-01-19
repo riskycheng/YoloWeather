@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct WeatherBubbleItem: Identifiable, Codable {
     let id: String
@@ -19,40 +20,51 @@ struct WeatherBubbleItem: Identifiable, Codable {
 class WeatherBubbleSettings: ObservableObject {
     static let shared = WeatherBubbleSettings()
     
-    @Published private(set) var bubbleItems: [WeatherBubbleItem]
+    @Published var enabledBubbles: Set<BubbleType> {
+        didSet {
+            saveSettings()
+        }
+    }
+    
+    enum BubbleType: String, CaseIterable, Codable {
+        case humidity = "湿度"
+        case windSpeed = "风速"
+        case precipitation = "降水概率"
+        case uvIndex = "紫外线"
+        case pressure = "气压"
+        case visibility = "能见度"
+    }
     
     private init() {
-        // 首先初始化属性
-        self.bubbleItems = []
-        
-        // 然后加载保存的设置
-        if let data = UserDefaults.standard.data(forKey: "WeatherBubbleSettings"),
-           let savedItems = try? JSONDecoder().decode([WeatherBubbleItem].self, from: data) {
-            self.bubbleItems = savedItems
+        // 从 UserDefaults 加载保存的设置
+        if let savedData = UserDefaults.standard.data(forKey: "EnabledWeatherBubbles"),
+           let savedBubbles = try? JSONDecoder().decode(Set<BubbleType>.self, from: savedData) {
+            self.enabledBubbles = savedBubbles
         } else {
-            self.bubbleItems = WeatherBubbleItem.allItems
+            // 默认启用的指标
+            self.enabledBubbles = [.humidity, .windSpeed, .pressure]
         }
     }
     
-    private func saveBubbleSettings() {
-        if let encoded = try? JSONEncoder().encode(bubbleItems) {
-            UserDefaults.standard.set(encoded, forKey: "WeatherBubbleSettings")
-        }
+    func isEnabled(_ type: BubbleType) -> Bool {
+        enabledBubbles.contains(type)
     }
     
-    func isEnabled(for id: String) -> Bool {
-        bubbleItems.first(where: { $0.id == id })?.isEnabled ?? false
-    }
-    
-    func toggleBubble(id: String) {
-        if let index = bubbleItems.firstIndex(where: { $0.id == id }) {
-            bubbleItems[index].isEnabled.toggle()
-            saveBubbleSettings()
+    func toggleBubble(_ type: BubbleType) {
+        if enabledBubbles.contains(type) {
+            enabledBubbles.remove(type)
+        } else {
+            enabledBubbles.insert(type)
         }
     }
     
     func updateBubbleSettings(_ items: [WeatherBubbleItem]) {
-        bubbleItems = items
-        saveBubbleSettings()
+        // Implementation needed
+    }
+    
+    private func saveSettings() {
+        if let encodedData = try? JSONEncoder().encode(enabledBubbles) {
+            UserDefaults.standard.set(encodedData, forKey: "EnabledWeatherBubbles")
+        }
     }
 } 
