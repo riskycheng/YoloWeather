@@ -419,7 +419,7 @@ struct WeatherView: View {
         calendar.timeZone = weather.timezone
         let hour = calendar.component(.hour, from: weather.date)
         let isNight = hour >= 18 || hour < 6
-        let symbolName = getWeatherSymbolName(condition: weather.weatherCondition, isNight: isNight)
+        let symbolName = getWeatherSymbolName(for: weather.weatherCondition, isNight: isNight)
         
         print("天气图标计算 - 城市: \(locationService.locationName)")
         print("天气图标计算 - 当地时间: \(hour)点")
@@ -450,20 +450,48 @@ struct WeatherView: View {
         }
     }
     
-    private func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
+    private func getWeatherSymbolName(for condition: WeatherCondition, isNight: Bool) -> String {
         switch condition {
-        case .clear, .mostlyClear, .hot:
-            return isNight ? "moon" : "sunny"
+        case .clear:
+            return isNight ? "full_moon" : "sunny"
         case .cloudy:
-            return isNight ? "cloudy_night" : "cloudy"
-        case .mostlyCloudy, .partlyCloudy:
+            return isNight ? "moon_cloudy" : "cloudy"
+        case .partlyCloudy, .mostlyCloudy:
             return isNight ? "partly_cloudy_night" : "partly_cloudy_daytime"
-        case .drizzle, .rain:
+        case .drizzle:
+            return "light_rain"
+        case .rain:
             return "moderate_rain"
-        case .snow, .heavySnow, .blizzard:
+        case .heavyRain:
+            return "heavy_rain"
+        case .snow:
+            return "light_snow"
+        case .heavySnow:
             return "heavy_snow"
+        case .sleet:
+            return "wet"
+        case .freezingDrizzle:
+            return "wet"
+        case .strongStorms:
+            return "thunderstorm"
+        case .windy:
+            return "windy"
+        case .foggy:
+            return "fog"
+        case .haze:
+            return "haze"
+        case .hot:
+            return "high_temperature"
+        case .blizzard:
+            return "blizzard"
+        case .blowingDust:
+            return "blowing_sand"
+        case .tropicalStorm:
+            return "rainstorm"
+        case .hurricane:
+            return "typhoon"
         default:
-            return isNight ? "moon" : "sunny"
+            return isNight ? "moon_stars" : "sunny"
         }
     }
     
