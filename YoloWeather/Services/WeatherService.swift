@@ -29,12 +29,28 @@ class WeatherService: ObservableObject {
         defer { isLoading = false }
         
         do {
+            // 先获取时区
+            let timezone = await calculateTimezone(for: location)
+            print("WeatherService - 使用时区: \(timezone.identifier)")
+            
+            // 获取天气数据
             let weather = try await weatherService.weather(for: location)
             print("WeatherService - 成功获取天气数据")
             
-            // 同步更新所有天气数据
-            let timezone = await calculateTimezone(for: location)
-            let isNightTime = isNight(for: weather.currentWeather.date)
+            // 使用获取到的时区创建日历
+            var calendar = Calendar.current
+            calendar.timeZone = timezone
+            
+            // 获取当前时间在目标时区的小时数
+            let now = Date()
+            let currentHour = calendar.component(.hour, from: now)
+            let isNightTime = isNight(for: now, in: timezone)
+            
+            print("WeatherService - 目标时区: \(timezone.identifier)")
+            print("WeatherService - UTC时间: \(now)")
+            print("WeatherService - 当地时间: \(currentHour)点")
+            print("WeatherService - 是否夜晚: \(isNightTime)")
+            
             let symbolName = getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime)
             let dailyForecast = weather.dailyForecast.forecast.first
             
@@ -61,12 +77,17 @@ class WeatherService: ObservableObject {
             // 更新小时预报
             var forecasts: [HourlyForecast] = []
             for hour in weather.hourlyForecast.filter({ $0.date.timeIntervalSince(Date()) >= 0 }).prefix(24) {
+                let hourComponent = calendar.component(.hour, from: hour.date)
+                let isHourNight = isNight(for: hour.date, in: timezone)
+                
+                print("WeatherService - 小时预报 - 时间: \(hour.date), 当地时间: \(hourComponent)点, 是否夜晚: \(isHourNight)")
+                
                 let forecast = HourlyForecast(
                     id: UUID(),
                     temperature: hour.temperature.value,
                     condition: hour.condition,
                     date: hour.date,
-                    symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isNight(for: hour.date)),
+                    symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isHourNight),
                     conditionText: getWeatherConditionText(hour.condition)
                 )
                 forecasts.append(forecast)
@@ -76,13 +97,12 @@ class WeatherService: ObservableObject {
             // 更新每日预报
             var dailyForecasts: [DayWeatherInfo] = []
             for day in weather.dailyForecast.forecast.prefix(7) {
-                let isNightTime = isNight(for: day.date)
-                let symbolName = getWeatherSymbolName(condition: day.condition, isNight: isNightTime)
+                let daySymbolName = getWeatherSymbolName(condition: day.condition, isNight: false)
                 
                 let forecast = DayWeatherInfo(
                     date: day.date,
                     condition: getWeatherConditionText(day.condition),
-                    symbolName: symbolName,
+                    symbolName: daySymbolName,
                     lowTemperature: day.lowTemperature.value,
                     highTemperature: day.highTemperature.value
                 )
@@ -198,38 +218,127 @@ class WeatherService: ObservableObject {
         let geocoder = CLGeocoder()
         print("正在计算位置 (\(location.coordinate.latitude), \(location.coordinate.longitude)) 的时区")
         
+        // 首先检查是否是已知的特定城市坐标
+        let knownCities: [(name: String, coordinates: (lat: Double, lon: Double), timezone: String)] = [
+            ("纽约", (40.7128, -74.006), "America/New_York"),
+            ("洛杉矶", (34.0522, -118.2437), "America/Los_Angeles"),
+            ("芝加哥", (41.8781, -87.6298), "America/Chicago"),
+            ("上海", (31.2304, 121.4737), "Asia/Shanghai"),
+            ("北京", (39.9042, 116.4074), "Asia/Shanghai"),
+            ("天津", (39.0842, 117.2009), "Asia/Shanghai"),
+            ("香港", (22.3193, 114.1694), "Asia/Hong_Kong"),
+            ("东京", (35.6762, 139.6503), "Asia/Tokyo"),
+            ("伦敦", (51.5074, -0.1278), "Europe/London"),
+            ("巴黎", (48.8566, 2.3522), "Europe/Paris")
+        ]
+        
+        // 检查是否匹配已知城市（允许0.1度的误差）
+        for city in knownCities {
+            let latDiff = abs(location.coordinate.latitude - city.coordinates.lat)
+            let lonDiff = abs(location.coordinate.longitude - city.coordinates.lon)
+            if latDiff < 0.1 && lonDiff < 0.1 {
+                print("找到匹配的已知城市: \(city.name), 使用时区: \(city.timezone)")
+                return TimeZone(identifier: city.timezone)!
+            }
+        }
+        
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
             
             if let placemark = placemarks.first {
+                print("获取到位置信息: \(placemark.locality ?? "未知城市"), \(placemark.administrativeArea ?? "未知地区"), \(placemark.country ?? "未知国家")")
+                
                 if let placemarkTimezone = placemark.timeZone {
                     print("从位置信息获取到时区: \(placemarkTimezone.identifier)")
-                    print("位置信息: \(placemark.locality ?? "未知城市"), \(placemark.administrativeArea ?? "未知地区"), \(placemark.country ?? "未知国家")")
                     return placemarkTimezone
-                } else {
-                    let defaultTZ = getDefaultTimezone(for: location)
-                    print("位置信息中没有时区数据，使用计算得到的时区: \(defaultTZ.identifier)")
-                    return defaultTZ
                 }
-            } else {
-                let defaultTZ = getDefaultTimezone(for: location)
-                print("未能获取位置信息，使用计算得到的时区: \(defaultTZ.identifier)")
-                return defaultTZ
+                
+                // 如果没有直接获取到时区，根据国家和经度来判断
+                if let countryCode = placemark.isoCountryCode {
+                    print("尝试根据国家代码确定时区: \(countryCode)")
+                    
+                    switch countryCode {
+                    case "CN": // 中国
+                        return TimeZone(identifier: "Asia/Shanghai")!
+                    case "US": // 美国
+                        let longitude = location.coordinate.longitude
+                        if longitude <= -115 {
+                            return TimeZone(identifier: "America/Los_Angeles")!
+                        } else if longitude <= -100 {
+                            return TimeZone(identifier: "America/Denver")!
+                        } else if longitude <= -87 {
+                            return TimeZone(identifier: "America/Chicago")!
+                        } else {
+                            return TimeZone(identifier: "America/New_York")!
+                        }
+                    case "JP": // 日本
+                        return TimeZone(identifier: "Asia/Tokyo")!
+                    case "KR": // 韩国
+                        return TimeZone(identifier: "Asia/Seoul")!
+                    case "GB": // 英国
+                        return TimeZone(identifier: "Europe/London")!
+                    case "DE": // 德国
+                        return TimeZone(identifier: "Europe/Berlin")!
+                    case "FR": // 法国
+                        return TimeZone(identifier: "Europe/Paris")!
+                    case "AU": // 澳大利亚
+                        if location.coordinate.longitude >= 142 {
+                            return TimeZone(identifier: "Australia/Sydney")!
+                        } else {
+                            return TimeZone(identifier: "Australia/Perth")!
+                        }
+                    default:
+                        let defaultTZ = getDefaultTimezone(for: location)
+                        print("未找到国家对应的时区，使用经纬度计算的时区: \(defaultTZ.identifier)")
+                        return defaultTZ
+                    }
+                }
             }
-        } catch {
+            
+            // 如果地理编码失败，使用经纬度范围判断
             let defaultTZ = getDefaultTimezone(for: location)
-            print("反地理编码错误: \(error.localizedDescription)，使用计算得到的时区: \(defaultTZ.identifier)")
+            print("未能获取位置信息，使用经纬度计算的时区: \(defaultTZ.identifier)")
+            return defaultTZ
+            
+        } catch {
+            print("反地理编码错误: \(error.localizedDescription)")
+            
+            // 对于美国城市的特殊处理
+            let longitude = location.coordinate.longitude
+            let latitude = location.coordinate.latitude
+            
+            // 检查是否在美国范围内
+            if latitude >= 24.396308 && latitude <= 49.384358 && // 美国大致纬度范围
+               longitude >= -125.000000 && longitude <= -66.934570 { // 美国大致经度范围
+                if longitude <= -115 {
+                    return TimeZone(identifier: "America/Los_Angeles")!
+                } else if longitude <= -100 {
+                    return TimeZone(identifier: "America/Denver")!
+                } else if longitude <= -87 {
+                    return TimeZone(identifier: "America/Chicago")!
+                } else {
+                    return TimeZone(identifier: "America/New_York")!
+                }
+            }
+            
+            let defaultTZ = getDefaultTimezone(for: location)
+            print("使用经纬度计算的时区: \(defaultTZ.identifier)")
             return defaultTZ
         }
     }
     
     // 获取天气图标名称
     internal func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
+        // 首先判断是否为夜晚
+        let timeBasedPrefix = isNight ? "night_" : "day_"
+        
+        // 根据天气状况选择基础图标名称
+        let baseSymbol: String
         switch condition {
         case .clear, .mostlyClear, .hot:
             return isNight ? "full_moon" : "sunny"
         case .cloudy:
-            return "cloudy"
+            return isNight ? "moon_cloudy" : "cloudy"
         case .mostlyCloudy, .partlyCloudy:
             return isNight ? "partly_cloudy_night" : "partly_cloudy_daytime"
         case .drizzle:
@@ -262,8 +371,16 @@ class WeatherService: ObservableObject {
     }
     
     // 判断是否为夜间
-    internal func isNight(for date: Date) -> Bool {
-        let hour = Calendar.current.component(.hour, from: date)
+    internal func isNight(for date: Date, in timezone: TimeZone) -> Bool {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone
+        let hour = calendar.component(.hour, from: date)
+        
+        print("isNight 计算 - 时区: \(timezone.identifier)")
+        print("isNight 计算 - UTC时间: \(date)")
+        print("isNight 计算 - 当地时间: \(hour)点")
+        print("isNight 计算 - 是否夜晚: \(hour < 6 || hour >= 18)")
+        
         return hour < 6 || hour >= 18
     }
     
