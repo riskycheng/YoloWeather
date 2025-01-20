@@ -20,6 +20,13 @@ class WeatherService: ObservableObject {
         location = CLLocation(latitude: 31.230416, longitude: 121.473701) // 默认上海
     }
     
+    func clearCurrentWeather() {
+        currentWeather = nil
+        hourlyForecast = []
+        dailyForecast = []
+        lastUpdateTime = nil
+    }
+    
     func updateWeather(for location: CLLocation) async {
         print("WeatherService - 开始获取天气数据")
         print("WeatherService - 请求位置: 纬度 \(location.coordinate.latitude), 经度 \(location.coordinate.longitude)")

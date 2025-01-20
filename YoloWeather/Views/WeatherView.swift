@@ -756,14 +756,14 @@ struct WeatherView: View {
     
     @MainActor
     private func handleLocationSelection(_ location: PresetLocation) {
-        print("主视图 - 开始处理城市选择: \(location.name)")
+        print("主视图 - 选择城市: \(location.name)")
         print("主视图 - 城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
         
         // 开始加载
         isLoadingWeather = true
         let startTime = Date()
         
-        // 更新选中的城市信息
+        // 先更新状态
         selectedLocation = location
         lastSelectedLocationName = location.name
         isUsingCurrentLocation = false
@@ -772,6 +772,8 @@ struct WeatherView: View {
         // 使用 Task 包装异步操作
         Task {
             print("主视图 - 正在使用 WeatherService 获取天气数据...")
+            // 先清除当前天气数据
+            weatherService.clearCurrentWeather()
             // 使用公共方法更新天气数据
             await weatherService.updateWeather(for: location.location)
             print("主视图 - 天气数据更新完成")
