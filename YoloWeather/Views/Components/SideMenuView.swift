@@ -88,20 +88,22 @@ struct SavedCityCard: View {
         .overlay(deleteButton, alignment: .topLeading)
         .modifier(ShakeEffect(isEditMode: isEditMode))
         .task {
-            if weather == nil {
+            if !isEditMode {
                 await loadWeather()
             }
         }
         .onAppear {
-            // 每次卡片出现时都刷新天气数据
-            Task {
-                await loadWeather()
+            if !isEditMode {
+                Task {
+                    await loadWeather()
+                }
             }
         }
         .onChange(of: location) { oldValue, newValue in
-            // 当位置改变时刷新天气数据
-            Task {
-                await loadWeather()
+            if !isEditMode {
+                Task {
+                    await loadWeather()
+                }
             }
         }
     }
@@ -126,12 +128,27 @@ struct SavedCityCard: View {
             
             Spacer()
             
-            if isLoading {
+            if isEditMode {
+                // 编辑模式下显示缓存的温度
+                if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
+                    Text("\(Int(round(weather.temperature)))°")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.white)
+                } else {
+                    Text("--°")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.white)
+                }
+            } else if isLoading {
                 Text("获取中...")
                     .font(.system(size: 24, weight: .medium))
                     .foregroundColor(.white)
+            } else if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
+                Text("\(Int(round(weather.temperature)))°")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.white)
             } else {
-                Text("\(Int(round(weather?.temperature ?? 0)))°")
+                Text("--°")
                     .font(.system(size: 24, weight: .medium))
                     .foregroundColor(.white)
             }
@@ -140,61 +157,43 @@ struct SavedCityCard: View {
     
     private var weatherInfo: some View {
         HStack {
-            if isLoading {
+            if isEditMode {
+                // 编辑模式下显示缓存的天气信息
+                if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
+                    Text(weather.condition)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                    
+                    Spacer()
+                    
+                    Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                } else {
+                    Text("暂无数据")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+            } else if isLoading {
                 Text("获取中...")
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.8))
-            } else {
-                Text(weather?.condition ?? "")
+            } else if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
+                Text(weather.condition)
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.8))
                 
                 Spacer()
                 
-                if let weather = weather {
-                    Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                }
+                Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
+            } else {
+                Text("暂无数据")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
             }
         }
-    }
-    
-    private func loadWeather() async {
-        // 在编辑模式下不更新天气数据
-        if isEditMode {
-            return
-        }
-        
-        isLoading = true
-        print("SavedCityCard - 开始加载城市天气: \(location.name)")
-        
-        // 如果是预设城市，使用预设的坐标
-        let cityLocation: CLLocation
-        if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) {
-            cityLocation = presetLocation.location
-            print("SavedCityCard - 使用预设城市坐标")
-        } else {
-            cityLocation = location.location
-            print("SavedCityCard - 使用传入的坐标")
-        }
-        
-        print("SavedCityCard - 城市坐标: 纬度 \(cityLocation.coordinate.latitude), 经度 \(cityLocation.coordinate.longitude)")
-        
-        do {
-            // 使用 WeatherService 获取天气数据
-            await WeatherService.shared.updateWeather(for: cityLocation)
-            
-            // 从 WeatherService 获取更新后的天气数据
-            if let currentWeather = WeatherService.shared.currentWeather {
-                self.weather = currentWeather
-                print("SavedCityCard - 成功更新城市天气: \(location.name)")
-            }
-        } catch {
-            print("SavedCityCard - 获取天气数据失败: \(error.localizedDescription)")
-        }
-        
-        isLoading = false
     }
     
     private var cardBackground: some View {
@@ -233,6 +232,44 @@ struct SavedCityCard: View {
                     isEditMode = true
                 }
             }
+    }
+    
+    private func loadWeather() async {
+        guard !isEditMode else { return }
+        
+        isLoading = true
+        print("SavedCityCard - 开始加载城市天气: \(location.name)")
+        
+        // 如果是预设城市，使用预设的坐标
+        let cityLocation: CLLocation
+        if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) {
+            cityLocation = presetLocation.location
+            print("SavedCityCard - 使用预设城市坐标")
+        } else {
+            cityLocation = location.location
+            print("SavedCityCard - 使用传入的坐标")
+        }
+        
+        print("SavedCityCard - 城市坐标: 纬度 \(cityLocation.coordinate.latitude), 经度 \(cityLocation.coordinate.longitude)")
+        
+        // 先尝试从缓存获取天气数据
+        if let cachedWeather = WeatherService.shared.getCachedWeather(for: location.name) {
+            print("SavedCityCard - 使用缓存的天气数据: \(location.name)")
+            self.weather = cachedWeather
+            isLoading = false
+            return
+        }
+        
+        // 如果缓存中没有，则更新天气数据
+        await WeatherService.shared.updateWeather(for: cityLocation, cityName: location.name)
+        
+        // 更新完成后，从缓存中获取天气数据
+        if let updatedWeather = WeatherService.shared.getCachedWeather(for: location.name) {
+            self.weather = updatedWeather
+            print("SavedCityCard - 成功更新城市天气: \(location.name)")
+        }
+        
+        isLoading = false
     }
 }
 
@@ -366,6 +403,7 @@ struct SideMenuView: View {
                                 }
                                 .padding(.vertical)
                             }
+                            .scrollDisabled(isEditMode)
                             .frame(maxHeight: .infinity)
                             
                             // 固定在底部的显示指标设置
@@ -449,7 +487,7 @@ struct SideMenuView: View {
                             }
                     )
                     .simultaneousGesture(
-                        DragGesture(minimumDistance: 1, coordinateSpace: .global)  // 增加最小拖动距离，避免误触
+                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { gesture in
                                 guard isEditMode && (draggingItem == nil || draggingItem == location) else { return }
                                 
@@ -516,7 +554,6 @@ struct SideMenuView: View {
             }
             .padding(.horizontal)
         }
-        .scrollDisabled(isEditMode)
     }
     
     private func offsetFor(_ location: PresetLocation) -> CGFloat {

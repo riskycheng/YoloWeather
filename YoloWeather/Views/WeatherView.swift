@@ -271,7 +271,7 @@ struct WeatherView: View {
         } else {
             print("使用选中的城市更新天气: \(selectedLocation.name)")
             print("城市坐标: 纬度 \(selectedLocation.location.coordinate.latitude), 经度 \(selectedLocation.location.coordinate.longitude)")
-            await weatherService.updateWeather(for: selectedLocation.location)
+            await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
         }
         
         updateTimeOfDay()
@@ -775,8 +775,8 @@ struct WeatherView: View {
             print("主视图 - 正在使用 WeatherService 获取天气数据...")
             // 先清除当前天气数据
             weatherService.clearCurrentWeather()
-            // 使用公共方法更新天气数据
-            await weatherService.updateWeather(for: location.location)
+            // 使用公共方法更新天气数据，传入城市名称
+            await weatherService.updateWeather(for: location.location, cityName: location.name)
             print("主视图 - 天气数据更新完成")
             
             // 更新时间相关设置

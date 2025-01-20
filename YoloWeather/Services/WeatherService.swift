@@ -13,6 +13,7 @@ class WeatherService: ObservableObject {
     @Published private(set) var lastUpdateTime: Date?
     @Published var errorMessage: String?
     @Published private(set) var isLoading: Bool = false
+    @Published private(set) var currentCityName: String?
     
     private var location: CLLocation
     private var cityWeatherCache: [String: CurrentWeather] = [:]
@@ -33,13 +34,20 @@ class WeatherService: ObservableObject {
         print("WeatherService - 开始获取天气数据")
         print("WeatherService - 请求位置: 纬度 \(location.coordinate.latitude), 经度 \(location.coordinate.longitude)")
         
+        if let cityName = cityName {
+            print("WeatherService - 城市名称: \(cityName)")
+            // 更新当前选中的城市名称
+            self.currentCityName = cityName
+            print("WeatherService - 已更新当前选中城市为: \(cityName)")
+        }
+        
         self.location = location
         isLoading = true
         defer { isLoading = false }
         
         do {
             // 先获取时区
-            let timezone = await calculateTimezone(for: location)
+            let timezone = await calculateTimezone(for: location, cityName: cityName)
             print("WeatherService - 使用时区: \(timezone.identifier)")
             
             // 获取天气数据
@@ -83,12 +91,6 @@ class WeatherService: ObservableObject {
                 lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
             )
             
-            // 更新当前天气和缓存
-            self.currentWeather = currentWeatherData
-            if let cityName = cityName {
-                cityWeatherCache[cityName] = currentWeatherData
-            }
-            
             // 更新小时预报
             var forecasts: [HourlyForecast] = []
             for hour in weather.hourlyForecast.filter({ $0.date.timeIntervalSince(Date()) >= 0 }).prefix(24) {
@@ -107,7 +109,6 @@ class WeatherService: ObservableObject {
                 )
                 forecasts.append(forecast)
             }
-            hourlyForecast = forecasts
             
             // 更新每日预报
             var dailyForecasts: [DayWeatherInfo] = []
@@ -123,7 +124,25 @@ class WeatherService: ObservableObject {
                 )
                 dailyForecasts.append(forecast)
             }
-            self.dailyForecast = dailyForecasts
+            
+            // 更新数据
+            if let cityName = cityName {
+                // 更新缓存
+                cityWeatherCache[cityName] = currentWeatherData
+                print("WeatherService - 已更新城市天气缓存: \(cityName)")
+                
+                // 直接更新显示数据，因为这是用户选择的城市
+                print("WeatherService - 更新显示数据为城市: \(cityName)")
+                self.currentWeather = currentWeatherData
+                self.hourlyForecast = forecasts
+                self.dailyForecast = dailyForecasts
+            } else {
+                // 如果没有城市名称，直接更新所有数据
+                print("WeatherService - 无城市名称，更新所有数据")
+                self.currentWeather = currentWeatherData
+                self.hourlyForecast = forecasts
+                self.dailyForecast = dailyForecasts
+            }
             
             lastUpdateTime = Date()
             errorMessage = nil
@@ -234,34 +253,68 @@ class WeatherService: ObservableObject {
         }
     }
     
-    private func calculateTimezone(for location: CLLocation) async -> TimeZone {
+    private func calculateTimezone(for location: CLLocation, cityName: String? = nil) async -> TimeZone {
         let geocoder = CLGeocoder()
         print("正在计算位置 (\(location.coordinate.latitude), \(location.coordinate.longitude)) 的时区")
         
-        // 首先检查是否是已知的特定城市坐标
-        let knownCities: [(name: String, coordinates: (lat: Double, lon: Double), timezone: String)] = [
-            ("纽约", (40.7128, -74.006), "America/New_York"),
-            ("洛杉矶", (34.0522, -118.2437), "America/Los_Angeles"),
-            ("芝加哥", (41.8781, -87.6298), "America/Chicago"),
-            ("上海", (31.2304, 121.4737), "Asia/Shanghai"),
-            ("北京", (39.9042, 116.4074), "Asia/Shanghai"),
-            ("天津", (39.0842, 117.2009), "Asia/Shanghai"),
-            ("香港", (22.3193, 114.1694), "Asia/Hong_Kong"),
-            ("东京", (35.6762, 139.6503), "Asia/Tokyo"),
-            ("伦敦", (51.5074, -0.1278), "Europe/London"),
-            ("巴黎", (48.8566, 2.3522), "Europe/Paris")
-        ]
-        
-        // 检查是否匹配已知城市（允许0.1度的误差）
-        for city in knownCities {
-            let latDiff = abs(location.coordinate.latitude - city.coordinates.lat)
-            let lonDiff = abs(location.coordinate.longitude - city.coordinates.lon)
-            if latDiff < 0.1 && lonDiff < 0.1 {
-                print("找到匹配的已知城市: \(city.name), 使用时区: \(city.timezone)")
-                return TimeZone(identifier: city.timezone)!
+        // 如果有城市名称，优先使用城市名称判断时区
+        if let cityName = cityName {
+            print("使用城市名称判断时区: \(cityName)")
+            
+            // 中国城市的特殊处理
+            if cityName == "香港" {
+                print("检测到香港，使用Asia/Hong_Kong时区")
+                return TimeZone(identifier: "Asia/Hong_Kong")!
+            } else if cityName == "澳门" {
+                print("检测到澳门，使用Asia/Macau时区")
+                return TimeZone(identifier: "Asia/Macau")!
+            } else if cityName.hasSuffix("市") || cityName.hasSuffix("省") || cityName == "台北" {
+                print("检测到中国大陆/台湾城市，使用Asia/Shanghai时区")
+                return TimeZone(identifier: "Asia/Shanghai")!
+            }
+            
+            // 检查是否匹配已知城市
+            let knownCities: [(name: String, timezone: String)] = [
+                ("纽约", "America/New_York"),
+                ("洛杉矶", "America/Los_Angeles"),
+                ("芝加哥", "America/Chicago"),
+                ("上海", "Asia/Shanghai"),
+                ("北京", "Asia/Shanghai"),
+                ("天津", "Asia/Shanghai"),
+                ("香港", "Asia/Hong_Kong"),
+                ("东京", "Asia/Tokyo"),
+                ("伦敦", "Europe/London"),
+                ("巴黎", "Europe/Paris")
+            ]
+            
+            if let knownCity = knownCities.first(where: { $0.name == cityName }) {
+                print("找到匹配的已知城市: \(cityName), 使用时区: \(knownCity.timezone)")
+                return TimeZone(identifier: knownCity.timezone)!
             }
         }
         
+        // 中国大陆经纬度范围判断
+        if location.coordinate.longitude >= 73 && location.coordinate.longitude <= 135 &&
+           location.coordinate.latitude >= 18 && location.coordinate.latitude <= 54 {
+            // 香港特别行政区的经纬度范围
+            if location.coordinate.longitude >= 113.8 && location.coordinate.longitude <= 114.4 &&
+               location.coordinate.latitude >= 22.1 && location.coordinate.latitude <= 22.6 {
+                print("根据经纬度判断为香港地区，使用Asia/Hong_Kong时区")
+                return TimeZone(identifier: "Asia/Hong_Kong")!
+            }
+            // 澳门特别行政区的经纬度范围
+            else if location.coordinate.longitude >= 113.5 && location.coordinate.longitude <= 113.6 &&
+                    location.coordinate.latitude >= 22.1 && location.coordinate.latitude <= 22.2 {
+                print("根据经纬度判断为澳门地区，使用Asia/Macau时区")
+                return TimeZone(identifier: "Asia/Macau")!
+            }
+            else {
+                print("根据经纬度判断为中国大陆地区，使用Asia/Shanghai时区")
+                return TimeZone(identifier: "Asia/Shanghai")!
+            }
+        }
+        
+        // 其他情况使用地理编码
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
             
@@ -280,6 +333,12 @@ class WeatherService: ObservableObject {
                     switch countryCode {
                     case "CN": // 中国
                         return TimeZone(identifier: "Asia/Shanghai")!
+                    case "HK": // 香港
+                        return TimeZone(identifier: "Asia/Hong_Kong")!
+                    case "MO": // 澳门
+                        return TimeZone(identifier: "Asia/Macau")!
+                    case "TW": // 台湾
+                        return TimeZone(identifier: "Asia/Taipei")!
                     case "US": // 美国
                         let longitude = location.coordinate.longitude
                         if longitude <= -115 {
@@ -322,25 +381,6 @@ class WeatherService: ObservableObject {
             
         } catch {
             print("反地理编码错误: \(error.localizedDescription)")
-            
-            // 对于美国城市的特殊处理
-            let longitude = location.coordinate.longitude
-            let latitude = location.coordinate.latitude
-            
-            // 检查是否在美国范围内
-            if latitude >= 24.396308 && latitude <= 49.384358 && // 美国大致纬度范围
-               longitude >= -125.000000 && longitude <= -66.934570 { // 美国大致经度范围
-                if longitude <= -115 {
-                    return TimeZone(identifier: "America/Los_Angeles")!
-                } else if longitude <= -100 {
-                    return TimeZone(identifier: "America/Denver")!
-                } else if longitude <= -87 {
-                    return TimeZone(identifier: "America/Chicago")!
-                } else {
-                    return TimeZone(identifier: "America/New_York")!
-                }
-            }
-            
             let defaultTZ = getDefaultTimezone(for: location)
             print("使用经纬度计算的时区: \(defaultTZ.identifier)")
             return defaultTZ
@@ -538,3 +578,4 @@ class WeatherService: ObservableObject {
         return service
     }
 }
+
