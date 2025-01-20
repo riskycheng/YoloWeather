@@ -686,35 +686,7 @@ struct WeatherView: View {
                         selectedLocation: $selectedLocation,
                         locations: PresetLocation.presets
                     ) { location in
-                        // 先关闭侧边栏
-                        withAnimation {
-                            showingSideMenu = false
-                        }
-                        
-                        Task {
-                            // 显示加载动画
-                            isLoadingWeather = true
-                            let startTime = Date()
-                            
-                            // 更新选中的城市信息
-                            selectedLocation = location
-                            lastSelectedLocationName = location.name
-                            isUsingCurrentLocation = false
-                            locationService.locationName = location.name
-                            
-                            // 更新天气数据
-                            await weatherService.updateWeather(for: location.location)
-                            
-                            // 更新时间相关设置
-                            updateTimeOfDay()
-                            lastRefreshTime = Date()
-                            
-                            // 确保最小加载时间
-                            await ensureMinimumLoadingTime(startTime: startTime)
-                            
-                            // 结束加载
-                            isLoadingWeather = false
-                        }
+                        handleLocationSelection(location)
                     }
                     .animation(.easeInOut, value: showingSideMenu)
                     
@@ -782,35 +754,43 @@ struct WeatherView: View {
         }
     }
     
-    private func handleLocationSelection(_ location: PresetLocation) async {
-        print("WeatherView - 开始更新城市天气: \(location.name)")
-        print("WeatherView - 城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
+    @MainActor
+    private func handleLocationSelection(_ location: PresetLocation) {
+        print("主视图 - 开始处理城市选择: \(location.name)")
+        print("主视图 - 城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
         
+        // 开始加载
         isLoadingWeather = true
         let startTime = Date()
         
-        do {
-            // 更新位置信息
-            locationService.locationName = location.name
-            lastSelectedLocationName = location.name
-            selectedLocation = location
-            isUsingCurrentLocation = false
-            
-            print("WeatherView - 正在使用 WeatherService 获取天气数据...")
-            // 直接使用 WeatherService 更新天气数据
+        // 更新选中的城市信息
+        selectedLocation = location
+        lastSelectedLocationName = location.name
+        isUsingCurrentLocation = false
+        locationService.locationName = location.name
+        
+        // 使用 Task 包装异步操作
+        Task {
+            print("主视图 - 正在使用 WeatherService 获取天气数据...")
+            // 使用公共方法更新天气数据
             await weatherService.updateWeather(for: location.location)
-            print("WeatherView - 天气数据更新完成")
+            print("主视图 - 天气数据更新完成")
             
             // 更新时间相关设置
             updateTimeOfDay()
             lastRefreshTime = Date()
             
+            // 确保最小加载时间
             await ensureMinimumLoadingTime(startTime: startTime)
-        } catch {
-            print("WeatherView - 获取天气数据失败: \(error.localizedDescription)")
+            
+            // 结束加载
+            isLoadingWeather = false
+            
+            // 最后关闭侧边栏
+            withAnimation {
+                showingSideMenu = false
+            }
         }
-        
-        isLoadingWeather = false
     }
 }
 

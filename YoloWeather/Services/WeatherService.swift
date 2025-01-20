@@ -32,9 +32,63 @@ class WeatherService: ObservableObject {
             let weather = try await weatherService.weather(for: location)
             print("WeatherService - 成功获取天气数据")
             
-            await updateCurrentWeather(from: weather)
-            await updateHourlyForecast(from: weather)
-            await updateDailyForecast(from: weather)
+            // 同步更新所有天气数据
+            let timezone = await calculateTimezone(for: location)
+            let isNightTime = isNight(for: weather.currentWeather.date)
+            let symbolName = getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime)
+            let dailyForecast = weather.dailyForecast.forecast.first
+            
+            // 更新当前天气
+            currentWeather = CurrentWeather(
+                date: weather.currentWeather.date,
+                temperature: weather.currentWeather.temperature.value,
+                feelsLike: weather.currentWeather.apparentTemperature.value,
+                condition: getWeatherConditionText(weather.currentWeather.condition),
+                symbolName: symbolName,
+                windSpeed: weather.currentWeather.wind.speed.value,
+                precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
+                uvIndex: Int(weather.currentWeather.uvIndex.value),
+                humidity: weather.currentWeather.humidity,
+                airQualityIndex: 0,
+                pressure: weather.currentWeather.pressure.value,
+                visibility: weather.currentWeather.visibility.value,
+                timezone: timezone,
+                weatherCondition: weather.currentWeather.condition,
+                highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
+                lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
+            )
+            
+            // 更新小时预报
+            var forecasts: [HourlyForecast] = []
+            for hour in weather.hourlyForecast.filter({ $0.date.timeIntervalSince(Date()) >= 0 }).prefix(24) {
+                let forecast = HourlyForecast(
+                    id: UUID(),
+                    temperature: hour.temperature.value,
+                    condition: hour.condition,
+                    date: hour.date,
+                    symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isNight(for: hour.date)),
+                    conditionText: getWeatherConditionText(hour.condition)
+                )
+                forecasts.append(forecast)
+            }
+            hourlyForecast = forecasts
+            
+            // 更新每日预报
+            var dailyForecasts: [DayWeatherInfo] = []
+            for day in weather.dailyForecast.forecast.prefix(7) {
+                let isNightTime = isNight(for: day.date)
+                let symbolName = getWeatherSymbolName(condition: day.condition, isNight: isNightTime)
+                
+                let forecast = DayWeatherInfo(
+                    date: day.date,
+                    condition: getWeatherConditionText(day.condition),
+                    symbolName: symbolName,
+                    lowTemperature: day.lowTemperature.value,
+                    highTemperature: day.highTemperature.value
+                )
+                dailyForecasts.append(forecast)
+            }
+            self.dailyForecast = dailyForecasts
             
             lastUpdateTime = Date()
             errorMessage = nil
@@ -169,67 +223,6 @@ class WeatherService: ObservableObject {
         }
     }
     
-    // 更新当前天气
-    private func updateCurrentWeather(from weather: Weather) async {
-        let isNightTime = isNight(for: weather.currentWeather.date)
-        let symbolName = getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime)
-        let timezone = await calculateTimezone(for: location)
-        
-        currentWeather = CurrentWeather(
-            date: weather.currentWeather.date,
-            temperature: weather.currentWeather.temperature.value,
-            feelsLike: weather.currentWeather.apparentTemperature.value,
-            condition: getWeatherConditionText(weather.currentWeather.condition),
-            symbolName: symbolName,
-            windSpeed: weather.currentWeather.wind.speed.value,
-            precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
-            uvIndex: Int(weather.currentWeather.uvIndex.value),
-            humidity: weather.currentWeather.humidity,
-            airQualityIndex: 0,
-            pressure: weather.currentWeather.pressure.value,
-            visibility: weather.currentWeather.visibility.value,
-            timezone: timezone,
-            weatherCondition: weather.currentWeather.condition,
-            highTemperature: weather.currentWeather.temperature.value + 3,
-            lowTemperature: weather.currentWeather.temperature.value - 3
-        )
-    }
-    
-    // 更新小时预报
-    private func updateHourlyForecast(from weather: Weather) async {
-        var forecasts: [HourlyForecast] = []
-        
-        for hour in weather.hourlyForecast.filter({ $0.date.timeIntervalSince(Date()) >= 0 }).prefix(24) {
-            let forecast = HourlyForecast(
-                id: UUID(),
-                temperature: hour.temperature.value,
-                condition: hour.condition,
-                date: hour.date,
-                symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isNight(for: hour.date)),
-                conditionText: getWeatherConditionText(hour.condition)
-            )
-            forecasts.append(forecast)
-        }
-        
-        hourlyForecast = forecasts
-    }
-    
-    // 更新每日预报
-    private func updateDailyForecast(from weather: Weather) async {
-        dailyForecast = weather.dailyForecast.forecast.prefix(7).map { day in
-            let isNightTime = isNight(for: day.date)
-            let symbolName = getWeatherSymbolName(condition: day.condition, isNight: isNightTime)
-            
-            return DayWeatherInfo(
-                date: day.date,
-                condition: getWeatherConditionText(day.condition),
-                symbolName: symbolName,
-                lowTemperature: day.lowTemperature.value,
-                highTemperature: day.highTemperature.value
-            )
-        }
-    }
-    
     // 获取天气图标名称
     internal func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
         switch condition {
@@ -330,7 +323,8 @@ class WeatherService: ObservableObject {
         }
     }
     
-    struct DayWeatherInfo {
+    struct DayWeatherInfo: Identifiable {
+        let id = UUID()
         let date: Date
         let condition: String
         let symbolName: String

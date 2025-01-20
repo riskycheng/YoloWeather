@@ -221,8 +221,47 @@ class CitySearchService: ObservableObject {
     }
     
     func addToRecentSearches(_ location: PresetLocation) {
-        if !recentSearches.contains(where: { $0.name == location.name }) {
+        print("CitySearchService - 添加城市到最近搜索: \(location.name)")
+        print("CitySearchService - 传入的坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
+        
+        // 如果是预设城市，使用预设的坐标
+        if let presetLocation = allCities.first(where: { $0.name == location.name }) {
+            print("CitySearchService - 找到预设城市，使用预设坐标")
+            let updatedLocation = PresetLocation(
+                name: location.name,
+                location: presetLocation.location,
+                currentTemperature: location.currentTemperature
+            )
+            
+            // 如果已经存在，先移除
+            recentSearches.removeAll { $0.name == location.name }
+            
+            // 添加到最前面
+            recentSearches.insert(updatedLocation, at: 0)
+            
+            // 限制数量
+            if recentSearches.count > maxRecentSearches {
+                recentSearches.removeLast()
+            }
+            
+            // 保存到本地
+            saveRecentSearches()
+            
+            print("CitySearchService - 更新后的坐标: 纬度 \(updatedLocation.location.coordinate.latitude), 经度 \(updatedLocation.location.coordinate.longitude)")
+        } else {
+            print("CitySearchService - 非预设城市，使用传入的坐标")
+            // 如果已经存在，先移除
+            recentSearches.removeAll { $0.name == location.name }
+            
+            // 添加到最前面
             recentSearches.insert(location, at: 0)
+            
+            // 限制数量
+            if recentSearches.count > maxRecentSearches {
+                recentSearches.removeLast()
+            }
+            
+            // 保存到本地
             saveRecentSearches()
         }
     }
@@ -246,7 +285,7 @@ class CitySearchService: ObservableObject {
     }
     
     // 预设城市列表
-    private let allCities: [PresetLocation] = [
+    let allCities: [PresetLocation] = [
         // 一线城市
         PresetLocation(name: "北京市", location: CLLocation(latitude: 39.9042, longitude: 116.4074)),
         PresetLocation(name: "上海市", location: CLLocation(latitude: 31.2304, longitude: 121.4737)),

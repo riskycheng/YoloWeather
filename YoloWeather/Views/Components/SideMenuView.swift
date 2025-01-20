@@ -46,39 +46,20 @@ private struct WeatherInfoView: View {
         isLoading = true
         defer { isLoading = false }
         
+        print("SideMenuView - 开始加载城市天气: \(location.name)")
+        print("SideMenuView - 城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
+        
         do {
-            let weatherKitService = WeatherKit.WeatherService.shared
-            let weather = try await weatherKitService.weather(for: location.location)
-            let dailyForecast = weather.dailyForecast.forecast.first
+            // 使用 WeatherService 获取天气数据
+            await WeatherService.shared.updateWeather(for: location.location)
             
-            // 获取城市所在时区
-            let geocoder = CLGeocoder()
-            let placemarks = try await geocoder.reverseGeocodeLocation(location.location)
-            let timezone = placemarks.first?.timeZone ?? TimeZone.current
-            
-            self.weather = WeatherService.CurrentWeather(
-                date: weather.currentWeather.date,
-                temperature: weather.currentWeather.temperature.value,
-                feelsLike: weather.currentWeather.apparentTemperature.value,
-                condition: WeatherService.shared.getWeatherConditionText(weather.currentWeather.condition),
-                symbolName: WeatherService.shared.getWeatherSymbolName(
-                    condition: weather.currentWeather.condition,
-                    isNight: WeatherService.shared.isNight(for: weather.currentWeather.date)
-                ),
-                windSpeed: weather.currentWeather.wind.speed.value,
-                precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
-                uvIndex: Int(weather.currentWeather.uvIndex.value),
-                humidity: weather.currentWeather.humidity,
-                airQualityIndex: 0,
-                pressure: weather.currentWeather.pressure.value,
-                visibility: weather.currentWeather.visibility.value,
-                timezone: timezone,
-                weatherCondition: weather.currentWeather.condition,
-                highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
-                lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
-            )
+            // 从 WeatherService 获取更新后的天气数据
+            if let currentWeather = WeatherService.shared.currentWeather {
+                self.weather = currentWeather
+                print("SideMenuView - 成功更新城市天气: \(location.name)")
+            }
         } catch {
-            print("Failed to load weather for \(location.name): \(error)")
+            print("SideMenuView - 获取天气数据失败: \(error.localizedDescription)")
         }
     }
 }
@@ -180,48 +161,35 @@ struct SavedCityCard: View {
     }
     
     private func loadWeather() async {
-        print("开始加载城市天气 - \(location.name)")
-        print("城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
-        
         isLoading = true
-        defer { isLoading = false }
+        print("SavedCityCard - 开始加载城市天气: \(location.name)")
+        
+        // 如果是预设城市，使用预设的坐标
+        let cityLocation: CLLocation
+        if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) {
+            cityLocation = presetLocation.location
+            print("SavedCityCard - 使用预设城市坐标")
+        } else {
+            cityLocation = location.location
+            print("SavedCityCard - 使用传入的坐标")
+        }
+        
+        print("SavedCityCard - 城市坐标: 纬度 \(cityLocation.coordinate.latitude), 经度 \(cityLocation.coordinate.longitude)")
         
         do {
-            let weatherKitService = WeatherKit.WeatherService.shared
-            let weather = try await weatherKitService.weather(for: location.location)
-            let dailyForecast = weather.dailyForecast.forecast.first
+            // 使用 WeatherService 获取天气数据
+            await WeatherService.shared.updateWeather(for: cityLocation)
             
-            // 获取城市所在时区
-            let geocoder = CLGeocoder()
-            let placemarks = try await geocoder.reverseGeocodeLocation(location.location)
-            let timezone = placemarks.first?.timeZone ?? TimeZone.current
-            
-            self.weather = WeatherService.CurrentWeather(
-                date: weather.currentWeather.date,
-                temperature: weather.currentWeather.temperature.value,
-                feelsLike: weather.currentWeather.apparentTemperature.value,
-                condition: WeatherService.shared.getWeatherConditionText(weather.currentWeather.condition),
-                symbolName: WeatherService.shared.getWeatherSymbolName(
-                    condition: weather.currentWeather.condition,
-                    isNight: WeatherService.shared.isNight(for: weather.currentWeather.date)
-                ),
-                windSpeed: weather.currentWeather.wind.speed.value,
-                precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
-                uvIndex: Int(weather.currentWeather.uvIndex.value),
-                humidity: weather.currentWeather.humidity,
-                airQualityIndex: 0,
-                pressure: weather.currentWeather.pressure.value,
-                visibility: weather.currentWeather.visibility.value,
-                timezone: timezone,
-                weatherCondition: weather.currentWeather.condition,
-                highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
-                lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
-            )
-            
-            print("城市天气加载完成 - \(location.name): \(Int(round(weather.currentWeather.temperature.value)))°")
+            // 从 WeatherService 获取更新后的天气数据
+            if let currentWeather = WeatherService.shared.currentWeather {
+                self.weather = currentWeather
+                print("SavedCityCard - 成功更新城市天气: \(location.name)")
+            }
         } catch {
-            print("加载城市天气失败 - \(location.name): \(error)")
+            print("SavedCityCard - 获取天气数据失败: \(error.localizedDescription)")
         }
+        
+        isLoading = false
     }
     
     private var cardBackground: some View {
@@ -621,20 +589,31 @@ struct SideMenuView: View {
     }
     
     private func handleLocationSelection(_ location: PresetLocation) {
-        print("选中城市: \(location.name)")
-        print("城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
+        print("SideMenuView - 选中城市: \(location.name)")
         
-        // 先关闭侧边栏
+        // 如果是预设城市，使用预设的坐标
+        let cityLocation: PresetLocation
+        if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) {
+            print("SideMenuView - 使用预设城市坐标")
+            cityLocation = presetLocation
+        } else {
+            print("SideMenuView - 使用传入的坐标")
+            cityLocation = location
+        }
+        
+        print("SideMenuView - 城市坐标: 纬度 \(cityLocation.location.coordinate.latitude), 经度 \(cityLocation.location.coordinate.longitude)")
+        
+        // 更新选中的城市
+        selectedLocation = cityLocation
+        
+        // 调用回调函数更新主视图
+        print("SideMenuView - 正在调用回调函数更新主视图的天气数据...")
+        onLocationSelected(cityLocation)
+        
+        // 最后关闭侧边栏
         withAnimation {
             isShowing = false
         }
-        
-        // 更新选中的城市
-        selectedLocation = location
-        
-        // 调用回调函数更新主视图
-        print("正在调用回调函数更新主视图的天气数据...")
-        onLocationSelected(location)
     }
 }
 
