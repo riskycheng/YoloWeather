@@ -15,6 +15,7 @@ class WeatherService: ObservableObject {
     @Published private(set) var isLoading: Bool = false
     
     private var location: CLLocation
+    private var cityWeatherCache: [String: CurrentWeather] = [:]
     
     private init() {
         location = CLLocation(latitude: 31.230416, longitude: 121.473701) // 默认上海
@@ -27,7 +28,8 @@ class WeatherService: ObservableObject {
         lastUpdateTime = nil
     }
     
-    func updateWeather(for location: CLLocation) async {
+    // 更新指定城市的天气数据
+    func updateWeather(for location: CLLocation, cityName: String? = nil) async {
         print("WeatherService - 开始获取天气数据")
         print("WeatherService - 请求位置: 纬度 \(location.coordinate.latitude), 经度 \(location.coordinate.longitude)")
         
@@ -62,7 +64,7 @@ class WeatherService: ObservableObject {
             let dailyForecast = weather.dailyForecast.forecast.first
             
             // 更新当前天气
-            currentWeather = CurrentWeather(
+            let currentWeatherData = CurrentWeather(
                 date: weather.currentWeather.date,
                 temperature: weather.currentWeather.temperature.value,
                 feelsLike: weather.currentWeather.apparentTemperature.value,
@@ -80,6 +82,12 @@ class WeatherService: ObservableObject {
                 highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
                 lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
             )
+            
+            // 更新当前天气和缓存
+            self.currentWeather = currentWeatherData
+            if let cityName = cityName {
+                cityWeatherCache[cityName] = currentWeatherData
+            }
             
             // 更新小时预报
             var forecasts: [HourlyForecast] = []
@@ -125,6 +133,11 @@ class WeatherService: ObservableObject {
             print("WeatherService - 获取天气数据失败: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
+    }
+    
+    // 获取缓存的城市天气数据
+    func getCachedWeather(for cityName: String) -> CurrentWeather? {
+        return cityWeatherCache[cityName]
     }
     
     // 将 WeatherKit 的天气状况转换为中文描述

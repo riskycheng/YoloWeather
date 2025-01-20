@@ -262,6 +262,7 @@ struct WeatherView: View {
         
         let refreshStartTime = Date()
         
+        // 只更新当前选中的城市天气
         if isUsingCurrentLocation {
             print("使用当前位置更新天气")
             if let currentLocation = locationService.currentLocation {

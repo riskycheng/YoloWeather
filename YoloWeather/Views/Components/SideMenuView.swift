@@ -161,6 +161,11 @@ struct SavedCityCard: View {
     }
     
     private func loadWeather() async {
+        // 在编辑模式下不更新天气数据
+        if isEditMode {
+            return
+        }
+        
         isLoading = true
         print("SavedCityCard - 开始加载城市天气: \(location.name)")
         
@@ -590,6 +595,11 @@ struct SideMenuView: View {
     
     private func handleLocationSelection(_ location: PresetLocation) {
         print("SideMenuView - 选中城市: \(location.name)")
+        
+        // 如果在编辑模式下，不触发主界面更新
+        if isEditMode {
+            return
+        }
         
         // 如果是预设城市，使用预设的坐标
         let cityLocation: PresetLocation
