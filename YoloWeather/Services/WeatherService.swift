@@ -389,45 +389,57 @@ class WeatherService: ObservableObject {
     
     // 获取天气图标名称
     internal func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
-        // 首先判断是否为夜晚
-        let timeBasedPrefix = isNight ? "night_" : "day_"
+        print("天气图标计算 - 天气状况: \(condition)")
+        print("天气图标计算 - 是否夜晚: \(isNight)")
         
-        // 根据天气状况选择基础图标名称
-        let baseSymbol: String
+        let symbolName: String
         switch condition {
-        case .clear, .mostlyClear, .hot:
-            return isNight ? "full_moon" : "sunny"
+        case .clear:
+            symbolName = isNight ? "moon.stars.fill" : "sun.max.fill"
+        case .mostlyClear:
+            symbolName = isNight ? "moon.fill" : "sun.max.fill"
+        case .partlyCloudy, .mostlyCloudy:
+            symbolName = isNight ? "cloud.moon.fill" : "cloud.sun.fill"
         case .cloudy:
-            return isNight ? "moon_cloudy" : "cloudy"
-        case .mostlyCloudy, .partlyCloudy:
-            return isNight ? "partly_cloudy_night" : "partly_cloudy_daytime"
+            symbolName = "cloud.fill"
         case .drizzle:
-            return "light_rain"
+            symbolName = "cloud.drizzle.fill"
         case .rain:
-            return "moderate_rain"
+            symbolName = "cloud.rain.fill"
         case .heavyRain:
-            return "heavy_rain"
+            symbolName = "cloud.heavyrain.fill"
         case .snow:
-            return "light_snow"
-        case .heavySnow, .blizzard:
-            return "heavy_snow"
-        case .sleet, .freezingDrizzle:
-            return "wet"
+            symbolName = "cloud.snow.fill"
+        case .heavySnow:
+            symbolName = "cloud.snow.fill"
+        case .sleet:
+            symbolName = "cloud.sleet.fill"
+        case .freezingDrizzle:
+            symbolName = "cloud.sleet.fill"
+        case .strongStorms:
+            symbolName = "cloud.bolt.rain.fill"
         case .windy:
-            return "windy"
+            symbolName = "wind"
         case .foggy:
-            return "fog"
+            symbolName = "cloud.fog.fill"
         case .haze:
-            return "haze"
+            symbolName = "sun.haze.fill"
+        case .hot:
+            symbolName = "thermometer.sun.fill"
+        case .blizzard:
+            symbolName = "wind.snow"
         case .blowingDust:
-            return "blowing_sand"
+            symbolName = "sun.dust.fill"
         case .tropicalStorm:
-            return "thunderstorm"
+            symbolName = "tropicalstorm"
         case .hurricane:
-            return "typhoon"
+            symbolName = "hurricane"
         default:
-            return isNight ? "full_moon" : "sunny"
+            symbolName = isNight ? "moon.fill" : "sun.max.fill"
         }
+        
+        print("天气图标计算 - 选择的图标: \(symbolName)")
+        return symbolName
     }
     
     // 判断是否为夜间
@@ -436,11 +448,8 @@ class WeatherService: ObservableObject {
         calendar.timeZone = timezone
         let hour = calendar.component(.hour, from: date)
         
-        print("isNight 计算 - 时区: \(timezone.identifier)")
-        print("isNight 计算 - UTC时间: \(date)")
-        print("isNight 计算 - 当地时间: \(hour)点")
-        print("isNight 计算 - 是否夜晚: \(hour < 6 || hour >= 18)")
-        
+        // 根据时间段判断是否为夜晚
+        // 夜晚：晚上6点到早上6点
         return hour < 6 || hour >= 18
     }
     
