@@ -27,6 +27,13 @@ class WeatherService: ObservableObject {
         hourlyForecast = []
         dailyForecast = []
         lastUpdateTime = nil
+        currentCityName = nil
+        errorMessage = nil
+    }
+    
+    // 清除当前城市名称
+    func clearCurrentCityName() {
+        currentCityName = nil
     }
     
     // 更新指定城市的天气数据
@@ -395,47 +402,47 @@ class WeatherService: ObservableObject {
         let symbolName: String
         switch condition {
         case .clear:
-            symbolName = isNight ? "moon.stars.fill" : "sun.max.fill"
+            symbolName = isNight ? "full_moon" : "sunny"
         case .mostlyClear:
-            symbolName = isNight ? "moon.fill" : "sun.max.fill"
+            symbolName = isNight ? "moon_stars" : "sunny"
         case .partlyCloudy, .mostlyCloudy:
-            symbolName = isNight ? "cloud.moon.fill" : "cloud.sun.fill"
+            symbolName = isNight ? "partly_cloudy_night" : "partly_cloudy_daytime"
         case .cloudy:
-            symbolName = "cloud.fill"
+            symbolName = isNight ? "moon_cloudy" : "cloudy"
         case .drizzle:
-            symbolName = "cloud.drizzle.fill"
+            symbolName = "light_rain"
         case .rain:
-            symbolName = "cloud.rain.fill"
+            symbolName = "moderate_rain"
         case .heavyRain:
-            symbolName = "cloud.heavyrain.fill"
+            symbolName = "heavy_rain"
         case .snow:
-            symbolName = "cloud.snow.fill"
+            symbolName = "light_snow"
         case .heavySnow:
-            symbolName = "cloud.snow.fill"
+            symbolName = "heavy_snow"
         case .sleet:
-            symbolName = "cloud.sleet.fill"
+            symbolName = "wet"
         case .freezingDrizzle:
-            symbolName = "cloud.sleet.fill"
+            symbolName = "wet"
         case .strongStorms:
-            symbolName = "cloud.bolt.rain.fill"
+            symbolName = "thunderstorm"
         case .windy:
-            symbolName = "wind"
+            symbolName = "windy"
         case .foggy:
-            symbolName = "cloud.fog.fill"
+            symbolName = "fog"
         case .haze:
-            symbolName = "sun.haze.fill"
+            symbolName = "haze"
         case .hot:
-            symbolName = "thermometer.sun.fill"
+            symbolName = "high_temperature"
         case .blizzard:
-            symbolName = "wind.snow"
+            symbolName = "blizzard"
         case .blowingDust:
-            symbolName = "sun.dust.fill"
+            symbolName = "blowing_sand"
         case .tropicalStorm:
-            symbolName = "tropicalstorm"
+            symbolName = "rainstorm"
         case .hurricane:
-            symbolName = "hurricane"
+            symbolName = "typhoon"
         default:
-            symbolName = isNight ? "moon.fill" : "sun.max.fill"
+            symbolName = isNight ? "moon_stars" : "sunny"
         }
         
         print("天气图标计算 - 选择的图标: \(symbolName)")

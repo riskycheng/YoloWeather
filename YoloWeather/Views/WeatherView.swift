@@ -140,6 +140,7 @@ private struct WeatherContentView: View {
     let timeOfDay: WeatherTimeOfDay
     let locationName: String
     let animationTrigger: UUID
+    @ObservedObject private var weatherService = WeatherService.shared
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -150,7 +151,7 @@ private struct WeatherContentView: View {
             )
             .scaleEffect(1.2)
             
-            Text(locationName)
+            Text(weatherService.currentCityName ?? locationName)
                 .font(.system(size: 46, weight: .medium))
                 .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
         }
@@ -387,7 +388,7 @@ struct WeatherView: View {
         let isNight = hour >= 18 || hour < 6
         let symbolName = getWeatherSymbolName(for: weather.weatherCondition, isNight: isNight)
         
-        print("天气图标计算 - 城市: \(locationService.locationName)")
+        print("天气图标计算 - 城市: \(weatherService.currentCityName ?? "未知城市")")
         print("天气图标计算 - 当地时间: \(hour)点")
         print("天气图标计算 - 是否夜晚: \(isNight)")
         print("天气图标计算 - 天气状况: \(weather.weatherCondition)")
@@ -764,19 +765,24 @@ struct WeatherView: View {
         isLoadingWeather = true
         let startTime = Date()
         
-        // 先更新状态
+        // 更新状态
         selectedLocation = location
         lastSelectedLocationName = location.name
         isUsingCurrentLocation = false
-        locationService.locationName = location.name
         
         // 使用 Task 包装异步操作
         Task {
             print("主视图 - 正在使用 WeatherService 获取天气数据...")
-            // 先清除当前天气数据
+            // 先清除当前天气数据和城市名称
             weatherService.clearCurrentWeather()
+            weatherService.clearCurrentCityName()
+            locationService.locationName = ""
+            
             // 使用公共方法更新天气数据，传入城市名称
             await weatherService.updateWeather(for: location.location, cityName: location.name)
+            
+            // 更新完天气数据后再更新位置名称
+            locationService.locationName = location.name
             print("主视图 - 天气数据更新完成")
             
             // 更新时间相关设置
@@ -789,7 +795,7 @@ struct WeatherView: View {
             // 结束加载
             isLoadingWeather = false
             
-            // 最后关闭侧边栏
+            // 关闭侧边栏
             withAnimation {
                 showingSideMenu = false
             }
