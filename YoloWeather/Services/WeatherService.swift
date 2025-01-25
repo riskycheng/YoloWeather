@@ -2,6 +2,12 @@ import Foundation
 import WeatherKit
 import CoreLocation
 
+enum WeatherError: Error {
+    case cityNameResolutionFailed
+    case weatherDataFetchFailed
+    case invalidLocation
+}
+
 @MainActor
 class WeatherService: ObservableObject {
     static let shared = WeatherService()
@@ -41,20 +47,32 @@ class WeatherService: ObservableObject {
         print("WeatherService - 开始获取天气数据")
         print("WeatherService - 请求位置: 纬度 \(location.coordinate.latitude), 经度 \(location.coordinate.longitude)")
         
-        if let cityName = cityName {
-            print("WeatherService - 城市名称: \(cityName)")
-            // 更新当前选中的城市名称
-            self.currentCityName = cityName
-            print("WeatherService - 已更新当前选中城市为: \(cityName)")
-        }
+        // 清除之前的数据
+        clearCurrentWeather()
         
         self.location = location
         isLoading = true
         defer { isLoading = false }
         
         do {
-            // 先获取时区
-            let timezone = await calculateTimezone(for: location, cityName: cityName)
+            // 如果没有提供城市名称，尝试进行反向地理编码
+            let resolvedCityName: String
+            if let providedCityName = cityName {
+                resolvedCityName = providedCityName
+            } else {
+                if let geocodedCity = await reverseGeocode(location: location) {
+                    resolvedCityName = geocodedCity
+                } else {
+                    throw WeatherError.cityNameResolutionFailed
+                }
+            }
+            
+            // 更新当前选中的城市名称
+            self.currentCityName = resolvedCityName
+            print("WeatherService - 已更新当前选中城市为: \(resolvedCityName)")
+            
+            // 获取时区
+            let timezone = await calculateTimezone(for: location, cityName: resolvedCityName)
             print("WeatherService - 使用时区: \(timezone.identifier)")
             
             // 获取天气数据
@@ -155,9 +173,17 @@ class WeatherService: ObservableObject {
             errorMessage = nil
             
             print("WeatherService - 天气数据更新完成")
+            
         } catch {
-            print("WeatherService - 获取天气数据失败: \(error.localizedDescription)")
-            errorMessage = error.localizedDescription
+            print("WeatherService - 更新天气数据失败: \(error.localizedDescription)")
+            handleError(error)
+            
+            // 如果缓存中有数据，使用缓存数据
+            if let cityName = self.currentCityName,
+               let cachedWeather = cityWeatherCache[cityName] {
+                self.currentWeather = cachedWeather
+                print("WeatherService - 使用缓存数据: \(cityName)")
+            }
         }
     }
     
@@ -592,6 +618,36 @@ class WeatherService: ObservableObject {
         ]
         
         return service
+    }
+    
+    private func reverseGeocode(location: CLLocation) async -> String? {
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            if let placemark = placemarks.first,
+               let city = placemark.locality ?? placemark.administrativeArea {
+                return city
+            }
+            return nil
+        } catch {
+            print("反向地理编码失败: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
+    private func handleError(_ error: Error) {
+        if let weatherError = error as? WeatherError {
+            switch weatherError {
+            case .cityNameResolutionFailed:
+                errorMessage = "无法获取城市名称"
+            case .weatherDataFetchFailed:
+                errorMessage = "获取天气数据失败"
+            case .invalidLocation:
+                errorMessage = "无效的位置信息"
+            }
+        } else {
+            errorMessage = "发生未知错误: \(error.localizedDescription)"
+        }
     }
 }
 
