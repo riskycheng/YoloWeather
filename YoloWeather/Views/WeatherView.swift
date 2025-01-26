@@ -151,7 +151,7 @@ private struct WeatherContentView: View {
             )
             .scaleEffect(1.2)
             
-            Text(weatherService.currentCityName ?? locationName)
+            Text(locationName)
                 .font(.system(size: 46, weight: .medium))
                 .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
         }
@@ -388,7 +388,10 @@ struct WeatherView: View {
         let isNight = hour >= 18 || hour < 6
         let symbolName = getWeatherSymbolName(for: weather.weatherCondition, isNight: isNight)
         
-        print("天气图标计算 - 城市: \(weatherService.currentCityName ?? "未知城市")")
+        // 使用 selectedLocation 的名称，因为这是用户当前选择的城市
+        let cityName = isUsingCurrentLocation ? locationService.locationName : selectedLocation.name
+        
+        print("天气图标计算 - 城市: \(cityName)")
         print("天气图标计算 - 当地时间: \(hour)点")
         print("天气图标计算 - 是否夜晚: \(isNight)")
         print("天气图标计算 - 天气状况: \(weather.weatherCondition)")
@@ -627,7 +630,7 @@ struct WeatherView: View {
                                         WeatherContentView(
                                             weather: weather,
                                             timeOfDay: timeOfDay,
-                                            locationName: locationService.locationName,
+                                            locationName: isUsingCurrentLocation ? locationService.locationName : selectedLocation.name,
                                             animationTrigger: animationTrigger
                                         )
                                         
@@ -765,37 +768,37 @@ struct WeatherView: View {
         isLoadingWeather = true
         let startTime = Date()
         
-        // 更新状态
-        selectedLocation = location
-        lastSelectedLocationName = location.name
-        isUsingCurrentLocation = false
-        
         // 使用 Task 包装异步操作
         Task {
             print("主视图 - 正在使用 WeatherService 获取天气数据...")
-            // 先清除当前天气数据和城市名称
-            weatherService.clearCurrentWeather()
-            weatherService.clearCurrentCityName()
-            locationService.locationName = ""
             
-            // 使用公共方法更新天气数据，传入城市名称
-            await weatherService.updateWeather(for: location.location, cityName: location.name)
-            
-            // 更新完天气数据后再更新位置名称
+            // 1. 更新 UI 状态
+            isUsingCurrentLocation = false
+            selectedLocation = location
+            lastSelectedLocationName = location.name
             locationService.locationName = location.name
+            
+            // 2. 清除旧数据
+            weatherService.clearCurrentWeather()
+            
+            // 3. 获取新数据
+            await weatherService.updateWeather(for: location.location, cityName: location.name)
             print("主视图 - 天气数据更新完成")
             
-            // 更新时间相关设置
+            // 4. 更新时间相关设置
             updateTimeOfDay()
             lastRefreshTime = Date()
             
-            // 确保最小加载时间
-            await ensureMinimumLoadingTime(startTime: startTime)
+            // 5. 确保最小加载时间
+            let timeElapsed = Date().timeIntervalSince(startTime)
+            if timeElapsed < 1.0 {
+                try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+            }
             
-            // 结束加载
+            // 6. 完成加载
             isLoadingWeather = false
             
-            // 关闭侧边栏
+            // 7. 关闭侧边栏
             withAnimation {
                 showingSideMenu = false
             }

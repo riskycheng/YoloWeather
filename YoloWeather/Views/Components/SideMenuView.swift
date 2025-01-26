@@ -50,12 +50,12 @@ private struct WeatherInfoView: View {
         print("SideMenuView - 城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
         
         do {
-            // 使用 WeatherService 获取天气数据
-            await WeatherService.shared.updateWeather(for: location.location)
+            // 使用 WeatherService 获取天气数据，一定要传入城市名称
+            await WeatherService.shared.updateWeather(for: location.location, cityName: location.name)
             
-            // 从 WeatherService 获取更新后的天气数据
-            if let currentWeather = WeatherService.shared.currentWeather {
-                self.weather = currentWeather
+            // 从缓存中获取更新后的天气数据
+            if let updatedWeather = WeatherService.shared.getCachedWeather(for: location.name) {
+                self.weather = updatedWeather
                 print("SideMenuView - 成功更新城市天气: \(location.name)")
             }
         } catch {
@@ -260,7 +260,7 @@ struct SavedCityCard: View {
             return
         }
         
-        // 如果缓存中没有，则更新天气数据
+        // 如果缓存中没有，则更新天气数据，一定要传入城市名称
         await WeatherService.shared.updateWeather(for: cityLocation, cityName: location.name)
         
         // 更新完成后，从缓存中获取天气数据
