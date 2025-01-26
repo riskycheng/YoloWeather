@@ -547,7 +547,18 @@ struct WeatherView: View {
             Task {
                 if citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) {
                     // 如果城市已在收藏列表中,则作为定位按钮使用
+                    isLoadingWeather = true  // 开始加载
+                    let startTime = Date()
+                    
                     await handleLocationButtonTap()
+                    
+                    // 确保最小加载时间
+                    let timeElapsed = Date().timeIntervalSince(startTime)
+                    if timeElapsed < 1.0 {
+                        try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+                    }
+                    
+                    isLoadingWeather = false  // 结束加载
                 } else {
                     // 如果城市不在收藏列表中,添加到收藏
                     let currentLocation = PresetLocation(
