@@ -2,6 +2,20 @@ import SwiftUI
 import CoreLocation
 import WeatherKit
 
+// 添加 View 扩展
+extension View {
+    func placeholder<Content: View>(
+        when shouldShow: Bool,
+        alignment: Alignment = .leading,
+        @ViewBuilder placeholder: () -> Content
+    ) -> some View {
+        ZStack(alignment: alignment) {
+            placeholder().opacity(shouldShow ? 1 : 0)
+            self
+        }
+    }
+}
+
 // 天气信息视图组件
 private struct WeatherInfoView: View {
     let location: PresetLocation
@@ -64,6 +78,84 @@ private struct WeatherInfoView: View {
     }
 }
 
+// 温度显示组件
+private struct TemperatureView: View {
+    let weather: WeatherService.CurrentWeather?
+    let isLoading: Bool
+    let isEditMode: Bool
+    
+    var body: some View {
+        if isEditMode {
+            // 编辑模式下显示缓存的温度
+            if let weather = weather {
+                Text("\(Int(round(weather.temperature)))°")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.white)
+            } else {
+                Text("--°")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(.white)
+            }
+        } else if isLoading {
+            Text("获取中...")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundColor(.white)
+        } else if let weather = weather {
+            Text("\(Int(round(weather.temperature)))°")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundColor(.white)
+        } else {
+            Text("--°")
+                .font(.system(size: 24, weight: .medium))
+                .foregroundColor(.white)
+        }
+    }
+}
+
+// 天气详情组件
+private struct WeatherDetailsView: View {
+    let weather: WeatherService.CurrentWeather?
+    let isLoading: Bool
+    let isEditMode: Bool
+    
+    var body: some View {
+        if isEditMode {
+            // 编辑模式下显示缓存的天气信息
+            if let weather = weather {
+                weatherInfoContent(weather)
+            } else {
+                Text("暂无数据")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.8))
+            }
+        } else if isLoading {
+            Text("获取中...")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.8))
+        } else if let weather = weather {
+            weatherInfoContent(weather)
+        } else {
+            Text("暂无数据")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.8))
+        }
+    }
+    
+    private func weatherInfoContent(_ weather: WeatherService.CurrentWeather) -> some View {
+        HStack {
+            Text(weather.condition)
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.8))
+            
+            Spacer()
+            
+            Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.8))
+        }
+    }
+}
+
 // 城市卡片组件
 struct SavedCityCard: View {
     let location: PresetLocation
@@ -111,7 +203,11 @@ struct SavedCityCard: View {
     private var cardContent: some View {
         VStack(spacing: 4) {
             cityHeader
-            weatherInfo
+            WeatherDetailsView(
+                weather: WeatherService.shared.getCachedWeather(for: location.name),
+                isLoading: isLoading,
+                isEditMode: isEditMode
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -128,71 +224,11 @@ struct SavedCityCard: View {
             
             Spacer()
             
-            if isEditMode {
-                // 编辑模式下显示缓存的温度
-                if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
-                    Text("\(Int(round(weather.temperature)))°")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.white)
-                } else {
-                    Text("--°")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(.white)
-                }
-            } else if isLoading {
-                Text("获取中...")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.white)
-            } else if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
-                Text("\(Int(round(weather.temperature)))°")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.white)
-            } else {
-                Text("--°")
-                    .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.white)
-            }
-        }
-    }
-    
-    private var weatherInfo: some View {
-        HStack {
-            if isEditMode {
-                // 编辑模式下显示缓存的天气信息
-                if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
-                    Text(weather.condition)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                    
-                    Spacer()
-                    
-                    Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                } else {
-                    Text("暂无数据")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            } else if isLoading {
-                Text("获取中...")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.8))
-            } else if let weather = WeatherService.shared.getCachedWeather(for: location.name) {
-                Text(weather.condition)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.8))
-                
-                Spacer()
-                
-                Text("最高\(Int(round(weather.highTemperature)))° 最低\(Int(round(weather.lowTemperature)))°")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.8))
-            } else {
-                Text("暂无数据")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.8))
-            }
+            TemperatureView(
+                weather: WeatherService.shared.getCachedWeather(for: location.name),
+                isLoading: isLoading,
+                isEditMode: isEditMode
+            )
         }
     }
     
@@ -208,9 +244,7 @@ struct SavedCityCard: View {
     private var deleteButton: some View {
         Group {
             if isEditMode {
-                Button(action: {
-                    onDelete()
-                }) {
+                Button(action: onDelete) {
                     Image(systemName: "minus.circle.fill")
                         .foregroundColor(.red)
                         .background(Circle().fill(.white))
@@ -223,11 +257,9 @@ struct SavedCityCard: View {
     private var longPressGesture: some Gesture {
         LongPressGesture(minimumDuration: 0.5)
             .updating($isDetectingLongPress) { currentState, gestureState, _ in
-                print("Long press updating for: \(location.name)")
                 gestureState = currentState
             }
             .onEnded { _ in
-                print("Long press ended for: \(location.name)")
                 withAnimation {
                     isEditMode = true
                 }
@@ -260,7 +292,7 @@ struct SavedCityCard: View {
             return
         }
         
-        // 如果缓存中没有，则更新天气数据，一定要传入城市名称
+        // 如果缓存中没有，则更新天气数据
         await WeatherService.shared.updateWeather(for: cityLocation, cityName: location.name)
         
         // 更新完成后，从缓存中获取天气数据
@@ -281,6 +313,337 @@ private struct DragState {
     var currentLocation: CGPoint = .zero
 }
 
+// 搜索栏组件
+private struct SearchBarView: View {
+    @Binding var searchText: String
+    var onSubmit: () async -> Void
+    
+    var body: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(Color.white.opacity(0.4))
+            
+            TextField("搜索城市", text: $searchText)
+                .textFieldStyle(.plain)
+                .submitLabel(.search)
+                .foregroundColor(.white)
+                .accentColor(.white)
+                .placeholder(when: searchText.isEmpty) {
+                    Text("搜索城市")
+                        .foregroundColor(Color.white.opacity(0.4))
+                }
+                .onSubmit {
+                    Task {
+                        await onSubmit()
+                    }
+                }
+            
+            if !searchText.isEmpty {
+                Button(action: {
+                    searchText = ""
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(Color.white.opacity(0.4))
+                }
+            }
+        }
+        .padding(10)
+        .background(Color.white.opacity(0.08))
+        .cornerRadius(8)
+    }
+}
+
+// 顶部栏组件
+private struct TopBarView: View {
+    @Binding var isEditMode: Bool
+    @Binding var searchText: String
+    var onSubmit: () async -> Void
+    
+    var body: some View {
+        HStack {
+            if isEditMode {
+                Button("完成") {
+                    withAnimation {
+                        isEditMode = false
+                    }
+                }
+                .foregroundColor(.white)
+                
+                Spacer()
+            } else {
+                SearchBarView(searchText: $searchText, onSubmit: onSubmit)
+            }
+        }
+        .padding()
+    }
+}
+
+// 主内容区域组件
+private struct MainContentView: View {
+    @Binding var isEditMode: Bool
+    @StateObject var citySearchService: CitySearchService
+    let searchText: String
+    let searchResults: [PresetLocation]
+    let isSearching: Bool
+    let onLocationSelected: (PresetLocation) -> Void
+    let cardHeight: CGFloat
+    let cardSpacing: CGFloat
+    @Binding var dragState: DragState
+    @Binding var draggingItem: PresetLocation?
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if searchText.isEmpty {
+                    // 收藏的城市
+                    if !citySearchService.recentSearches.isEmpty {
+                        savedCitiesSection
+                    }
+                } else {
+                    searchResultsList
+                }
+            }
+            .padding(.vertical)
+        }
+        .scrollDisabled(isEditMode)
+        .frame(maxHeight: .infinity)
+    }
+    
+    private var savedCitiesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("收藏城市")
+                    .font(.system(size: 14))
+                    .foregroundColor(Color.white.opacity(0.6))
+                Spacer()
+            }
+            .padding(.horizontal)
+            .onLongPressGesture {
+                withAnimation {
+                    isEditMode = true
+                }
+            }
+            
+            if isEditMode {
+                editableLocationsList
+            } else {
+                normalLocationsList
+            }
+        }
+    }
+    
+    private var searchResultsList: some View {
+        Group {
+            if isSearching {
+                HStack {
+                    Spacer()
+                    ProgressView()
+                        .padding()
+                    Spacer()
+                }
+            } else if searchResults.isEmpty {
+                Text("未找到匹配的城市")
+                    .foregroundColor(.gray)
+                    .padding()
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(searchResults) { location in
+                        SavedCityCard(
+                            location: location,
+                            action: {
+                                handleLocationSelection(location)
+                            },
+                            onDelete: {
+                                citySearchService.removeFromRecentSearches(location)
+                            },
+                            isEditMode: $isEditMode
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+    
+    private var normalLocationsList: some View {
+        VStack(spacing: 8) {
+            ForEach(citySearchService.recentSearches) { location in
+                SavedCityCard(
+                    location: location,
+                    action: {
+                        if !isEditMode {
+                            handleLocationSelection(location)
+                        }
+                    },
+                    onDelete: {
+                        citySearchService.removeFromRecentSearches(location)
+                    },
+                    isEditMode: $isEditMode
+                )
+            }
+        }
+        .padding(.horizontal)
+    }
+    
+    private var editableLocationsList: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: cardSpacing) {
+                Color.clear.frame(height: 12)
+                
+                ForEach(citySearchService.recentSearches) { location in
+                    SavedCityCard(
+                        location: location,
+                        action: {
+                            if !isEditMode {
+                                handleLocationSelection(location)
+                            }
+                        },
+                        onDelete: {
+                            citySearchService.removeFromRecentSearches(location)
+                        },
+                        isEditMode: $isEditMode
+                    )
+                    .offset(y: offsetFor(location))
+                    .zIndex(draggingItem == location ? 1 : 0)
+                    .scaleEffect(draggingItem == location ? 1.05 : 1.0)
+                    .shadow(color: .black.opacity(draggingItem == location ? 0.2 : 0), radius: 10, x: 0, y: 5)
+                    .animation(
+                        .interactiveSpring(response: 0.35, dampingFraction: 0.86),
+                        value: offsetFor(location)
+                    )
+                    .gesture(makeLongPressGesture(for: location))
+                    .simultaneousGesture(makeDragGesture(for: location))
+                }
+                
+                Color.clear.frame(height: 12)
+            }
+            .padding(.horizontal)
+        }
+    }
+    
+    private func handleLocationSelection(_ location: PresetLocation) {
+        onLocationSelected(location)
+    }
+    
+    private func offsetFor(_ location: PresetLocation) -> CGFloat {
+        let itemHeight = cardHeight + cardSpacing
+        
+        if draggingItem == location {
+            return dragState.translation.height
+        }
+        
+        guard let currentIndex = citySearchService.recentSearches.firstIndex(of: location),
+              let draggingIndex = draggingItem.flatMap({ citySearchService.recentSearches.firstIndex(of: $0) }) else {
+            return 0
+        }
+        
+        let targetPosition = itemHeight * CGFloat(currentIndex)
+        let draggingPosition = itemHeight * CGFloat(draggingIndex) + dragState.translation.height
+        
+        if currentIndex > draggingIndex && draggingPosition > targetPosition {
+            return -itemHeight
+        } else if currentIndex < draggingIndex && draggingPosition < targetPosition {
+            return itemHeight
+        }
+        
+        return 0
+    }
+    
+    private func makeLongPressGesture(for location: PresetLocation) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.5)
+            .onChanged { _ in
+                if draggingItem == nil {
+                    withAnimation {
+                        isEditMode = true
+                    }
+                }
+            }
+    }
+    
+    private func makeDragGesture(for location: PresetLocation) -> some Gesture {
+        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+            .onChanged { gesture in
+                handleDragChange(gesture: gesture, location: location)
+            }
+            .onEnded { _ in
+                handleDragEnd()
+            }
+    }
+    
+    private func handleDragChange(gesture: DragGesture.Value, location: PresetLocation) {
+        guard isEditMode && (draggingItem == nil || draggingItem == location) else { return }
+        
+        if draggingItem == nil {
+            initiateDrag(for: location, at: gesture.location)
+            return
+        }
+        
+        if draggingItem == location {
+            updateDragPosition(gesture: gesture, location: location)
+        }
+    }
+    
+    private func initiateDrag(for location: PresetLocation, at point: CGPoint) {
+        draggingItem = location
+        dragState.startLocation = point
+        dragState.currentLocation = point
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+    }
+    
+    private func updateDragPosition(gesture: DragGesture.Value, location: PresetLocation) {
+        dragState.translation = CGSize(
+            width: 0,
+            height: gesture.location.y - dragState.startLocation.y
+        )
+        dragState.currentLocation = gesture.location
+        
+        updateItemPosition(for: location, with: gesture)
+    }
+    
+    private func updateItemPosition(for location: PresetLocation, with gesture: DragGesture.Value) {
+        guard let currentIndex = citySearchService.recentSearches.firstIndex(of: location) else { return }
+        
+        let itemHeight = cardHeight + cardSpacing
+        let headerHeight: CGFloat = 12
+        
+        let startY = headerHeight + (itemHeight * CGFloat(currentIndex))
+        let currentY = startY + dragState.translation.height
+        
+        let proposedIndex = Int(round((currentY - headerHeight) / itemHeight))
+        let targetIndex = max(0, min(citySearchService.recentSearches.count - 1, proposedIndex))
+        
+        if targetIndex != currentIndex && abs(currentY - startY) > itemHeight / 2 {
+            moveItem(from: currentIndex, to: targetIndex, gesture: gesture)
+        }
+    }
+    
+    private func moveItem(from currentIndex: Int, to targetIndex: Int, gesture: DragGesture.Value) {
+        withAnimation(.interactiveSpring(response: 0.2, dampingFraction: 0.7)) {
+            let fromOffset = IndexSet(integer: currentIndex)
+            let toOffset = targetIndex > currentIndex ? targetIndex + 1 : targetIndex
+            citySearchService.recentSearches.move(
+                fromOffsets: fromOffset,
+                toOffset: toOffset
+            )
+        }
+        dragState.startLocation = gesture.location
+        dragState.translation = .zero
+        let impactFeedback = UIImpactFeedbackGenerator(style: .light)
+        impactFeedback.impactOccurred()
+    }
+    
+    private func handleDragEnd() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            dragState = DragState()
+            draggingItem = nil
+        }
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+    }
+}
+
+// 修改 SideMenuView 的实现
 struct SideMenuView: View {
     @Binding var isShowing: Bool
     @Binding var selectedLocation: PresetLocation
@@ -318,98 +681,27 @@ struct SideMenuView: View {
                     Spacer()
                     
                     VStack(spacing: 0) {
-                        // 顶部栏
-                        HStack {
-                            if isEditMode {
-                                Button("完成") {
-                                    withAnimation {
-                                        isEditMode = false
-                                    }
-                                }
-                                .foregroundColor(.white)
-                                
-                                Spacer()
-                            } else {
-                                // 搜索框
-                                HStack {
-                                    Image(systemName: "magnifyingglass")
-                                        .foregroundColor(Color.white.opacity(0.4))
-                                    
-                                    TextField("搜索城市", text: $searchText)
-                                        .textFieldStyle(.plain)
-                                        .submitLabel(.search)
-                                        .foregroundColor(.white)
-                                        .accentColor(.white)
-                                        .placeholder(when: searchText.isEmpty) {
-                                            Text("搜索城市")
-                                                .foregroundColor(Color.white.opacity(0.4))
-                                        }
-                                        .onSubmit {
-                                            Task {
-                                                await performSearch()
-                                            }
-                                        }
-                                    
-                                    if !searchText.isEmpty {
-                                        Button(action: {
-                                            searchText = ""
-                                            searchResults = []
-                                            showSearchResults = false
-                                        }) {
-                                            Image(systemName: "xmark.circle.fill")
-                                                .foregroundColor(Color.white.opacity(0.4))
-                                        }
-                                    }
-                                }
-                                .padding(10)
-                                .background(Color.white.opacity(0.08))
-                                .cornerRadius(8)
-                            }
-                        }
-                        .padding()
+                        TopBarView(
+                            isEditMode: $isEditMode,
+                            searchText: $searchText,
+                            onSubmit: performSearch
+                        )
                         
-                        // 主内容区域
-                        VStack(spacing: 0) {
-                            // 可滚动的城市列表区域
-                            ScrollView {
-                                VStack(spacing: 20) {
-                                    if searchText.isEmpty {
-                                        // 收藏的城市
-                                        if !citySearchService.recentSearches.isEmpty {
-                                            VStack(alignment: .leading, spacing: 12) {
-                                                HStack {
-                                                    Text("收藏城市")
-                                                        .font(.system(size: 14))
-                                                        .foregroundColor(Color.white.opacity(0.6))
-                                                    Spacer()
-                                                }
-                                                .padding(.horizontal)
-                                                .onLongPressGesture {
-                                                    withAnimation {
-                                                        isEditMode = true
-                                                    }
-                                                }
-                                                
-                                                if isEditMode {
-                                                    editableLocationsList
-                                                } else {
-                                                    normalLocationsList
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        searchResultsList
-                                    }
-                                }
-                                .padding(.vertical)
-                            }
-                            .scrollDisabled(isEditMode)
-                            .frame(maxHeight: .infinity)
-                            
-                            // 固定在底部的显示指标设置
-                            WeatherBubbleSettingsView()
-                                .padding(.bottom)
-                        }
+                        MainContentView(
+                            isEditMode: $isEditMode,
+                            citySearchService: citySearchService,
+                            searchText: searchText,
+                            searchResults: searchResults,
+                            isSearching: isSearching,
+                            onLocationSelected: handleLocationSelection,
+                            cardHeight: cardHeight,
+                            cardSpacing: cardSpacing,
+                            dragState: $dragState,
+                            draggingItem: $draggingItem
+                        )
+                        
+                        WeatherBubbleSettingsView()
+                            .padding(.bottom)
                     }
                     .frame(width: min(geometry.size.width * 0.75, 300))
                     .background(Color(red: 0.25, green: 0.35, blue: 0.45))
@@ -419,208 +711,18 @@ struct SideMenuView: View {
             }
             .onChange(of: isShowing) { newValue in
                 if !newValue {
-                    searchText = ""
-                    searchResults = []
-                    showSearchResults = false
-                    isSearching = false
-                    isEditMode = false
+                    resetState()
                 }
             }
         }
     }
     
-    private var normalLocationsList: some View {
-        VStack(spacing: 8) {
-            ForEach(citySearchService.recentSearches) { location in
-                SavedCityCard(
-                    location: location,
-                    action: {
-                        if !isEditMode {
-                            handleLocationSelection(location)
-                        }
-                    },
-                    onDelete: {
-                        citySearchService.removeFromRecentSearches(location)
-                    },
-                    isEditMode: $isEditMode
-                )
-            }
-        }
-        .padding(.horizontal)
-    }
-    
-    private var editableLocationsList: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: cardSpacing) {
-                Color.clear.frame(height: 12)
-                
-                ForEach(citySearchService.recentSearches) { location in
-                    SavedCityCard(
-                        location: location,
-                        action: {
-                            // 编辑模式下禁用点击动作
-                            if !isEditMode {
-                                handleLocationSelection(location)
-                            }
-                        },
-                        onDelete: {
-                            citySearchService.removeFromRecentSearches(location)
-                        },
-                        isEditMode: $isEditMode
-                    )
-                    .offset(y: offsetFor(location))
-                    .zIndex(draggingItem == location ? 1 : 0)
-                    .scaleEffect(draggingItem == location ? 1.05 : 1.0)
-                    .shadow(color: .black.opacity(draggingItem == location ? 0.2 : 0), radius: 10, x: 0, y: 5)
-                    .animation(
-                        .interactiveSpring(response: 0.35, dampingFraction: 0.86),
-                        value: offsetFor(location)
-                    )
-                    .gesture(
-                        LongPressGesture(minimumDuration: 0.5)
-                            .onChanged { _ in
-                                if draggingItem == nil {
-                                    withAnimation {
-                                        isEditMode = true
-                                    }
-                                }
-                            }
-                    )
-                    .simultaneousGesture(
-                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
-                            .onChanged { gesture in
-                                guard isEditMode && (draggingItem == nil || draggingItem == location) else { return }
-                                
-                                if draggingItem == nil {
-                                    draggingItem = location
-                                    dragState.startLocation = gesture.location
-                                    dragState.currentLocation = gesture.location
-                                    let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                    impactFeedback.impactOccurred()
-                                }
-                                
-                                if draggingItem == location {
-                                    // 更新拖拽位置
-                                    dragState.translation = CGSize(
-                                        width: 0,
-                                        height: gesture.location.y - dragState.startLocation.y
-                                    )
-                                    dragState.currentLocation = gesture.location
-                                    
-                                    // 计算目标位置
-                                    if let currentIndex = citySearchService.recentSearches.firstIndex(of: location) {
-                                        let itemHeight = cardHeight + cardSpacing
-                                        let headerHeight: CGFloat = 12
-                                        
-                                        // 计算当前拖拽位置相对于起始位置的偏移
-                                        let startY = headerHeight + (itemHeight * CGFloat(currentIndex))
-                                        let currentY = startY + dragState.translation.height
-                                        
-                                        // 计算目标索引
-                                        let proposedIndex = Int(round((currentY - headerHeight) / itemHeight))
-                                        let targetIndex = max(0, min(citySearchService.recentSearches.count - 1, proposedIndex))
-                                        
-                                        // 只有当移动足够距离时才触发位置交换
-                                        if targetIndex != currentIndex && abs(currentY - startY) > itemHeight / 2 {
-                                            withAnimation(.interactiveSpring(response: 0.2, dampingFraction: 0.7)) {
-                                                let fromOffset = IndexSet(integer: currentIndex)
-                                                let toOffset = targetIndex > currentIndex ? targetIndex + 1 : targetIndex
-                                                citySearchService.recentSearches.move(
-                                                    fromOffsets: fromOffset,
-                                                    toOffset: toOffset
-                                                )
-                                            }
-                                            // 更新起始位置
-                                            dragState.startLocation = gesture.location
-                                            dragState.translation = .zero
-                                            let impactFeedback = UIImpactFeedbackGenerator(style: .light)
-                                            impactFeedback.impactOccurred()
-                                        }
-                                    }
-                                }
-                            }
-                            .onEnded { _ in
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    dragState = DragState()
-                                    draggingItem = nil
-                                }
-                                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
-                                impactFeedback.impactOccurred()
-                            }
-                    )
-                }
-                
-                Color.clear.frame(height: 12)
-            }
-            .padding(.horizontal)
-        }
-    }
-    
-    private func offsetFor(_ location: PresetLocation) -> CGFloat {
-        let itemHeight = cardHeight + cardSpacing
-        
-        // 如果是被拖拽的卡片，直接跟随手指移动
-        if draggingItem == location {
-            return dragState.translation.height
-        }
-        
-        guard let currentIndex = citySearchService.recentSearches.firstIndex(of: location),
-              let draggingIndex = draggingItem.flatMap({ citySearchService.recentSearches.firstIndex(of: $0) }) else {
-            return 0
-        }
-        
-        // 计算补齐位置
-        let targetPosition = itemHeight * CGFloat(currentIndex)
-        let draggingPosition = itemHeight * CGFloat(draggingIndex) + dragState.translation.height
-        
-        if currentIndex > draggingIndex {
-            // 如果当前卡片在拖拽卡片下方
-            if draggingPosition > targetPosition {
-                // 如果拖拽的卡片移动到了当前卡片之后，当前卡片向上移动
-                return -itemHeight
-            }
-        } else if currentIndex < draggingIndex {
-            // 如果当前卡片在拖拽卡片上方
-            if draggingPosition < targetPosition {
-                // 如果拖拽的卡片移动到了当前卡片之前，当前卡片向下移动
-                return itemHeight
-            }
-        }
-        
-        return 0
-    }
-    
-    private var searchResultsList: some View {
-        Group {
-            if isSearching {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .padding()
-                    Spacer()
-                }
-            } else if searchResults.isEmpty {
-                Text("未找到匹配的城市")
-                    .foregroundColor(.gray)
-                    .padding()
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(searchResults) { location in
-                        SavedCityCard(
-                            location: location,
-                            action: {
-                                handleLocationSelection(location)
-                            },
-                            onDelete: {
-                                citySearchService.removeFromRecentSearches(location)
-                            },
-                            isEditMode: $isEditMode
-                        )
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
+    private func resetState() {
+        searchText = ""
+        searchResults = []
+        showSearchResults = false
+        isSearching = false
+        isEditMode = false
     }
     
     private func performSearch() async {
@@ -633,31 +735,15 @@ struct SideMenuView: View {
     private func handleLocationSelection(_ location: PresetLocation) {
         print("SideMenuView - 选中城市: \(location.name)")
         
-        // 如果在编辑模式下，不触发主界面更新
         if isEditMode {
             return
         }
         
-        // 如果是预设城市，使用预设的坐标
-        let cityLocation: PresetLocation
-        if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) {
-            print("SideMenuView - 使用预设城市坐标")
-            cityLocation = presetLocation
-        } else {
-            print("SideMenuView - 使用传入的坐标")
-            cityLocation = location
-        }
+        let cityLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) ?? location
         
-        print("SideMenuView - 城市坐标: 纬度 \(cityLocation.location.coordinate.latitude), 经度 \(cityLocation.location.coordinate.longitude)")
-        
-        // 更新选中的城市
         selectedLocation = cityLocation
-        
-        // 调用回调函数更新主视图
-        print("SideMenuView - 正在调用回调函数更新主视图的天气数据...")
         onLocationSelected(cityLocation)
         
-        // 最后关闭侧边栏
         withAnimation {
             isShowing = false
         }

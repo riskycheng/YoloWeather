@@ -11,7 +11,7 @@ import SwiftUI
 struct YoloWeatherApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            WeatherView()
         }
     }
 }
