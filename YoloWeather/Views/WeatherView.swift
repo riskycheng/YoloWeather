@@ -2,6 +2,7 @@ import SwiftUI
 import CoreLocation
 import Foundation
 import WeatherKit
+import EventKit
 
 // MARK: - Weather Forecast Item View
 private struct HourlyForecastItemView: View {
@@ -679,31 +680,33 @@ struct WeatherView: View {
                                 }
                             }
                         }
-                        .offset(y: -dragOffset)
+                        .offset(y: 0)  // 移除主页面的位移
                         .simultaneousGesture(
                             DragGesture()
                                 .onChanged { value in
-                                    if value.translation.height < 0 && value.startLocation.y > geometry.size.height - 100 {
-                                        let newOffset = -min(value.translation.height, geometry.size.height)
-                                        if !isDraggingUp {
-                                            print("开始上拉手势")
-                                            isDraggingUp = true
+                                    if !showingDailyForecast {
+                                        // 未显示预报时，处理上滑
+                                        if value.translation.height < 0 {
+                                            let newOffset = -min(value.translation.height, geometry.size.height * 0.7)
+                                            if !isDraggingUp {
+                                                print("开始上拉手势")
+                                                isDraggingUp = true
+                                            }
+                                            print("上拉距离: \(newOffset)")
+                                            dragOffset = newOffset
                                         }
-                                        print("上拉距离: \(newOffset)")
-                                        dragOffset = newOffset
                                     }
                                 }
                                 .onEnded { value in
-                                    if value.startLocation.y > geometry.size.height - 100 {
+                                    if !showingDailyForecast && value.translation.height < 0 {
                                         withAnimation(.spring()) {
-                                            if -value.translation.height > geometry.size.height * 0.3 {
-                                                print("上拉超过阈值，显示每日预报")
+                                            if -value.translation.height > 100 {
+                                                print("显示预报界面")
                                                 dragOffset = geometry.size.height
                                                 showingDailyForecast = true
                                             } else {
-                                                print("上拉未超过阈值，回到原位")
+                                                print("返回主界面")
                                                 dragOffset = 0
-                                                showingDailyForecast = false
                                             }
                                             isDraggingUp = false
                                         }
@@ -715,16 +718,70 @@ struct WeatherView: View {
                     // 每日预报视图
                     if let _ = weatherService.currentWeather {
                         VStack(spacing: 0) {
-                            // 上拉指示器
-                            RoundedRectangle(cornerRadius: 2.5)
-                                .fill(Color.white.opacity(0.3))
-                                .frame(width: 40, height: 5)
-                                .padding(.top, 10)
+                            HStack {
+                                Text("7天预报")
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundColor(.white)
+                                
+                                Spacer()
+                                
+                                Button(action: {
+                                    // 添加日历事件
+                                    let eventStore = EKEventStore()
+                                    eventStore.requestAccess(to: .event) { granted, error in
+                                        if granted {
+                                            // 打开系统日历
+                                            if let url = URL(string: "calshow://") {
+                                                UIApplication.shared.open(url)
+                                            }
+                                        }
+                                    }
+                                }) {
+                                    Image(systemName: "calendar")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
                             
-                            DailyForecastView(forecast: weatherService.dailyForecast)
+                            DailyForecastView(forecast: convertToDailyForecast(weatherService.dailyForecast))
                                 .transition(.move(edge: .bottom))
+                                .padding(.bottom, geometry.safeAreaInsets.bottom)
                         }
-                        .offset(y: geometry.size.height - dragOffset)
+                        .frame(height: geometry.size.height * 0.7)  // 减小整体高度
+                        .background(
+                            RoundedRectangle(cornerRadius: 20)
+                                .fill(.ultraThinMaterial)
+                                .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: -5)
+                        )
+                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height * 0.7 : dragOffset))
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if showingDailyForecast {
+                                        // 已显示预报时，处理下滑
+                                        if value.translation.height > 0 {
+                                            dragOffset = geometry.size.height - value.translation.height
+                                            print("下滑距离: \(value.translation.height)")
+                                        }
+                                    }
+                                }
+                                .onEnded { value in
+                                    if showingDailyForecast && value.translation.height > 0 {
+                                        withAnimation(.spring()) {
+                                            if value.translation.height > 100 {
+                                                print("下滑返回主界面")
+                                                dragOffset = 0
+                                                showingDailyForecast = false
+                                            } else {
+                                                print("保持预报界面")
+                                                dragOffset = geometry.size.height
+                                            }
+                                        }
+                                    }
+                                }
+                        )
                     }
                     
                     // 添加一个透明的边缘手势检测视图
@@ -852,6 +909,21 @@ struct WeatherView: View {
             withAnimation {
                 showingSideMenu = false
             }
+        }
+    }
+    
+    private func convertToDailyForecast(_ dayWeatherInfo: [DayWeatherInfo]) -> [DailyForecast] {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "EEE"
+        
+        return dayWeatherInfo.map { day in
+            DailyForecast(
+                weekday: dateFormatter.string(from: day.date),
+                date: day.date,
+                temperatureMin: day.lowTemperature,
+                temperatureMax: day.highTemperature,
+                symbolName: day.symbolName  // 直接使用 DayWeatherInfo 中的 symbolName
+            )
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import WeatherKit
 
 struct HourlyForecastView: View {
     let forecast: [CurrentWeather]
@@ -42,20 +43,22 @@ struct HourlyForecastView: View {
     }
 }
 
+struct DailyForecast: Identifiable {
+    let id = UUID()
+    let weekday: String
+    let date: Date
+    let temperatureMin: Double
+    let temperatureMax: Double
+    let symbolName: String
+}
+
 struct DailyForecastView: View {
-    let forecast: [DayWeatherInfo]
-    @Environment(\.weatherTimeOfDay) private var timeOfDay: WeatherTimeOfDay
-    
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "EEE"
-        return formatter
-    }()
+    let forecast: [DailyForecast]
     
     // 计算7天内的全局温度范围
     private var globalTempRange: (min: Double, max: Double) {
-        let minTemp = forecast.map { $0.lowTemperature }.min() ?? 0
-        let maxTemp = forecast.map { $0.highTemperature }.max() ?? 0
+        let minTemp = forecast.map { $0.temperatureMin }.min() ?? 0
+        let maxTemp = forecast.map { $0.temperatureMax }.max() ?? 0
         return (minTemp, maxTemp)
     }
     
@@ -88,93 +91,68 @@ struct DailyForecastView: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
-            // 标题栏
-            HStack {
-                Text("7天预报")
-                    .font(.system(.headline, design: .rounded))
-                    .foregroundStyle(.white)
-                
-                Spacer()
-                
-                Image(systemName: "calendar")
-                    .foregroundStyle(.white)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            
-            // 预报列表
-            VStack(spacing: 12) {
-                ForEach(0..<forecast.count, id: \.self) { index in
-                    let day = forecast[index]
-                    HStack(spacing: 12) {
-                        // 星期
-                        Text(dateFormatter.string(from: day.date))
-                            .font(.system(.body, design: .rounded))
-                            .frame(width: 45, alignment: .leading)
-                        
-                        // 天气图标
-                        Image(systemName: day.symbolName)
-                            .font(.title3)
-                            .frame(width: 24)
-                            .symbolRenderingMode(.multicolor)
-                        
-                        // 温度条和温度
-                        HStack(spacing: 8) {
-                            Text("\(Int(round(day.lowTemperature)))°")
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .frame(width: 30, alignment: .trailing)
-                                .lineLimit(1)
-                            
-                            temperatureBar(low: day.lowTemperature, high: day.highTemperature, width: 80)
-                                .frame(height: 6)
-                            
-                            Text("\(Int(round(day.highTemperature)))°")
-                                .font(.system(.subheadline, design: .rounded))
-                                .frame(width: 30, alignment: .leading)
-                                .lineLimit(1)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
+        VStack(spacing: 8) {  // 减小整体间距
+            ForEach(forecast.prefix(7)) { day in
+                HStack(spacing: 12) {
+                    // 星期
+                    Text(day.weekday)
+                        .font(.system(size: 17, weight: .medium))
+                        .frame(width: 45, alignment: .leading)
                     
-                    if index != forecast.count - 1 {
-                        Divider()
-                            .padding(.horizontal, 16)
+                    // 天气图标
+                    Image(day.symbolName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                    
+                    // 温度条和温度
+                    HStack(spacing: 8) {
+                        Text("\(Int(round(day.temperatureMin)))°")
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 30, alignment: .trailing)
+                            .lineLimit(1)
+                        
+                        temperatureBar(low: day.temperatureMin, high: day.temperatureMax, width: 80)
+                            .frame(height: 6)
+                        
+                        Text("\(Int(round(day.temperatureMax)))°")
+                            .font(.system(.subheadline, design: .rounded))
+                            .frame(width: 30, alignment: .leading)
+                            .lineLimit(1)
                     }
+                    .frame(maxWidth: .infinity)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                
+                if forecast.firstIndex(where: { $0.id == day.id }) != forecast.count - 1 {
+                    Divider()
+                        .background(Color.white.opacity(0.2))
+                        .padding(.horizontal, 16)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
         }
-        .background {
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-        }
-        .padding(.horizontal, 20)
+        .padding(.vertical, 12)  // 减小顶部和底部边距
     }
 }
 
-struct ForecastViews_Previews: PreviewProvider {
-    static var previews: some View {
-        ZStack {
-            Color.blue
-            VStack {
-                HourlyForecastView(forecast: [
-                    .mock(temp: 25, condition: "晴", symbol: "sun.max"),
-                    .mock(temp: 27, condition: "晴", symbol: "sun.max"),
-                    .mock(temp: 28, condition: "多云", symbol: "cloud"),
-                    .mock(temp: 26, condition: "多云", symbol: "cloud"),
-                    .mock(temp: 24, condition: "阴", symbol: "cloud.fill")
-                ])
-                
-                DailyForecastView(forecast: [
-                    .mock(low: 20, high: 28, condition: "晴", symbol: "sun.max"),
-                    .mock(low: 21, high: 29, condition: "多云", symbol: "cloud"),
-                    .mock(low: 19, high: 27, condition: "阴", symbol: "cloud.fill")
-                ])
-            }
-            .padding()
-        }
+// 预览数据
+extension DailyForecast {
+    static let previewData = [
+        DailyForecast(weekday: "Sun", date: Date(), temperatureMin: 5, temperatureMax: 9, symbolName: "sunny"),
+        DailyForecast(weekday: "Mon", date: Date().addingTimeInterval(86400), temperatureMin: 0, temperatureMax: 6, symbolName: "cloudy"),
+        DailyForecast(weekday: "Tue", date: Date().addingTimeInterval(172800), temperatureMin: -2, temperatureMax: 7, symbolName: "partly_cloudy_daytime"),
+        DailyForecast(weekday: "Wed", date: Date().addingTimeInterval(259200), temperatureMin: -1, temperatureMax: 10, symbolName: "moderate_rain"),
+        DailyForecast(weekday: "Thu", date: Date().addingTimeInterval(345600), temperatureMin: 2, temperatureMax: 14, symbolName: "sunny"),
+        DailyForecast(weekday: "Fri", date: Date().addingTimeInterval(432000), temperatureMin: 7, temperatureMax: 12, symbolName: "cloudy"),
+        DailyForecast(weekday: "Sat", date: Date().addingTimeInterval(518400), temperatureMin: 7, temperatureMax: 11, symbolName: "partly_cloudy_daytime")
+    ]
+}
+
+#Preview {
+    ZStack {
+        Color.blue.ignoresSafeArea()
+        DailyForecastView(forecast: DailyForecast.previewData)
     }
 }
