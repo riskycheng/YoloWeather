@@ -34,7 +34,8 @@ struct CurrentWeather: Equatable {
     }
 }
 
-struct DayWeatherInfo: Equatable {
+struct DayWeatherInfo: Equatable, Identifiable {
+    var id: Date { date }
     let date: Date
     let condition: String
     let symbolName: String

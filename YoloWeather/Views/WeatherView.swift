@@ -161,6 +161,7 @@ private struct WeatherContentView: View {
     }
 }
 
+// MARK: - Main Weather View
 struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
     @StateObject private var locationService = LocationService()
@@ -178,6 +179,8 @@ struct WeatherView: View {
     @AppStorage("showDailyForecast") private var showDailyForecast = false
     @State private var dragOffset: CGFloat = 0
     @State private var showSuccessToast = false
+    @State private var isDraggingUp = false
+    @State private var showingDailyForecast = false
     
     private func ensureMinimumLoadingTime(startTime: Date) async {
         let timeElapsed = Date().timeIntervalSince(startTime)
@@ -601,67 +604,127 @@ struct WeatherView: View {
                     )
                     .environment(\.weatherTimeOfDay, timeOfDay)
                     
-                    // 前景内容
-                    RefreshableView(isRefreshing: $isRefreshing) {
-                        await refreshWeather()
-                    } content: {
-                        VStack(spacing: 0) {
-                            Spacer()
-                                .frame(height: 0)
-                                .padding(.top, -60)
-                            
+                    VStack {
+                        // 前景内容
+                        RefreshableView(isRefreshing: $isRefreshing) {
+                            await refreshWeather()
+                        } content: {
                             VStack(spacing: 0) {
-                                // 顶部工具栏
-                                HStack {
-                                    topLeftButton
-                                    
-                                    Spacer()
-                                    
-                                    Button(action: {
-                                        withAnimation(.easeInOut) {
-                                            showingSideMenu.toggle()
-                                        }
-                                    }) {
-                                        Image(systemName: "line.3.horizontal")
-                                            .font(.title2)
-                                            .foregroundColor(.white)
-                                    }
-                                }
-                                .padding(.horizontal, 20)
-                                .padding(.bottom, 20)
+                                Spacer()
+                                    .frame(height: 0)
+                                    .padding(.top, -60)
                                 
-                                if isRefreshing || isLoadingWeather {
-                                    WeatherLoadingView()
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                } else {
-                                    if let weather = weatherService.currentWeather {
-                                        weatherIcon
-                                            .frame(maxHeight: .infinity, alignment: .top)
-                                        
-                                        WeatherContentView(
-                                            weather: weather,
-                                            timeOfDay: timeOfDay,
-                                            locationName: isUsingCurrentLocation ? locationService.locationName : selectedLocation.name,
-                                            animationTrigger: animationTrigger
-                                        )
+                                VStack(spacing: 0) {
+                                    // 顶部工具栏
+                                    HStack {
+                                        topLeftButton
                                         
                                         Spacer()
-                                            .frame(height: 20)
                                         
-                                        Spacer()
-                                            .frame(minHeight: 0, maxHeight: .infinity)
-                                            .frame(height: 20)
-                                        
-                                        ScrollableHourlyForecastView(
-                                            weatherService: weatherService,
-                                            safeAreaInsets: geometry.safeAreaInsets,
-                                            animationTrigger: animationTrigger
-                                        )
-                                        .padding(.bottom, 20)
+                                        Button(action: {
+                                            withAnimation(.easeInOut) {
+                                                showingSideMenu.toggle()
+                                            }
+                                        }) {
+                                            Image(systemName: "line.3.horizontal")
+                                                .font(.title2)
+                                                .foregroundColor(.white)
+                                        }
+                                    }
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 20)
+                                    
+                                    if isRefreshing || isLoadingWeather {
+                                        WeatherLoadingView()
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    } else {
+                                        if let weather = weatherService.currentWeather {
+                                            weatherIcon
+                                                .frame(maxHeight: .infinity, alignment: .top)
+                                            
+                                            WeatherContentView(
+                                                weather: weather,
+                                                timeOfDay: timeOfDay,
+                                                locationName: isUsingCurrentLocation ? locationService.locationName : selectedLocation.name,
+                                                animationTrigger: animationTrigger
+                                            )
+                                            
+                                            Spacer()
+                                                .frame(height: 20)
+                                            
+                                            Spacer()
+                                                .frame(minHeight: 0, maxHeight: .infinity)
+                                                .frame(height: 20)
+                                            
+                                            ScrollableHourlyForecastView(
+                                                weatherService: weatherService,
+                                                safeAreaInsets: geometry.safeAreaInsets,
+                                                animationTrigger: animationTrigger
+                                            )
+                                            .padding(.bottom, 20)
+                                            
+                                            // 添加上拉提示
+                                            VStack(spacing: 4) {
+                                                Image(systemName: "chevron.up")
+                                                    .font(.system(size: 20, weight: .medium))
+                                                    .foregroundColor(.white.opacity(0.6))
+                                                Text("上拉查看未来天气")
+                                                    .font(.system(size: 14))
+                                                    .foregroundColor(.white.opacity(0.6))
+                                            }
+                                            .opacity(isDraggingUp ? 0 : 1)
+                                            .animation(.easeInOut(duration: 0.2), value: isDraggingUp)
+                                        }
                                     }
                                 }
                             }
                         }
+                        .offset(y: -dragOffset)
+                        .simultaneousGesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    if value.translation.height < 0 && value.startLocation.y > geometry.size.height - 100 {
+                                        let newOffset = -min(value.translation.height, geometry.size.height)
+                                        if !isDraggingUp {
+                                            print("开始上拉手势")
+                                            isDraggingUp = true
+                                        }
+                                        print("上拉距离: \(newOffset)")
+                                        dragOffset = newOffset
+                                    }
+                                }
+                                .onEnded { value in
+                                    if value.startLocation.y > geometry.size.height - 100 {
+                                        withAnimation(.spring()) {
+                                            if -value.translation.height > geometry.size.height * 0.3 {
+                                                print("上拉超过阈值，显示每日预报")
+                                                dragOffset = geometry.size.height
+                                                showingDailyForecast = true
+                                            } else {
+                                                print("上拉未超过阈值，回到原位")
+                                                dragOffset = 0
+                                                showingDailyForecast = false
+                                            }
+                                            isDraggingUp = false
+                                        }
+                                    }
+                                }
+                        )
+                    }
+                    
+                    // 每日预报视图
+                    if let _ = weatherService.currentWeather {
+                        VStack(spacing: 0) {
+                            // 上拉指示器
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(Color.white.opacity(0.3))
+                                .frame(width: 40, height: 5)
+                                .padding(.top, 10)
+                            
+                            DailyForecastView(forecast: weatherService.dailyForecast)
+                                .transition(.move(edge: .bottom))
+                        }
+                        .offset(y: geometry.size.height - dragOffset)
                     }
                     
                     // 添加一个透明的边缘手势检测视图
@@ -685,16 +748,14 @@ struct WeatherView: View {
                         )
                     
                     // 浮动气泡层
-                    GeometryReader { geometry in
-                        FloatingBubblesView(
-                            weatherService: weatherService,
-                            timeOfDay: timeOfDay,
-                            geometry: geometry
-                        )
-                        .opacity(isRefreshing || isLoadingWeather ? 0 : 1)
-                        .animation(.easeInOut(duration: 0.3), value: isRefreshing)
-                        .animation(.easeInOut(duration: 0.3), value: isLoadingWeather)
-                    }
+                    FloatingBubblesView(
+                        weatherService: weatherService,
+                        timeOfDay: timeOfDay,
+                        geometry: geometry
+                    )
+                    .opacity(isRefreshing || isLoadingWeather ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.3), value: isRefreshing)
+                    .animation(.easeInOut(duration: 0.3), value: isLoadingWeather)
                     
                     // 侧边栏菜单
                     SideMenuView(
@@ -705,28 +766,6 @@ struct WeatherView: View {
                         handleLocationSelection(location)
                     }
                     .animation(.easeInOut, value: showingSideMenu)
-                    
-                    // 成功提示
-                    if showSuccessToast {
-                        VStack {
-                            HStack(spacing: 12) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.system(size: 20))
-                                Text("\(selectedLocation.name)已添加到收藏")
-                                    .foregroundColor(.white)
-                                    .font(.system(size: 16))
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 12)
-                            .background(Color.black.opacity(0.7))
-                            .cornerRadius(25)
-                        }
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                        .zIndex(1)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .padding(.top, 100)
-                    }
                 }
             }
         }

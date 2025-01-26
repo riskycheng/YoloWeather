@@ -155,10 +155,6 @@ struct DailyForecastView: View {
     }
 }
 
-extension DayWeatherInfo: Identifiable {
-    var id: Date { date }
-}
-
 struct ForecastViews_Previews: PreviewProvider {
     static var previews: some View {
         ZStack {

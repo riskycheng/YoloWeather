@@ -542,25 +542,6 @@ class WeatherService: ObservableObject {
         }
     }
     
-    struct DayWeatherInfo: Identifiable {
-        let id = UUID()
-        let date: Date
-        let condition: String
-        let symbolName: String
-        let lowTemperature: Double
-        let highTemperature: Double
-        
-        static func mock(low: Double, high: Double, condition: String, symbol: String, date: Date) -> DayWeatherInfo {
-            DayWeatherInfo(
-                date: date,
-                condition: condition,
-                symbolName: symbol,
-                lowTemperature: low,
-                highTemperature: high
-            )
-        }
-    }
-    
     static func mock() -> WeatherService {
         let service = WeatherService()
         let timezone = TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
