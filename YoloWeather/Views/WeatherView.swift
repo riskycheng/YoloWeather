@@ -720,7 +720,7 @@ struct WeatherView: View {
                         VStack(spacing: 0) {
                             HStack {
                                 Text("7天预报")
-                                    .font(.system(size: 20, weight: .medium))
+                                    .font(.system(size: 18, weight: .medium))
                                     .foregroundColor(.white)
                                 
                                 Spacer()
@@ -738,24 +738,25 @@ struct WeatherView: View {
                                     }
                                 }) {
                                     Image(systemName: "calendar")
-                                        .font(.system(size: 20))
+                                        .font(.system(size: 18))
                                         .foregroundColor(.white)
                                 }
                             }
                             .padding(.horizontal, 20)
-                            .padding(.top, 16)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
                             
                             DailyForecastView(forecast: convertToDailyForecast(weatherService.dailyForecast))
                                 .transition(.move(edge: .bottom))
-                                .padding(.bottom, geometry.safeAreaInsets.bottom)
+                                .padding(.bottom, 8)  // 减小底部边距
                         }
-                        .frame(height: geometry.size.height * 0.7)  // 减小整体高度
+                        .frame(height: geometry.size.height * 0.5)  // 增加视图高度
                         .background(
                             RoundedRectangle(cornerRadius: 20)
                                 .fill(.ultraThinMaterial)
                                 .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: -5)
                         )
-                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height * 0.7 : dragOffset))
+                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height * 0.5 + 180 : dragOffset))  // 进一步增加上移距离
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
