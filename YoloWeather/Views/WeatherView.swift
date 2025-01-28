@@ -720,10 +720,10 @@ struct WeatherView: View {
                         VStack(spacing: 0) {
                             HStack {
                                 Text("7天预报")
-                                    .font(.system(size: 16))
+                                    .font(.system(size: 20, weight: .medium))
                                     .foregroundColor(.white)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 16)
+                                    .padding(.horizontal, 12)
                                     .padding(.top, 12)
                                     .padding(.bottom, 8)
                                 
@@ -741,15 +741,14 @@ struct WeatherView: View {
                                 )
                             })
                             .transition(.move(edge: .bottom))
-                            .padding(.bottom, 12)
                         }
                         .background {
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(.ultraThinMaterial)
                         }
-                        .padding(.horizontal, 16)
-                        .frame(height: geometry.size.height * 0.5)  // 增加视图高度
-                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height * 0.5 + 180 : dragOffset))  // 进一步增加上移距离
+                        .padding(.horizontal, 12)
+                        .frame(height: geometry.size.height * 0.75)  // 增加视图高度占比
+                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height * 0.75 + 160 : dragOffset))  // 减小上移距离
                         .gesture(
                             DragGesture()
                                 .onChanged { value in

@@ -63,7 +63,7 @@ struct DailyForecastView: View {
         return (minTemp, maxTemp)
     }
     
-    private func temperatureBar(low: Double, high: Double, width: CGFloat = 120) -> some View {
+    private func temperatureBar(low: Double, high: Double, width: CGFloat = 140) -> some View {
         let (minTemp, maxTemp) = globalTempRange
         let tempRange = maxTemp - minTemp
         
@@ -74,7 +74,7 @@ struct DailyForecastView: View {
             // 背景条
             Capsule()
                 .fill(.white.opacity(0.15))
-                .frame(width: width, height: 4)
+                .frame(width: width, height: 6)
             
             // 温度范围条
             Capsule()
@@ -88,65 +88,71 @@ struct DailyForecastView: View {
                         endPoint: .trailing
                     )
                 )
-                .frame(width: highX - lowX, height: 4)
+                .frame(width: highX - lowX, height: 6)
                 .offset(x: lowX)
         }
-        .frame(width: width, height: 4)
+        .frame(width: width, height: 6)
     }
     
     var body: some View {
-        VStack(spacing: 20) {  // 增加行间距
-            ForEach(forecast.prefix(7)) { day in
-                HStack(spacing: 12) {
-                    // 星期
-                    Text(day.weekday)
-                        .font(.system(size: 16))
-                        .foregroundColor(.white)
-                        .frame(width: 50, alignment: .leading)
-                    
-                    // 天气图标和降水概率
-                    VStack(alignment: .center, spacing: 2) {
-                        Image(day.symbolName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 24, height: 24)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 12) {
+                ForEach(forecast) { day in
+                    VStack(spacing: 0) {
+                        HStack(spacing: 12) {
+                            // 星期
+                            Text(day.weekday)
+                                .font(.system(size: 17, weight: .medium))
+                                .foregroundColor(.white)
+                                .frame(width: 50, alignment: .leading)
+                            
+                            // 天气图标和降水概率
+                            VStack(alignment: .center, spacing: 2) {
+                                Image(day.symbolName)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 28, height: 28)
+                                
+                                if let probability = day.precipitationProbability, probability > 0 {
+                                    Text("\(Int(probability * 100))%")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.cyan)
+                                }
+                            }
+                            .frame(width: 40)
+                            
+                            // 温度条和温度
+                            HStack(spacing: 8) {
+                                Text("\(Int(round(day.temperatureMin)))°")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .frame(width: 35, alignment: .trailing)
+                                    .lineLimit(1)
+                                
+                                temperatureBar(low: day.temperatureMin, high: day.temperatureMax)
+                                
+                                Text("\(Int(round(day.temperatureMax)))°")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: 35, alignment: .leading)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                         
-                        if let probability = day.precipitationProbability, probability > 0 {
-                            Text("\(Int(probability * 100))%")
-                                .font(.system(size: 12))
-                                .foregroundStyle(.cyan)
+                        if forecast.firstIndex(where: { $0.id == day.id }) != forecast.count - 1 {
+                            Divider()
+                                .background(Color.white.opacity(0.1))
+                                .padding(.horizontal, 12)
                         }
                     }
-                    .frame(width: 40)
-                    
-                    // 温度条和温度
-                    HStack(spacing: 8) {
-                        Text("\(Int(round(day.temperatureMin)))°")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.7))
-                            .frame(width: 30, alignment: .trailing)
-                            .lineLimit(1)
-                        
-                        temperatureBar(low: day.temperatureMin, high: day.temperatureMax)
-                        
-                        Text("\(Int(round(day.temperatureMax)))°")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white)
-                            .frame(width: 30, alignment: .leading)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .padding(.horizontal, 16)
-                
-                if forecast.firstIndex(where: { $0.id == day.id }) != forecast.count - 1 {
-                    Divider()
-                        .background(Color.white.opacity(0.1))
-                        .padding(.horizontal, 16)
                 }
             }
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 12)
+        .frame(height: 460)  // 增加视图高度
     }
 }
 
