@@ -145,7 +145,8 @@ class WeatherService: ObservableObject {
                     condition: getWeatherConditionText(day.condition),
                     symbolName: daySymbolName,
                     lowTemperature: day.lowTemperature.value,
-                    highTemperature: day.highTemperature.value
+                    highTemperature: day.highTemperature.value,
+                    precipitationProbability: day.precipitationChance
                 )
                 dailyForecasts.append(forecast)
             }
@@ -542,6 +543,15 @@ class WeatherService: ObservableObject {
         }
     }
     
+    struct DayWeatherInfo {
+        let date: Date
+        let condition: String
+        let symbolName: String
+        let lowTemperature: Double
+        let highTemperature: Double
+        let precipitationProbability: Double
+    }
+    
     static func mock() -> WeatherService {
         let service = WeatherService()
         let timezone = TimeZone(identifier: "Asia/Shanghai") ?? TimeZone.current
@@ -593,9 +603,9 @@ class WeatherService: ObservableObject {
         
         // 模拟每日预报
         service.dailyForecast = [
-            DayWeatherInfo.mock(low: 20, high: 30, condition: "晴", symbol: "sunny", date: now),
-            DayWeatherInfo.mock(low: 19, high: 29, condition: "多云", symbol: "cloudy", date: Calendar.current.date(byAdding: .day, value: 1, to: now)!),
-            DayWeatherInfo.mock(low: 18, high: 28, condition: "小雨", symbol: "rain", date: Calendar.current.date(byAdding: .day, value: 2, to: now)!)
+            DayWeatherInfo(date: now, condition: "晴", symbolName: "sunny", lowTemperature: 20, highTemperature: 30, precipitationProbability: 0.5),
+            DayWeatherInfo(date: Calendar.current.date(byAdding: .day, value: 1, to: now)!, condition: "多云", symbolName: "cloudy", lowTemperature: 19, highTemperature: 29, precipitationProbability: 0.5),
+            DayWeatherInfo(date: Calendar.current.date(byAdding: .day, value: 2, to: now)!, condition: "小雨", symbolName: "rain", lowTemperature: 18, highTemperature: 28, precipitationProbability: 0.5)
         ]
         
         return service
@@ -631,4 +641,3 @@ class WeatherService: ObservableObject {
         }
     }
 }
-

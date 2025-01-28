@@ -3,9 +3,11 @@ import WeatherKit
 
 struct DailyForecastRow: View {
     let forecast: DayWeatherInfo
+    let precipitationProbability: Double?
     
-    init(forecast: DayWeatherInfo) {
+    init(forecast: DayWeatherInfo, precipitationProbability: Double? = nil) {
         self.forecast = forecast
+        self.precipitationProbability = precipitationProbability
     }
     
     private var dayFormatter: DateFormatter = {
@@ -42,37 +44,83 @@ struct DailyForecastRow: View {
         }
     }
     
+    private func temperatureGradient(lowTemp: Double, highTemp: Double) -> some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let minTemp = min(lowTemp, highTemp)
+            let maxTemp = max(lowTemp, highTemp)
+            let tempRange = maxTemp - minTemp
+            let startPoint = max(0.1, (lowTemp - minTemp) / tempRange)
+            let endPoint = min(0.9, (highTemp - minTemp) / tempRange)
+            
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.blue.opacity(0.6),
+                    Color.cyan.opacity(0.6),
+                    Color.green.opacity(0.6)
+                ]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .frame(width: width * CGFloat(endPoint - startPoint))
+            .frame(width: width, alignment: .leading)
+            .offset(x: width * CGFloat(startPoint))
+        }
+    }
+    
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            // Day of week
             Text(dayFormatter.string(from: forecast.date))
                 .font(.system(size: 16))
                 .foregroundColor(.white)
-                .frame(width: 30, alignment: .leading)
+                .frame(width: 50, alignment: .leading)
             
-            Image(systemName: getWeatherSymbol(for: forecast.condition))
-                .font(.system(size: 16))
-                .foregroundColor(.white)
-                .frame(width: 30)
+            // Weather icon and precipitation probability
+            VStack(alignment: .center, spacing: 2) {
+                Image(systemName: getWeatherSymbol(for: forecast.condition))
+                    .font(.system(size: 16))
+                    .foregroundColor(.white)
+                
+                if let probability = precipitationProbability, probability > 0 {
+                    Text("\(Int(probability * 100))%")
+                        .font(.system(size: 12))
+                        .foregroundColor(.cyan)
+                }
+            }
+            .frame(width: 40)
             
-            Text(forecast.condition)
-                .font(.system(size: 16))
-                .foregroundColor(.white)
-                .frame(width: 60)
-            
-            Spacer()
-            
-            Text("\(Int(round(forecast.lowTemperature)))°")
-                .font(.system(size: 16))
-                .foregroundColor(.white.opacity(0.8))
-            
-            Text("-")
-                .font(.system(size: 16))
-                .foregroundColor(.white.opacity(0.8))
-                .padding(.horizontal, 4)
-            
-            Text("\(Int(round(forecast.highTemperature)))°")
-                .font(.system(size: 16))
-                .foregroundColor(.white)
+            // Temperature range with gradient bar
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    // Background bar
+                    Capsule()
+                        .fill(Color.white.opacity(0.2))
+                        .frame(height: 4)
+                    
+                    // Gradient temperature bar
+                    temperatureGradient(
+                        lowTemp: forecast.lowTemperature,
+                        highTemp: forecast.highTemperature
+                    )
+                    .clipShape(Capsule())
+                    .frame(height: 4)
+                }
+                .frame(height: geometry.size.height)
+                .overlay(
+                    HStack {
+                        Text("\(Int(round(forecast.lowTemperature)))°")
+                            .foregroundColor(.white.opacity(0.8))
+                            .font(.system(size: 16))
+                        Spacer()
+                        Text("\(Int(round(forecast.highTemperature)))°")
+                            .foregroundColor(.white)
+                            .font(.system(size: 16))
+                    }
+                )
+            }
         }
+        .padding(.horizontal, 16)
+        .frame(height: 44)
     }
-} 
+}

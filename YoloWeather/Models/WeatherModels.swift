@@ -41,14 +41,16 @@ struct DayWeatherInfo: Equatable, Identifiable {
     let symbolName: String
     let lowTemperature: Double
     let highTemperature: Double
+    let precipitationProbability: Double?
     
-    static func mock(low: Double, high: Double, condition: String, symbol: String, date: Date = Date()) -> DayWeatherInfo {
+    static func mock(low: Double, high: Double, condition: String, symbol: String, precipitationProbability: Double? = nil, date: Date = Date()) -> DayWeatherInfo {
         DayWeatherInfo(
             date: date,
             condition: condition,
             symbolName: symbol,
             lowTemperature: low,
-            highTemperature: high
+            highTemperature: high,
+            precipitationProbability: precipitationProbability
         )
     }
 }

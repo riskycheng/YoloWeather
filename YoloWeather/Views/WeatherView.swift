@@ -720,42 +720,35 @@ struct WeatherView: View {
                         VStack(spacing: 0) {
                             HStack {
                                 Text("7天预报")
-                                    .font(.system(size: 18, weight: .medium))
+                                    .font(.system(size: 16))
                                     .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 8)
                                 
                                 Spacer()
-                                
-                                Button(action: {
-                                    // 添加日历事件
-                                    let eventStore = EKEventStore()
-                                    eventStore.requestAccess(to: .event) { granted, error in
-                                        if granted {
-                                            // 打开系统日历
-                                            if let url = URL(string: "calshow://") {
-                                                UIApplication.shared.open(url)
-                                            }
-                                        }
-                                    }
-                                }) {
-                                    Image(systemName: "calendar")
-                                        .font(.system(size: 18))
-                                        .foregroundColor(.white)
-                                }
                             }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 12)
-                            .padding(.bottom, 8)
                             
-                            DailyForecastView(forecast: convertToDailyForecast(weatherService.dailyForecast))
-                                .transition(.move(edge: .bottom))
-                                .padding(.bottom, 8)  // 减小底部边距
+                            DailyForecastView(forecast: weatherService.dailyForecast.map { day in
+                                DailyForecast(
+                                    weekday: dayFormatter.string(from: day.date),
+                                    date: day.date,
+                                    temperatureMin: day.lowTemperature,
+                                    temperatureMax: day.highTemperature,
+                                    symbolName: day.symbolName,
+                                    precipitationProbability: day.precipitationProbability
+                                )
+                            })
+                            .transition(.move(edge: .bottom))
+                            .padding(.bottom, 12)
                         }
-                        .frame(height: geometry.size.height * 0.5)  // 增加视图高度
-                        .background(
-                            RoundedRectangle(cornerRadius: 20)
+                        .background {
+                            RoundedRectangle(cornerRadius: 16)
                                 .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: -5)
-                        )
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(height: geometry.size.height * 0.5)  // 增加视图高度
                         .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height * 0.5 + 180 : dragOffset))  // 进一步增加上移距离
                         .gesture(
                             DragGesture()
@@ -913,19 +906,11 @@ struct WeatherView: View {
         }
     }
     
-    private func convertToDailyForecast(_ dayWeatherInfo: [DayWeatherInfo]) -> [DailyForecast] {
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "EEE"
-        
-        return dayWeatherInfo.map { day in
-            DailyForecast(
-                weekday: dateFormatter.string(from: day.date),
-                date: day.date,
-                temperatureMin: day.lowTemperature,
-                temperatureMax: day.highTemperature,
-                symbolName: day.symbolName  // 直接使用 DayWeatherInfo 中的 symbolName
-            )
-        }
+    private let dayFormatter = DateFormatter()
+    
+    init() {
+        dayFormatter.dateFormat = "EEE"
+        dayFormatter.locale = Locale(identifier: "zh_CN")
     }
 }
 
