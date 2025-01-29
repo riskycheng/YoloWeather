@@ -745,6 +745,25 @@ struct WeatherView: View {
                                 .frame(width: 36, height: 5)
                                 .padding(.top, 8)
                                 .padding(.bottom, 8)
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            // 实时跟随手指移动
+                                            if value.translation.height > 0 {
+                                                withAnimation(.interactiveSpring()) {
+                                                    dragOffset = value.translation.height
+                                                }
+                                            }
+                                        }
+                                        .onEnded { value in
+                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                                if value.translation.height > 50 {
+                                                    showingDailyForecast = false
+                                                }
+                                                dragOffset = 0
+                                            }
+                                        }
+                                )
                             
                             // 标题
                             Text("7天预报")
@@ -767,60 +786,37 @@ struct WeatherView: View {
                         .background {
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)  // 添加主阴影
+                                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)  // 添加微弱的光晕效果
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
                                         .blur(radius: 1)
-                                        .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 0)  // 添加内部光晕
+                                        .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 0)
                                 )
                         }
                         .padding(.horizontal, 12)
-                        .frame(height: geometry.size.height * 0.75)  // 增加视图高度占比
-                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height - 80 : dragOffset))  // 调整位置让底部对齐
+                        .frame(height: geometry.size.height * 0.75)
+                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height - 80 : dragOffset))
+                        .animation(dragOffset > 0 ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: showingDailyForecast)
                         .gesture(
                             DragGesture()
                                 .onChanged { value in
-                                    if showingDailyForecast {
-                                        // 显示预报时的下滑手势
-                                        if value.translation.height > 0 {
+                                    if value.translation.height > 0 {
+                                        withAnimation(.interactiveSpring()) {
                                             dragOffset = value.translation.height
                                         }
                                     }
                                 }
                                 .onEnded { value in
-                                    if showingDailyForecast {
-                                        // 处理下滑收起
-                                        withAnimation(.spring()) {
-                                            if value.translation.height > 50 {
-                                                showingDailyForecast = false
-                                            }
-                                            dragOffset = 0
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        if value.translation.height > 50 {
+                                            showingDailyForecast = false
                                         }
+                                        dragOffset = 0
                                     }
                                 }
                         )
                     }
-                    
-                    // 添加一个透明的边缘手势检测视图
-                    Color.clear
-                        .frame(width: 20)
-                        .frame(maxHeight: .infinity)
-                        .contentShape(Rectangle())
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .highPriorityGesture(
-                            DragGesture(minimumDistance: 20)
-                                .onChanged { gesture in
-                                    let translation = gesture.translation.width
-                                    // 只在首次触发时打印日志
-                                    if translation < -20 && !showingSideMenu {
-                                        print("触发右边缘滑动手势")
-                                        withAnimation(.easeInOut) {
-                                            showingSideMenu = true
-                                        }
-                                    }
-                                }
-                        )
                     
                     // 浮动气泡层
                     FloatingBubblesView(
