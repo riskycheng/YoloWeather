@@ -19,6 +19,13 @@ struct HourlyTemperatureTrendView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .strokeBorder(Color.white.opacity(0.2), lineWidth: 1)
                 )
+                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)  // 添加主阴影
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)  // 添加微弱的光晕效果
+                        .blur(radius: 1)
+                        .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 0)  // 添加内部光晕
+                )
                 .overlay(
                     // 滚动内容
                     ScrollViewReader { scrollProxy in
@@ -57,9 +64,11 @@ struct HourlyTemperatureTrendView: View {
                         }
                     }
                 )
-                .frame(width: availableWidth)
-                .frame(height: containerHeight)
-                .position(x: geometry.size.width / 2, y: containerHeight / 2)
+                .frame(maxWidth: .infinity, maxHeight: containerHeight)
+                .padding(.horizontal, 16)
+        }
+        .onAppear {
+            print("HourlyTemperatureTrendView - Bottom boundary reached at height: \(containerHeight)")
         }
         .frame(height: containerHeight)
     }

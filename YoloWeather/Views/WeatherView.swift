@@ -97,6 +97,13 @@ private struct ScrollableHourlyForecastView: View {
                     // 背景
                     RoundedRectangle(cornerRadius: 16)
                         .fill(.black.opacity(0.2))
+                        .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)  // 添加主阴影
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.white.opacity(0.1), lineWidth: 1)  // 添加微弱的光晕效果
+                                .blur(radius: 1)
+                                .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 0)  // 添加内部光晕
+                        )
                     
                     // 滚动内容
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -662,6 +669,8 @@ struct WeatherView: View {
                                                 safeAreaInsets: geometry.safeAreaInsets,
                                                 animationTrigger: animationTrigger
                                             )
+                                            .opacity(showingDailyForecast ? 0 : 1)  // 当显示日预报时完全隐藏
+                                            .animation(.easeInOut(duration: 0.3), value: showingDailyForecast)  // 添加渐变动画
                                             .padding(.bottom, 20)
                                             
                                             // 添加上拉提示
@@ -673,6 +682,7 @@ struct WeatherView: View {
                                                     .font(.system(size: 14))
                                                     .foregroundColor(.white.opacity(0.6))
                                             }
+                                            .padding(.top, 16)
                                             .opacity(isDraggingUp ? 0 : 1)
                                             .animation(.easeInOut(duration: 0.2), value: isDraggingUp)
                                         }
@@ -745,10 +755,17 @@ struct WeatherView: View {
                         .background {
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(.ultraThinMaterial)
+                                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)  // 添加主阴影
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)  // 添加微弱的光晕效果
+                                        .blur(radius: 1)
+                                        .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 0)  // 添加内部光晕
+                                )
                         }
                         .padding(.horizontal, 12)
                         .frame(height: geometry.size.height * 0.75)  // 增加视图高度占比
-                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height * 0.75 + 160 : dragOffset))  // 减小上移距离
+                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height - 80 : dragOffset))  // 调整位置让底部对齐
                         .gesture(
                             DragGesture()
                                 .onChanged { value in

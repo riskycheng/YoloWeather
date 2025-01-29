@@ -40,6 +40,13 @@ struct HourlyForecastView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(.black.opacity(0.2))
         }
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(Color.green, lineWidth: 2)
+        )
+        .onAppear {
+            print("HourlyForecastView - Bottom boundary reached")
+        }
     }
 }
 
@@ -153,6 +160,9 @@ struct DailyForecastView: View {
             .padding(.vertical, 8)
         }
         .frame(height: 460)  // 增加视图高度
+        .onAppear {
+            print("DailyForecastView - Bottom boundary reached at height: 460")
+        }
     }
 }
 
