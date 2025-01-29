@@ -557,7 +557,7 @@ struct WeatherView: View {
         Button(action: {
             Task {
                 if citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) {
-                    // 如果城市已在收藏列表中,则作为定位按钮使用
+                    // 如果城市已在收藏列表中，则作为定位按钮使用
                     isLoadingWeather = true  // 开始加载
                     let startTime = Date()
                     
@@ -571,7 +571,7 @@ struct WeatherView: View {
                     
                     isLoadingWeather = false  // 结束加载
                 } else {
-                    // 如果城市不在收藏列表中,添加到收藏
+                    // 如果城市不在收藏列表中，则添加到收藏
                     let currentLocation = PresetLocation(
                         name: locationService.locationName,
                         location: locationService.currentLocation ?? CLLocation(latitude: 0, longitude: 0)
@@ -615,7 +615,10 @@ struct WeatherView: View {
                     VStack {
                         // 前景内容
                         RefreshableView(isRefreshing: $isRefreshing) {
-                            await refreshWeather()
+                            // 只在未显示预报时允许刷新
+                            if !showingDailyForecast {
+                                await refreshWeather()
+                            }
                         } content: {
                             VStack(spacing: 0) {
                                 Spacer()
@@ -675,10 +678,10 @@ struct WeatherView: View {
                                             
                                             // 添加上拉提示
                                             VStack(spacing: 4) {
-                                                Image(systemName: "chevron.up")
+                                                Image(systemName: showingDailyForecast ? "chevron.down" : "chevron.up")
                                                     .font(.system(size: 20, weight: .medium))
                                                     .foregroundColor(.white.opacity(0.6))
-                                                Text("上拉查看未来天气")
+                                                Text(showingDailyForecast ? "下滑收起未来天气" : "上拉查看未来天气")
                                                     .font(.system(size: 14))
                                                     .foregroundColor(.white.opacity(0.6))
                                             }
@@ -692,30 +695,38 @@ struct WeatherView: View {
                         }
                         .offset(y: 0)  // 移除主页面的位移
                         .simultaneousGesture(
-                            DragGesture()
+                            DragGesture(minimumDistance: 5)
                                 .onChanged { value in
-                                    if !showingDailyForecast {
-                                        // 未显示预报时，处理上滑
-                                        if value.translation.height < 0 {
-                                            let newOffset = -min(value.translation.height, geometry.size.height * 0.7)
-                                            if !isDraggingUp {
-                                                print("开始上拉手势")
-                                                isDraggingUp = true
-                                            }
-                                            print("上拉距离: \(newOffset)")
-                                            dragOffset = newOffset
+                                    if showingDailyForecast && value.translation.height > 0 {
+                                        // 在显示预报时，阻止下拉刷新，将所有下滑手势用于收起预报
+                                        dragOffset = value.translation.height
+                                        // 取消任何可能的刷新状态
+                                        isRefreshing = false
+                                    } else if !showingDailyForecast && value.translation.height < 0 {
+                                        // 未显示预报时的上滑手势
+                                        let newOffset = -min(value.translation.height, geometry.size.height * 0.7)
+                                        if !isDraggingUp {
+                                            isDraggingUp = true
                                         }
+                                        dragOffset = newOffset
                                     }
                                 }
                                 .onEnded { value in
-                                    if !showingDailyForecast && value.translation.height < 0 {
+                                    if showingDailyForecast && value.translation.height > 0 {
+                                        // 处理下滑收起
+                                        withAnimation(.spring()) {
+                                            if value.translation.height > 50 {
+                                                showingDailyForecast = false
+                                            }
+                                            dragOffset = 0
+                                        }
+                                    } else if !showingDailyForecast && value.translation.height < 0 {
+                                        // 处理上滑显示
                                         withAnimation(.spring()) {
                                             if -value.translation.height > 100 {
-                                                print("显示预报界面")
                                                 dragOffset = geometry.size.height
                                                 showingDailyForecast = true
                                             } else {
-                                                print("返回主界面")
                                                 dragOffset = 0
                                             }
                                             isDraggingUp = false
@@ -726,19 +737,20 @@ struct WeatherView: View {
                     }
                     
                     // 每日预报视图
-                    if let _ = weatherService.currentWeather {
+                    if showingDailyForecast {
                         VStack(spacing: 0) {
-                            HStack {
-                                Text("7天预报")
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(.white)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.horizontal, 12)
-                                    .padding(.top, 12)
-                                    .padding(.bottom, 8)
-                                
-                                Spacer()
-                            }
+                            // 添加滑动指示器
+                            RoundedRectangle(cornerRadius: 2.5)
+                                .fill(Color.white.opacity(0.3))
+                                .frame(width: 36, height: 5)
+                                .padding(.top, 8)
+                                .padding(.bottom, 8)
+                            
+                            // 标题
+                            Text("7天预报")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.bottom, 16)
                             
                             DailyForecastView(forecast: weatherService.dailyForecast.map { day in
                                 DailyForecast(
@@ -770,24 +782,20 @@ struct WeatherView: View {
                             DragGesture()
                                 .onChanged { value in
                                     if showingDailyForecast {
-                                        // 已显示预报时，处理下滑
+                                        // 显示预报时的下滑手势
                                         if value.translation.height > 0 {
-                                            dragOffset = geometry.size.height - value.translation.height
-                                            print("下滑距离: \(value.translation.height)")
+                                            dragOffset = value.translation.height
                                         }
                                     }
                                 }
                                 .onEnded { value in
-                                    if showingDailyForecast && value.translation.height > 0 {
+                                    if showingDailyForecast {
+                                        // 处理下滑收起
                                         withAnimation(.spring()) {
-                                            if value.translation.height > 100 {
-                                                print("下滑返回主界面")
-                                                dragOffset = 0
+                                            if value.translation.height > 50 {
                                                 showingDailyForecast = false
-                                            } else {
-                                                print("保持预报界面")
-                                                dragOffset = geometry.size.height
                                             }
+                                            dragOffset = 0
                                         }
                                     }
                                 }
@@ -833,6 +841,29 @@ struct WeatherView: View {
                         handleLocationSelection(location)
                     }
                     .animation(.easeInOut, value: showingSideMenu)
+                    
+                    if showingDailyForecast {
+                        // 添加一个透明的视图来阻止下拉刷新
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { }  // 添加空手势以捕获触摸事件
+                            .simultaneousGesture(
+                                DragGesture(minimumDistance: 5)
+                                    .onChanged { value in
+                                        if value.translation.height > 0 {
+                                            dragOffset = value.translation.height
+                                        }
+                                    }
+                                    .onEnded { value in
+                                        withAnimation(.spring()) {
+                                            if value.translation.height > 50 {
+                                                showingDailyForecast = false
+                                            }
+                                            dragOffset = 0
+                                        }
+                                    }
+                            )
+                    }
                 }
             }
         }
