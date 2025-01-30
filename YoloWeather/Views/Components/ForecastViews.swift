@@ -30,6 +30,7 @@ struct HourlyForecastView: View {
                                 .font(.system(.body, design: .monospaced))
                         }
                         .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                        .transition(.opacity.combined(with: .scale))
                     }
                 }
                 .padding(.horizontal)
@@ -47,6 +48,10 @@ struct HourlyForecastView: View {
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(Color.green, lineWidth: 2)
         )
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .move(edge: .bottom).combined(with: .opacity)
+        ))
         .onAppear {
             print("HourlyForecastView - Bottom boundary reached")
         }
@@ -65,6 +70,7 @@ struct DailyForecast: Identifiable {
 
 struct DailyForecastView: View {
     let forecast: [DailyForecast]
+    @State private var appearingItems: Set<UUID> = []
     
     // 计算7天内的全局温度范围
     private var globalTempRange: (min: Double, max: Double) {
@@ -104,65 +110,92 @@ struct DailyForecastView: View {
         .frame(width: width, height: 6)
     }
     
+    // 天气图标和降水概率视图
+    private func weatherIconView(symbolName: String, probability: Double?) -> some View {
+        VStack(alignment: .center, spacing: 2) {
+            Image(symbolName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 28, height: 28)
+            
+            if let probability = probability, probability > 0 {
+                Text("\(Int(probability * 100))%")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.cyan)
+            }
+        }
+        .frame(width: 40)
+    }
+    
+    // 温度显示视图
+    private func temperatureView(day: DailyForecast) -> some View {
+        HStack(spacing: 8) {
+            Text("\(Int(round(day.temperatureMin)))°")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 35, alignment: .trailing)
+                .lineLimit(1)
+            
+            temperatureBar(low: day.temperatureMin, high: day.temperatureMax)
+            
+            Text("\(Int(round(day.temperatureMax)))°")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 35, alignment: .leading)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity)
+    }
+    
+    // 单日天气视图
+    private func dailyWeatherRow(day: DailyForecast, index: Int) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                // 星期
+                Text(day.weekday)
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundColor(.white)
+                    .frame(width: 50, alignment: .leading)
+                
+                // 天气图标和降水概率
+                weatherIconView(symbolName: day.symbolName, probability: day.precipitationProbability)
+                
+                // 温度条和温度
+                temperatureView(day: day)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .opacity(appearingItems.contains(day.id) ? 1 : 0)
+            .offset(y: appearingItems.contains(day.id) ? 0 : 20)
+            .onAppear {
+                let animation = Animation.easeOut(duration: 0.3).delay(Double(index) * 0.05)
+                withAnimation(animation) {
+                    _ = appearingItems.insert(day.id)
+                }
+            }
+            
+            if index != forecast.count - 1 {
+                Divider()
+                    .background(Color.white.opacity(0.1))
+                    .padding(.horizontal, 12)
+            }
+        }
+    }
+    
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 12) {
-                ForEach(forecast) { day in
-                    VStack(spacing: 0) {
-                        HStack(spacing: 12) {
-                            // 星期
-                            Text(day.weekday)
-                                .font(.system(size: 17, weight: .medium))
-                                .foregroundColor(.white)
-                                .frame(width: 50, alignment: .leading)
-                            
-                            // 天气图标和降水概率
-                            VStack(alignment: .center, spacing: 2) {
-                                Image(day.symbolName)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 28, height: 28)
-                                
-                                if let probability = day.precipitationProbability, probability > 0 {
-                                    Text("\(Int(probability * 100))%")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.cyan)
-                                }
-                            }
-                            .frame(width: 40)
-                            
-                            // 温度条和温度
-                            HStack(spacing: 8) {
-                                Text("\(Int(round(day.temperatureMin)))°")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .frame(width: 35, alignment: .trailing)
-                                    .lineLimit(1)
-                                
-                                temperatureBar(low: day.temperatureMin, high: day.temperatureMax)
-                                
-                                Text("\(Int(round(day.temperatureMax)))°")
-                                    .font(.system(size: 18, weight: .medium))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 35, alignment: .leading)
-                                    .lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity)
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        
-                        if forecast.firstIndex(where: { $0.id == day.id }) != forecast.count - 1 {
-                            Divider()
-                                .background(Color.white.opacity(0.1))
-                                .padding(.horizontal, 12)
-                        }
-                    }
+                ForEach(Array(forecast.enumerated()), id: \.element.id) { index, day in
+                    dailyWeatherRow(day: day, index: index)
                 }
             }
             .padding(.vertical, 8)
         }
-        .frame(height: 460)  // 增加视图高度
+        .frame(height: 460)
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .move(edge: .bottom).combined(with: .opacity)
+        ))
         .onAppear {
             print("DailyForecastView - Bottom boundary reached at height: 460")
         }

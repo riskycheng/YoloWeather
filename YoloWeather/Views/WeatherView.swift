@@ -699,7 +699,7 @@ struct WeatherView: View {
                                 .onChanged { value in
                                     // 处理左右滑动
                                     if !showingSideMenu && value.translation.width < 0 && 
-                                       abs(value.translation.width) > abs(value.translation.height) * 1.5 {
+                                       abs(value.translation.width) > abs(value.translation.height) {
                                         withAnimation(.easeInOut) {
                                             showingSideMenu = true
                                         }
@@ -708,23 +708,26 @@ struct WeatherView: View {
                                     
                                     // 处理上下滑动
                                     if showingDailyForecast && value.translation.height > 0 {
-                                        // 在显示预报时，阻止下拉刷新，将所有下滑手势用于收起预报
-                                        dragOffset = value.translation.height
+                                        // 在显示预报时，实时跟随下滑手势
+                                        withAnimation(.interactiveSpring()) {
+                                            dragOffset = value.translation.height
+                                        }
                                         // 取消任何可能的刷新状态
                                         isRefreshing = false
                                     } else if !showingDailyForecast && value.translation.height < 0 {
-                                        // 未显示预报时的上滑手势
-                                        let newOffset = -min(value.translation.height, geometry.size.height * 0.7)
-                                        if !isDraggingUp {
-                                            isDraggingUp = true
+                                        // 未显示预报时，实时跟随上滑手势
+                                        withAnimation(.interactiveSpring()) {
+                                            dragOffset = -min(-value.translation.height, geometry.size.height)
+                                            if !isDraggingUp {
+                                                isDraggingUp = true
+                                            }
                                         }
-                                        dragOffset = newOffset
                                     }
                                 }
                                 .onEnded { value in
                                     if showingDailyForecast && value.translation.height > 0 {
                                         // 处理下滑收起
-                                        withAnimation(.spring()) {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                             if value.translation.height > 50 {
                                                 showingDailyForecast = false
                                             }
@@ -732,13 +735,11 @@ struct WeatherView: View {
                                         }
                                     } else if !showingDailyForecast && value.translation.height < 0 {
                                         // 处理上滑显示
-                                        withAnimation(.spring()) {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                             if -value.translation.height > 100 {
-                                                dragOffset = geometry.size.height
                                                 showingDailyForecast = true
-                                            } else {
-                                                dragOffset = 0
                                             }
+                                            dragOffset = 0
                                             isDraggingUp = false
                                         }
                                     }
@@ -766,7 +767,7 @@ struct WeatherView: View {
                                             }
                                         }
                                         .onEnded { value in
-                                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            withAnimation(.spring()) {
                                                 if value.translation.height > 50 {
                                                     showingDailyForecast = false
                                                 }
@@ -806,7 +807,7 @@ struct WeatherView: View {
                         }
                         .padding(.horizontal, 12)
                         .frame(height: geometry.size.height * 0.75)
-                        .offset(y: geometry.size.height - (showingDailyForecast ? geometry.size.height - 80 : dragOffset))
+                        .offset(y: geometry.size.height - (geometry.size.height - 80) + (dragOffset > 0 ? dragOffset : 0))
                         .animation(dragOffset > 0 ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: showingDailyForecast)
                         .gesture(
                             DragGesture()
