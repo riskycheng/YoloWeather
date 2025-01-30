@@ -34,6 +34,9 @@ struct HourlyForecastView: View {
                 }
                 .padding(.horizontal)
             }
+            .scrollTargetBehavior(.viewAligned)  
+            .scrollTargetLayout()  
+            .scrollClipDisabled()  
         }
         .padding()
         .background {

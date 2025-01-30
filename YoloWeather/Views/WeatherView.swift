@@ -697,6 +697,16 @@ struct WeatherView: View {
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 5)
                                 .onChanged { value in
+                                    // 处理左右滑动
+                                    if !showingSideMenu && value.translation.width < 0 && 
+                                       abs(value.translation.width) > abs(value.translation.height) * 1.5 {
+                                        withAnimation(.easeInOut) {
+                                            showingSideMenu = true
+                                        }
+                                        return
+                                    }
+                                    
+                                    // 处理上下滑动
                                     if showingDailyForecast && value.translation.height > 0 {
                                         // 在显示预报时，阻止下拉刷新，将所有下滑手势用于收起预报
                                         dragOffset = value.translation.height
@@ -787,12 +797,12 @@ struct WeatherView: View {
                             RoundedRectangle(cornerRadius: 16)
                                 .fill(.ultraThinMaterial)
                                 .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
-                                .overlay(
+                                .overlay {
                                     RoundedRectangle(cornerRadius: 16)
                                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
                                         .blur(radius: 1)
                                         .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 0)
-                                )
+                                }
                         }
                         .padding(.horizontal, 12)
                         .frame(height: geometry.size.height * 0.75)
@@ -863,6 +873,17 @@ struct WeatherView: View {
                 }
             }
         }
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onChanged { value in
+                    if !showingSideMenu && value.translation.width < 0 && 
+                       abs(value.translation.width) > abs(value.translation.height) {
+                        withAnimation(.easeInOut) {
+                            showingSideMenu = true
+                        }
+                    }
+                }
+        )
         .task {
             await loadInitialWeather()
         }
