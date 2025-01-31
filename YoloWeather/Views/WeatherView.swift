@@ -51,6 +51,7 @@ private struct ScrollableHourlyForecastView: View {
     let weatherService: WeatherService
     let safeAreaInsets: EdgeInsets
     let animationTrigger: UUID
+    @Binding var isDragging: Bool
     
     private let itemWidth: CGFloat = 50
     private let spacing: CGFloat = 8
@@ -129,6 +130,15 @@ private struct ScrollableHourlyForecastView: View {
         }
         .frame(height: 90)
         .padding(.bottom, 4)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 5)
+                .onChanged { value in
+                    isDragging = true
+                }
+                .onEnded { value in
+                    isDragging = false
+                }
+        )
     }
 }
 
@@ -176,19 +186,21 @@ struct WeatherView: View {
     @StateObject private var citySearchService = CitySearchService.shared
     @State private var selectedLocation: PresetLocation = PresetLocation.presets[0]
     @State private var showingSideMenu = false
-    @State private var showingLocationPicker = false
+    @State private var showingDailyForecast = false
     @State private var isRefreshing = false
     @State private var isLoadingWeather = false
-    @State private var timeOfDay: WeatherTimeOfDay = .day
     @State private var animationTrigger = UUID()
+    @State private var isHourlyViewDragging = false
     @State private var lastRefreshTime = Date()
     @State private var isUsingCurrentLocation = false
     @AppStorage("lastSelectedLocation") private var lastSelectedLocationName: String?
-    @AppStorage("showDailyForecast") private var showDailyForecast = false
+    @State private var showingLocationPicker = false
+    @State private var timeOfDay: WeatherTimeOfDay = .day
     @State private var dragOffset: CGFloat = 0
     @State private var showSuccessToast = false
     @State private var isDraggingUp = false
-    @State private var showingDailyForecast = false
+    @State private var isTouchInHourlyView = false
+    @State private var sideMenuGestureEnabled = true
     
     private func ensureMinimumLoadingTime(startTime: Date) async {
         let timeElapsed = Date().timeIntervalSince(startTime)
@@ -670,11 +682,29 @@ struct WeatherView: View {
                                             ScrollableHourlyForecastView(
                                                 weatherService: weatherService,
                                                 safeAreaInsets: geometry.safeAreaInsets,
-                                                animationTrigger: animationTrigger
+                                                animationTrigger: animationTrigger,
+                                                isDragging: $isHourlyViewDragging
                                             )
-                                            .opacity(showingDailyForecast ? 0 : 1)  // 当显示日预报时完全隐藏
-                                            .animation(.easeInOut(duration: 0.3), value: showingDailyForecast)  // 添加渐变动画
+                                            .opacity(showingDailyForecast ? 0 : 1)
+                                            .animation(.easeInOut(duration: 0.3), value: showingDailyForecast)
                                             .padding(.bottom, 20)
+                                            .onHover { isHovered in
+                                                sideMenuGestureEnabled = !isHovered
+                                            }
+                                            .onTapGesture { }  // 空的点击手势来阻止事件传递
+                                            .simultaneousGesture(
+                                                DragGesture(minimumDistance: 0)
+                                                    .onChanged { _ in
+                                                        sideMenuGestureEnabled = false
+                                                        isHourlyViewDragging = true
+                                                    }
+                                                    .onEnded { _ in
+                                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                            sideMenuGestureEnabled = true
+                                                            isHourlyViewDragging = false
+                                                        }
+                                                    }
+                                            )
                                             
                                             // 添加上拉提示
                                             VStack(spacing: 4) {
@@ -698,7 +728,7 @@ struct WeatherView: View {
                             DragGesture(minimumDistance: 5)
                                 .onChanged { value in
                                     // 处理左右滑动
-                                    if !showingSideMenu && value.translation.width < 0 && 
+                                    if !isHourlyViewDragging && !showingSideMenu && value.translation.width < 0 && 
                                        abs(value.translation.width) > abs(value.translation.height) {
                                         withAnimation(.easeInOut) {
                                             showingSideMenu = true
@@ -761,9 +791,7 @@ struct WeatherView: View {
                                         .onChanged { value in
                                             // 实时跟随手指移动
                                             if value.translation.height > 0 {
-                                                withAnimation(.interactiveSpring()) {
-                                                    dragOffset = value.translation.height
-                                                }
+                                                dragOffset = value.translation.height
                                             }
                                         }
                                         .onEnded { value in
@@ -877,7 +905,7 @@ struct WeatherView: View {
         .gesture(
             DragGesture(minimumDistance: 20)
                 .onChanged { value in
-                    if !showingSideMenu && value.translation.width < 0 && 
+                    if sideMenuGestureEnabled && !showingSideMenu && value.translation.width < 0 && 
                        abs(value.translation.width) > abs(value.translation.height) {
                         withAnimation(.easeInOut) {
                             showingSideMenu = true
