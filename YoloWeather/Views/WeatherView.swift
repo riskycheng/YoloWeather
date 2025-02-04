@@ -727,7 +727,7 @@ struct WeatherView: View {
                             DragGesture(minimumDistance: 5)
                                 .onChanged { value in
                                     // 处理左右滑动
-                                    if !isHourlyViewDragging && !showingSideMenu && value.translation.width < 0 && 
+                                    if !isHourlyViewDragging && !showingSideMenu && !showingDailyForecast && value.translation.width < 0 && 
                                        abs(value.translation.width) > abs(value.translation.height) {
                                         withAnimation(.easeInOut) {
                                             showingSideMenu = true
@@ -903,7 +903,7 @@ struct WeatherView: View {
         .gesture(
             DragGesture(minimumDistance: 20)
                 .onChanged { value in
-                    if sideMenuGestureEnabled && !showingSideMenu && value.translation.width < 0 && 
+                    if sideMenuGestureEnabled && !showingSideMenu && !showingDailyForecast && value.translation.width < 0 && 
                        abs(value.translation.width) > abs(value.translation.height) {
                         withAnimation(.easeInOut) {
                             showingSideMenu = true

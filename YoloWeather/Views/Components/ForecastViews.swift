@@ -51,6 +51,7 @@ struct HourlyForecastView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
         )
+        .highPriorityGesture(DragGesture().onChanged { _ in })
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .move(edge: .bottom).combined(with: .opacity)
@@ -102,6 +103,7 @@ struct DailyForecastView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
         )
+        .highPriorityGesture(DragGesture().onChanged { _ in })
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .move(edge: .bottom).combined(with: .opacity)
@@ -209,6 +211,11 @@ struct DailyForecastView: View {
                 .offset(x: lowX)
         }
         .frame(width: width, height: 6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(.white.opacity(0.2), lineWidth: 1)
+        )
+        .highPriorityGesture(DragGesture().onChanged { _ in })
     }
 }
 
