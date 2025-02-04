@@ -665,18 +665,17 @@ struct WeatherView: View {
                                             weatherIcon
                                                 .frame(maxHeight: .infinity, alignment: .top)
                                             
+                                            // 天气状态气泡视图，在显示预报时隐藏
                                             WeatherContentView(
                                                 weather: weather,
                                                 timeOfDay: timeOfDay,
                                                 locationName: isUsingCurrentLocation ? locationService.locationName : selectedLocation.name,
                                                 animationTrigger: animationTrigger
                                             )
+                                            .opacity(showingDailyForecast ? 0 : 1) // 添加透明度动画
+                                            .animation(.easeInOut(duration: 0.3), value: showingDailyForecast) // 添加动画效果
                                             
                                             Spacer()
-                                                .frame(height: 20)
-                                            
-                                            Spacer()
-                                                .frame(minHeight: 0, maxHeight: .infinity)
                                                 .frame(height: 20)
                                             
                                             ScrollableHourlyForecastView(
@@ -777,6 +776,15 @@ struct WeatherView: View {
                         )
                     }
                     
+                    // 浮动气泡视图，在显示预报时隐藏
+                    if !showingDailyForecast {
+                        FloatingBubblesView(
+                            weatherService: weatherService,
+                            timeOfDay: timeOfDay,
+                            geometry: geometry
+                        )
+                    }
+                    
                     // 每日预报视图
                     if showingDailyForecast {
                         VStack(spacing: 0) {
@@ -856,16 +864,6 @@ struct WeatherView: View {
                                 }
                         )
                     }
-                    
-                    // 浮动气泡层
-                    FloatingBubblesView(
-                        weatherService: weatherService,
-                        timeOfDay: timeOfDay,
-                        geometry: geometry
-                    )
-                    .opacity(isRefreshing || isLoadingWeather ? 0 : 1)
-                    .animation(.easeInOut(duration: 0.3), value: isRefreshing)
-                    .animation(.easeInOut(duration: 0.3), value: isLoadingWeather)
                     
                     // 侧边栏菜单
                     SideMenuView(
