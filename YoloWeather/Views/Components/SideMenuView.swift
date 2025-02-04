@@ -643,113 +643,6 @@ private struct MainContentView: View {
     }
 }
 
-// 修改 SideMenuView 的实现
-struct SideMenuView: View {
-    @Binding var isShowing: Bool
-    @Binding var selectedLocation: PresetLocation
-    let locations: [PresetLocation]
-    let onLocationSelected: (PresetLocation) -> Void
-    
-    @StateObject private var citySearchService = CitySearchService.shared
-    @State private var searchText = ""
-    @State private var searchResults: [PresetLocation] = []
-    @State private var isSearching = false
-    @State private var showSearchResults = false
-    @State private var isEditMode = false
-    @State private var dragState = DragState()
-    @State private var draggingItem: PresetLocation?
-    private let cardHeight: CGFloat = 98
-    private let cardSpacing: CGFloat = 8
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .trailing) {
-                // 半透明背景
-                if isShowing {
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                        .onTapGesture {
-                            withAnimation {
-                                isShowing = false
-                            }
-                        }
-                }
-                
-                // 侧边栏主容器
-                HStack(spacing: 0) {
-                    Spacer()
-                    
-                    VStack(spacing: 0) {
-                        TopBarView(
-                            isEditMode: $isEditMode,
-                            searchText: $searchText,
-                            onSubmit: performSearch
-                        )
-                        
-                        MainContentView(
-                            isEditMode: $isEditMode,
-                            citySearchService: citySearchService,
-                            searchText: searchText,
-                            searchResults: searchResults,
-                            isSearching: isSearching,
-                            onLocationSelected: handleLocationSelection,
-                            cardHeight: cardHeight,
-                            cardSpacing: cardSpacing,
-                            dragState: $dragState,
-                            draggingItem: $draggingItem
-                        )
-                        
-                        WeatherBubbleSettingsView()
-                            .padding(.bottom)
-                    }
-                    .frame(width: min(geometry.size.width * 0.75, 300))
-                    .background(Color(red: 0.25, green: 0.35, blue: 0.45))
-                }
-                .offset(x: isShowing ? 0 : min(geometry.size.width * 0.75, 300))
-                .animation(.spring(response: 0.35, dampingFraction: 0.86), value: isShowing)
-            }
-            .onChange(of: isShowing) { newValue in
-                if !newValue {
-                    resetState()
-                }
-            }
-        }
-    }
-    
-    private func resetState() {
-        searchText = ""
-        searchResults = []
-        showSearchResults = false
-        isSearching = false
-        isEditMode = false
-    }
-    
-    private func performSearch() async {
-        isSearching = true
-        searchResults = await citySearchService.searchCities(query: searchText)
-        isSearching = false
-        showSearchResults = true
-    }
-    
-    private func handleLocationSelection(_ location: PresetLocation) {
-        print("SideMenuView - 选中城市: \(location.name)")
-        
-        if isEditMode {
-            return
-        }
-        
-        let cityLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) ?? location
-        
-        selectedLocation = cityLocation
-        onLocationSelected(cityLocation)
-        
-        withAnimation {
-            isShowing = false
-        }
-    }
-}
-
 // 抖动效果修饰符
 struct ShakeEffect: ViewModifier {
     let isEditMode: Bool
@@ -821,5 +714,129 @@ private struct DragOffsetPreferenceKey: PreferenceKey {
     
     static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
         value = nextValue()
+    }
+}
+
+// 修改 SideMenuView 的实现
+struct SideMenuView: View {
+    @Binding var isShowing: Bool
+    @Binding var selectedLocation: PresetLocation
+    let onLocationSelected: (PresetLocation) -> Void
+    @StateObject private var citySearchService = CitySearchService.shared
+    @State private var searchText = ""
+    @State private var isSearching = false
+    @State private var isEditMode = false
+    @State private var dragOffset: CGFloat = 0 // 添加拖动偏移量状态
+    @State private var dragState = DragState()
+    @State private var draggingItem: PresetLocation?
+    @State private var searchResults: [PresetLocation] = []
+    @State private var showSearchResults = false
+    
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .trailing) {
+                // 半透明背景
+                if isShowing {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .onTapGesture {
+                            withAnimation {
+                                isShowing = false
+                            }
+                        }
+                }
+                
+                // 侧边栏主容器
+                HStack(spacing: 0) {
+                    Spacer()
+                    
+                    VStack(spacing: 0) {
+                        TopBarView(
+                            isEditMode: $isEditMode,
+                            searchText: $searchText,
+                            onSubmit: performSearch
+                        )
+                        .padding(.top, 50)  // 添加顶部间距
+                        
+                        MainContentView(
+                            isEditMode: $isEditMode,
+                            citySearchService: citySearchService,
+                            searchText: searchText,
+                            searchResults: searchResults,
+                            isSearching: isSearching,
+                            onLocationSelected: handleLocationSelection,
+                            cardHeight: 80,
+                            cardSpacing: 8,
+                            dragState: $dragState,
+                            draggingItem: $draggingItem
+                        )
+                        
+                        WeatherBubbleSettingsView()
+                            .padding(.bottom)
+                    }
+                    .frame(width: min(geometry.size.width * 0.75, 300))
+                    .background(Color(red: 0.25, green: 0.35, blue: 0.45))
+                    .offset(x: isShowing ? dragOffset : min(geometry.size.width * 0.75, 300))
+                }
+            }
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        // 只处理从左向右的滑动
+                        if value.translation.width > 0 {
+                            dragOffset = value.translation.width
+                        }
+                    }
+                    .onEnded { value in
+                        withAnimation(.easeInOut) {
+                            // 如果滑动距离超过阈值，关闭侧边栏
+                            if value.translation.width > geometry.size.width * 0.3 {
+                                isShowing = false
+                            }
+                            dragOffset = 0
+                        }
+                    }
+            )
+            .animation(.spring(response: 0.35, dampingFraction: 0.86), value: isShowing)
+            .onChange(of: isShowing) { newValue in
+                if !newValue {
+                    resetState()
+                }
+            }
+        }
+        .edgesIgnoringSafeArea(.all)
+    }
+    
+    private func resetState() {
+        searchText = ""
+        searchResults = []
+        showSearchResults = false
+        isSearching = false
+        isEditMode = false
+    }
+    
+    private func performSearch() async {
+        isSearching = true
+        searchResults = await citySearchService.searchCities(query: searchText)
+        isSearching = false
+        showSearchResults = true
+    }
+    
+    private func handleLocationSelection(_ location: PresetLocation) {
+        print("SideMenuView - 选中城市: \(location.name)")
+        
+        if isEditMode {
+            return
+        }
+        
+        let cityLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) ?? location
+        
+        selectedLocation = cityLocation
+        onLocationSelected(cityLocation)
+        
+        withAnimation {
+            isShowing = false
+        }
     }
 }

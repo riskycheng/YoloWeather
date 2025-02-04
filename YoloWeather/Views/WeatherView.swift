@@ -869,10 +869,10 @@ struct WeatherView: View {
                     SideMenuView(
                         isShowing: $showingSideMenu,
                         selectedLocation: $selectedLocation,
-                        locations: PresetLocation.presets
-                    ) { location in
-                        handleLocationSelection(location)
-                    }
+                        onLocationSelected: { location in
+                            handleLocationSelection(location)
+                        }
+                    )
                     .animation(.easeInOut, value: showingSideMenu)
                     
                     if showingDailyForecast {
