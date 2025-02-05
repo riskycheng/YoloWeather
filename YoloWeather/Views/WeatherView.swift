@@ -776,8 +776,8 @@ struct WeatherView: View {
                         )
                     }
                     
-                    // 浮动气泡视图，在显示预报时隐藏
-                    if !showingDailyForecast {
+                    // 浮动气泡视图，只在有天气数据且不在加载状态时显示
+                    if !showingDailyForecast && !isRefreshing && weatherService.currentWeather != nil {
                         FloatingBubblesView(
                             weatherService: weatherService,
                             timeOfDay: timeOfDay,
