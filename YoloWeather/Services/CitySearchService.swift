@@ -7,7 +7,9 @@ class CitySearchService: ObservableObject {
     static let shared = CitySearchService()
     
     @Published var recentSearches: [PresetLocation] = []
-    private let maxRecentSearches = 5
+    // Maximum number of cities that can be saved in the favorites list
+    // Increased from 5 to 20 to allow for more recent searches to be stored
+    private let maxRecentSearches = 20
     
     private var cityPinyinMap: [String: [String]] = [:]
     private var searchTask: Task<Void, Never>?

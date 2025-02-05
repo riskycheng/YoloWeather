@@ -392,8 +392,8 @@ private struct MainContentView: View {
     @Binding var draggingItem: PresetLocation?
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
+        ScrollView(showsIndicators: true) {
+            VStack(spacing: 16) {
                 if searchText.isEmpty {
                     // 收藏的城市
                     if !citySearchService.recentSearches.isEmpty {
@@ -404,6 +404,8 @@ private struct MainContentView: View {
                 }
             }
             .padding(.vertical)
+            // Add bottom padding to ensure last item is not hidden behind home bar
+            .padding(.bottom, 34)
         }
         .scrollDisabled(isEditMode)
         .frame(maxHeight: .infinity)
