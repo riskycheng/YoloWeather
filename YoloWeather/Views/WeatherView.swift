@@ -375,6 +375,10 @@ struct WeatherView: View {
                     ProgressView()
                         .scaleEffect(1.0)
                         .tint(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                } else if isLoadingWeather {
+                    ProgressView()
+                        .scaleEffect(0.8)
+                        .tint(.white)
                 } else {
                     Image(systemName: "location.circle.fill")
                         .font(.system(size: 32))
@@ -383,7 +387,7 @@ struct WeatherView: View {
             .frame(width: 64, height: 64)
         }
         .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-        .disabled(locationService.isLocating) // 定位过程中禁用按钮
+        .disabled(locationService.isLocating || isLoadingWeather) // 定位过程中禁用按钮
     }
     
     private var cityPickerButton: some View {
@@ -565,54 +569,6 @@ struct WeatherView: View {
         .disabled(locationService.isLocating) // 定位过程中禁用按钮
     }
     
-    var topLeftButton: some View {
-        Button(action: {
-            Task {
-                if citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) {
-                    // 如果城市已在收藏列表中，则作为定位按钮使用
-                    isLoadingWeather = true  // 开始加载
-                    let startTime = Date()
-                    
-                    await handleLocationButtonTap()
-                    
-                    // 确保最小加载时间
-                    let timeElapsed = Date().timeIntervalSince(startTime)
-                    if timeElapsed < 1.0 {
-                        try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
-                    }
-                    
-                    isLoadingWeather = false  // 结束加载
-                } else {
-                    // 如果城市不在收藏列表中，则添加到收藏
-                    let currentLocation = PresetLocation(
-                        name: locationService.locationName,
-                        location: locationService.currentLocation ?? CLLocation(latitude: 0, longitude: 0)
-                    )
-                    citySearchService.addToRecentSearches(currentLocation)
-                    
-                    // 显示成功提示
-                    let generator = UINotificationFeedbackGenerator()
-                    generator.notificationOccurred(.success)
-                    withAnimation {
-                        let banner = UIBanner(
-                            title: "添加成功",
-                            subtitle: "\(locationService.locationName)已添加到收藏",
-                            type: .success
-                        )
-                        UIBannerPresenter.shared.show(banner)
-                    }
-                }
-            }
-        }) {
-            Image(systemName: citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) 
-                ? "location.circle.fill" 
-                : "plus.circle.fill")
-                .font(.system(size: 24))
-                .foregroundColor(.white)
-        }
-        .disabled(locationService.isLocating)
-    }
-    
     var body: some View {
         GeometryReader { geometry in
             BannerContainerView {
@@ -640,7 +596,64 @@ struct WeatherView: View {
                                 VStack(spacing: 0) {
                                     // 顶部工具栏
                                     HStack {
-                                        topLeftButton
+                                        HStack(spacing: 8) {
+                                            // Location button
+                                            Button(action: {
+                                                Task {
+                                                    if citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) {
+                                                        isLoadingWeather = true
+                                                        let startTime = Date()
+                                                        await handleLocationButtonTap()
+                                                        let timeElapsed = Date().timeIntervalSince(startTime)
+                                                        if timeElapsed < 1.0 {
+                                                            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+                                                        }
+                                                        isLoadingWeather = false
+                                                    }
+                                                }
+                                            }) {
+                                                if isLoadingWeather {
+                                                    ProgressView()
+                                                        .scaleEffect(0.8)
+                                                        .tint(.white)
+                                                        .frame(width: 32, height: 32)
+                                                        .background(Color.white.opacity(0.2))
+                                                        .clipShape(Circle())
+                                                } else {
+                                                    Image(systemName: "location.circle.fill")
+                                                        .font(.system(size: 16))
+                                                        .foregroundColor(.white)
+                                                        .frame(width: 32, height: 32)
+                                                        .background(Color.white.opacity(0.2))
+                                                        .clipShape(Circle())
+                                                }
+                                            }
+                                            .disabled(locationService.isLocating || isLoadingWeather)
+                                            
+                                            // Add button - only show if current city is not in the list
+                                            if !citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) {
+                                                Button(action: {
+                                                    citySearchService.addToRecentSearches(selectedLocation)
+                                                    let generator = UINotificationFeedbackGenerator()
+                                                    generator.notificationOccurred(.success)
+                                                    withAnimation {
+                                                        let banner = UIBanner(
+                                                            title: "添加成功",
+                                                            subtitle: "\(selectedLocation.name)已添加到收藏",
+                                                            type: .success
+                                                        )
+                                                        UIBannerPresenter.shared.show(banner)
+                                                    }
+                                                }) {
+                                                    Image(systemName: "plus.circle.fill")
+                                                        .font(.system(size: 16))
+                                                        .foregroundColor(.white)
+                                                        .frame(width: 32, height: 32)
+                                                        .background(Color.white.opacity(0.2))
+                                                        .clipShape(Circle())
+                                                }
+                                            }
+                                        }
                                         
                                         Spacer()
                                         
@@ -777,7 +790,7 @@ struct WeatherView: View {
                     }
                     
                     // 浮动气泡视图，只在有天气数据且不在加载状态时显示
-                    if !showingDailyForecast && !isRefreshing && weatherService.currentWeather != nil {
+                    if !showingDailyForecast && !isRefreshing && !isLoadingWeather && weatherService.currentWeather != nil {
                         FloatingBubblesView(
                             weatherService: weatherService,
                             timeOfDay: timeOfDay,
