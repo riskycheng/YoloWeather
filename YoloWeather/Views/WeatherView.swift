@@ -219,7 +219,7 @@ struct WeatherView: View {
                location.name == lastLocationName
            }) {
             selectedLocation = savedLocation
-            await weatherService.updateWeather(for: savedLocation.location)
+            await weatherService.updateWeather(for: savedLocation.location, cityName: savedLocation.name)
             locationService.locationName = savedLocation.name
             updateTimeOfDay()
             await ensureMinimumLoadingTime(startTime: startTime)
@@ -248,7 +248,7 @@ struct WeatherView: View {
             // 使用默认城市（上海）
             let defaultLocation = PresetLocation.presets[0]
             selectedLocation = defaultLocation
-            await weatherService.updateWeather(for: defaultLocation.location)
+            await weatherService.updateWeather(for: defaultLocation.location, cityName: defaultLocation.name)
             locationService.locationName = defaultLocation.name
             updateTimeOfDay()
         }
@@ -290,7 +290,7 @@ struct WeatherView: View {
         if isUsingCurrentLocation {
             print("使用当前位置更新天气")
             if let currentLocation = locationService.currentLocation {
-                await weatherService.updateWeather(for: currentLocation)
+                await weatherService.updateWeather(for: currentLocation, cityName: locationService.locationName)
             }
         } else {
             print("使用选中的城市更新天气: \(selectedLocation.name)")
@@ -315,7 +315,7 @@ struct WeatherView: View {
         } else {
             locationService.locationName = selectedLocation.name
             locationService.currentLocation = selectedLocation.location
-            await weatherService.updateWeather(for: selectedLocation.location)
+            await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
         }
         
         lastRefreshTime = Date()
@@ -333,7 +333,7 @@ struct WeatherView: View {
                 await locationService.waitForLocationNameUpdate()
                 
                 // 更新天气信息并触发动画
-                await weatherService.updateWeather(for: location)
+                await weatherService.updateWeather(for: location, cityName: locationService.locationName)
                 lastRefreshTime = Date()
                 updateTimeOfDay()
                 
@@ -358,7 +358,7 @@ struct WeatherView: View {
         
         // If we already have a location, trigger an immediate refresh
         if let currentLocation = locationService.currentLocation {
-            await weatherService.updateWeather(for: currentLocation)
+            await weatherService.updateWeather(for: currentLocation, cityName: locationService.locationName)
             lastRefreshTime = Date()
             updateTimeOfDay()
         }

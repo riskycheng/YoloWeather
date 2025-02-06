@@ -31,7 +31,7 @@ class LocationService: NSObject, ObservableObject {
         
         // 在模拟器上使用默认位置
         #if targetEnvironment(simulator)
-        let defaultLocation = CLLocation(latitude: 39.9042, longitude: 116.4074) // 北京
+        let defaultLocation = CLLocation(latitude: 31.2304, longitude: 121.4737) // 上海
         self.currentLocation = defaultLocation
         updateLocationName(for: defaultLocation)
         #else
@@ -64,7 +64,7 @@ class LocationService: NSObject, ObservableObject {
     }
     
     private func useDefaultLocation() {
-        let defaultLocation = CLLocation(latitude: 39.9042, longitude: 116.4074) // 北京
+        let defaultLocation = CLLocation(latitude: 31.2304, longitude: 121.4737) // 上海
         self.currentLocation = defaultLocation
         updateLocationName(for: defaultLocation)
     }
@@ -141,13 +141,27 @@ class LocationService: NSObject, ObservableObject {
                 }
                 
                 if let placemark = placemarks?.first {
-                    // 优先使用区域名称，如果没有则使用城市名称
-                    if let locality = placemark.locality {
-                        self?.locationName = locality
-                    } else if let administrativeArea = placemark.administrativeArea {
-                        self?.locationName = administrativeArea
+                    // 中国城市的特殊处理
+                    if placemark.isoCountryCode == "CN" {
+                        if let locality = placemark.locality {
+                            // 如果城市名不以"市"结尾，添加"市"后缀
+                            let cityName = locality.hasSuffix("市") ? locality : "\(locality)市"
+                            self?.locationName = cityName
+                        } else if let administrativeArea = placemark.administrativeArea {
+                            // 如果没有城市名但有行政区划（省份），使用行政区划
+                            self?.locationName = administrativeArea
+                        } else {
+                            self?.locationName = "未知位置"
+                        }
                     } else {
-                        self?.locationName = "未知位置"
+                        // 非中国城市，使用locality或administrativeArea
+                        if let locality = placemark.locality {
+                            self?.locationName = locality
+                        } else if let administrativeArea = placemark.administrativeArea {
+                            self?.locationName = administrativeArea
+                        } else {
+                            self?.locationName = "未知位置"
+                        }
                     }
                     self?.logger.info("Location name updated: \(self?.locationName ?? "")")
                 } else {

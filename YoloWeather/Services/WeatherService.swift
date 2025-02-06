@@ -24,6 +24,17 @@ class WeatherService: ObservableObject {
     private var location: CLLocation
     private var cityWeatherCache: [String: CurrentWeather] = [:]
     
+    // 城市坐标映射
+    private let cityCoordinates: [String: CLLocation] = [
+        "上海市": CLLocation(latitude: 31.2304, longitude: 121.4737),
+        "北京市": CLLocation(latitude: 39.9042, longitude: 116.4074),
+        "香港": CLLocation(latitude: 22.3193, longitude: 114.1694),
+        "东京": CLLocation(latitude: 35.6762, longitude: 139.6503),
+        "新加坡": CLLocation(latitude: 1.3521, longitude: 103.8198),
+        "旧金山": CLLocation(latitude: 37.7749, longitude: -122.4194),
+        "冰岛": CLLocation(latitude: 64.9631, longitude: -19.0208)
+    ]
+    
     private init() {
         location = CLLocation(latitude: 31.230416, longitude: 121.473701) // 默认上海
     }
@@ -45,12 +56,21 @@ class WeatherService: ObservableObject {
     // 更新指定城市的天气数据
     func updateWeather(for location: CLLocation, cityName: String? = nil) async {
         print("WeatherService - 开始获取天气数据")
-        print("WeatherService - 请求位置: 纬度 \(location.coordinate.latitude), 经度 \(location.coordinate.longitude)")
+        
+        // 如果提供了城市名称，使用预设的城市坐标
+        let weatherLocation: CLLocation
+        if let cityName = cityName, let cityLocation = cityCoordinates[cityName] {
+            weatherLocation = cityLocation
+            print("WeatherService - 使用预设城市坐标: \(cityName) (\(weatherLocation.coordinate.latitude), \(weatherLocation.coordinate.longitude))")
+        } else {
+            weatherLocation = location
+            print("WeatherService - 使用提供的坐标: \(location.coordinate.latitude), \(location.coordinate.longitude)")
+        }
         
         // 清除之前的数据
         clearCurrentWeather()
         
-        self.location = location
+        self.location = weatherLocation
         isLoading = true
         defer { isLoading = false }
         
@@ -59,9 +79,11 @@ class WeatherService: ObservableObject {
             let resolvedCityName: String
             if let providedCityName = cityName {
                 resolvedCityName = providedCityName
+                print("WeatherService - 使用提供的城市名称: \(resolvedCityName)")
             } else {
-                if let geocodedCity = await reverseGeocode(location: location) {
+                if let geocodedCity = await reverseGeocode(location: weatherLocation) {
                     resolvedCityName = geocodedCity
+                    print("WeatherService - 通过地理编码获取到城市名称: \(resolvedCityName)")
                 } else {
                     throw WeatherError.cityNameResolutionFailed
                 }
@@ -72,11 +94,11 @@ class WeatherService: ObservableObject {
             print("WeatherService - 已更新当前选中城市为: \(resolvedCityName)")
             
             // 获取时区
-            let timezone = await calculateTimezone(for: location, cityName: resolvedCityName)
+            let timezone = await calculateTimezone(for: weatherLocation, cityName: resolvedCityName)
             print("WeatherService - 使用时区: \(timezone.identifier)")
             
             // 获取天气数据
-            let weather = try await weatherService.weather(for: location)
+            let weather = try await weatherService.weather(for: weatherLocation)
             print("WeatherService - 成功获取天气数据")
             
             // 使用获取到的时区创建日历
@@ -615,10 +637,22 @@ class WeatherService: ObservableObject {
         let geocoder = CLGeocoder()
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
-            if let placemark = placemarks.first,
-               let city = placemark.locality ?? placemark.administrativeArea {
-                return city
+            if let placemark = placemarks.first {
+                print("反向地理编码结果 - 国家: \(placemark.country ?? "未知"), 行政区: \(placemark.administrativeArea ?? "未知"), 城市: \(placemark.locality ?? "未知")")
+                
+                // 中国城市的特殊处理
+                if placemark.isoCountryCode == "CN" {
+                    if let city = placemark.locality {
+                        return city.hasSuffix("市") ? city : "\(city)市"
+                    } else if let adminArea = placemark.administrativeArea {
+                        return adminArea
+                    }
+                } else {
+                    // 非中国城市，使用locality或administrativeArea
+                    return placemark.locality ?? placemark.administrativeArea
+                }
             }
+            print("反向地理编码未能解析出城市名称")
             return nil
         } catch {
             print("反向地理编码失败: \(error.localizedDescription)")
