@@ -509,6 +509,11 @@ class WeatherService: ObservableObject {
         return hour < 6 || hour >= 18
     }
     
+    // 获取城市的预设坐标
+    func getPresetLocation(for cityName: String) -> CLLocation? {
+        return cityCoordinates[cityName]
+    }
+    
     // 小时预报结构体
     struct HourlyForecast: Identifiable {
         let id: UUID

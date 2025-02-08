@@ -291,11 +291,18 @@ struct WeatherView: View {
             print("使用当前位置更新天气")
             if let currentLocation = locationService.currentLocation {
                 await weatherService.updateWeather(for: currentLocation, cityName: locationService.locationName)
+                // 确保当前位置模式下不会使用预设城市
+                selectedLocation = PresetLocation(name: locationService.locationName ?? "当前位置", location: currentLocation)
             }
         } else {
             print("使用选中的城市更新天气: \(selectedLocation.name)")
             print("城市坐标: 纬度 \(selectedLocation.location.coordinate.latitude), 经度 \(selectedLocation.location.coordinate.longitude)")
             await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
+            // 确保选中的城市与天气服务状态同步
+            if let currentCityName = weatherService.currentCityName, currentCityName != selectedLocation.name,
+               let cityLocation = weatherService.getPresetLocation(for: currentCityName) {
+                selectedLocation = PresetLocation(name: currentCityName, location: cityLocation)
+            }
         }
         
         updateTimeOfDay()
@@ -490,83 +497,6 @@ struct WeatherView: View {
         default:
             return isNight ? "moon_stars" : "sunny"
         }
-    }
-    
-    var addButton: some View {
-        Button(action: {
-            if !citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) {
-                // 如果当前城市不在收藏列表中，则添加到收藏
-                citySearchService.addToRecentSearches(selectedLocation)
-                // 显示添加成功提示
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                withAnimation {
-                    let banner = UIBanner(title: "添加成功", subtitle: "\(selectedLocation.name)已添加到收藏", type: .success)
-                    UIBannerPresenter.shared.show(banner)
-                }
-            } else {
-                // 如果当前城市已在收藏列表中，则触发定位功能
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                withAnimation {
-                    let banner = UIBanner(title: "定位中", subtitle: "正在获取当前位置...", type: .info)
-                    UIBannerPresenter.shared.show(banner)
-                }
-                
-                // 使用Task包装异步调用
-                Task { @MainActor in
-                    // 请求定位权限
-                    locationService.requestLocationPermission()
-                    
-                    // 开始更新位置
-                    locationService.startUpdatingLocation()
-                    
-                    // 设置为使用当前位置
-                    isUsingCurrentLocation = true
-                    
-                    // 设置位置更新回调
-                    locationService.onLocationUpdated = { location in
-                        Task { @MainActor in
-                            // 等待位置名称更新完成
-                            await locationService.waitForLocationNameUpdate()
-                            
-                            // 更新天气信息并触发动画
-                            await weatherService.updateWeather(for: location)
-                            lastRefreshTime = Date()
-                            updateTimeOfDay()
-                            
-                            // 显示定位成功的提示
-                            let generator = UINotificationFeedbackGenerator()
-                            generator.notificationOccurred(.success)
-                            withAnimation {
-                                let banner = UIBanner(title: "定位成功", subtitle: "已切换到当前位置", type: .success)
-                                UIBannerPresenter.shared.show(banner)
-                            }
-                        }
-                    }
-                    
-                    // If we already have a location, trigger an immediate refresh
-                    if let currentLocation = locationService.currentLocation {
-                        await weatherService.updateWeather(for: currentLocation)
-                        lastRefreshTime = Date()
-                        updateTimeOfDay()
-                    }
-                }
-            }
-        }) {
-            Image(systemName: citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) ? "location.circle.fill" : "plus.circle.fill")
-                .font(.system(size: 24))
-                .foregroundColor(.white)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-                .overlay {
-                    if locationService.isLocating {
-                        ProgressView()
-                            .tint(.white)
-                    }
-                }
-        }
-        .disabled(locationService.isLocating) // 定位过程中禁用按钮
     }
     
     var body: some View {
