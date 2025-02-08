@@ -115,7 +115,7 @@ struct DailyForecastView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 // 星期
-                Text(day.weekday)
+                Text(index == 0 ? "今天" : day.weekday)
                     .font(.system(size: 17, weight: .medium))
                     .foregroundColor(.black)
                     .frame(width: 50, alignment: .leading)
@@ -182,7 +182,7 @@ struct DailyForecastView: View {
         .frame(maxWidth: .infinity)
     }
     
-    private func temperatureBar(low: Double, high: Double, width: CGFloat = 140) -> some View {
+    private func temperatureBar(low: Double, high: Double, width: CGFloat = 100) -> some View {
         let (minTemp, maxTemp) = globalTempRange
         let tempRange = maxTemp - minTemp
         
@@ -199,15 +199,15 @@ struct DailyForecastView: View {
             Capsule()
                 .fill(
                     LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color.blue.opacity(0.6),  // 更深的蓝色
-                            Color.blue.opacity(0.8)
-                        ]),
+                        colors: [
+                            Color(red: 0.4, green: 0.6, blue: 1.0),  // 蓝色
+                            Color(red: 1.0, green: 0.6, blue: 0.4)   // 橙色
+                        ],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
                 )
-                .frame(width: highX - lowX, height: 6)
+                .frame(width: max(highX - lowX, 6), height: 6)
                 .offset(x: lowX)
         }
         .frame(width: width, height: 6)
