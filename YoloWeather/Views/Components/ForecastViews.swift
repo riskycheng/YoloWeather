@@ -99,10 +99,6 @@ struct DailyForecastView: View {
                 .fill(.white.opacity(0.85))
                 .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.black.opacity(0.1), lineWidth: 0.5)
-        )
         .highPriorityGesture(DragGesture().onChanged { _ in })
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
@@ -127,7 +123,8 @@ struct DailyForecastView: View {
                 temperatureView(day: day)
             }
             .frame(height: rowHeight)  // 固定行高
-            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .center)  // 确保行内容居中
+            .padding(.horizontal)  // 使用标准水平内边距
             .opacity(appearingItems.contains(day.id) ? 1 : 0)
             .offset(y: appearingItems.contains(day.id) ? 0 : 20)
             .onAppear {
@@ -140,7 +137,7 @@ struct DailyForecastView: View {
             if index != forecast.count - 1 {
                 Divider()
                     .background(Color.black.opacity(0.1))
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal)
             }
         }
     }
@@ -168,15 +165,15 @@ struct DailyForecastView: View {
             Text("\(Int(round(day.temperatureMin)))°")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.black.opacity(0.7))
-                .frame(width: 35, alignment: .trailing)
+                .frame(width: 50, alignment: .trailing)
                 .lineLimit(1)
             
-            temperatureBar(low: day.temperatureMin, high: day.temperatureMax)
+            temperatureBar(low: day.temperatureMin, high: day.temperatureMax, width: 120)
             
             Text("\(Int(round(day.temperatureMax)))°")
                 .font(.system(size: 18, weight: .medium))
                 .foregroundStyle(.black)
-                .frame(width: 35, alignment: .leading)
+                .frame(width: 50, alignment: .leading)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity)

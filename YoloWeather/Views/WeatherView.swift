@@ -703,7 +703,7 @@ struct WeatherView: View {
                                             .onHover { isHovered in
                                                 sideMenuGestureEnabled = !isHovered
                                             }
-                                            .onTapGesture { }  // 空的点击手势来阻止事件传递
+                                            .onTapGesture { }  // 添加空手势来阻止事件传递
                                             .simultaneousGesture(
                                                 DragGesture(minimumDistance: 0)
                                                     .onChanged { _ in
@@ -740,8 +740,8 @@ struct WeatherView: View {
                             DragGesture(minimumDistance: 5)
                                 .onChanged { value in
                                     // 处理左右滑动
-                                    if !isHourlyViewDragging && !showingSideMenu && !showingDailyForecast && value.translation.width < 0 && 
-                                       abs(value.translation.width) > abs(value.translation.height) {
+                                    if !isHourlyViewDragging && !showingSideMenu && !showingDailyForecast && 
+                                       value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) {
                                         withAnimation(.easeInOut) {
                                             showingSideMenu = true
                                         }
@@ -758,10 +758,9 @@ struct WeatherView: View {
                                         isRefreshing = false
                                     } else if !showingDailyForecast && value.translation.height < 0 {
                                         // 未显示预报时，实时跟随上滑手势
-                                        withAnimation(.interactiveSpring()) {
-                                            dragOffset = -min(-value.translation.height, geometry.size.height)
-                                            if !isDraggingUp {
-                                                isDraggingUp = true
+                                        if -value.translation.height > 50 {
+                                            withAnimation(.spring()) {
+                                                showingDailyForecast = true
                                             }
                                         }
                                     }
@@ -769,20 +768,11 @@ struct WeatherView: View {
                                 .onEnded { value in
                                     if showingDailyForecast && value.translation.height > 0 {
                                         // 处理下滑收起
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        withAnimation(.spring()) {
                                             if value.translation.height > 50 {
                                                 showingDailyForecast = false
                                             }
                                             dragOffset = 0
-                                        }
-                                    } else if !showingDailyForecast && value.translation.height < 0 {
-                                        // 处理上滑显示
-                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                            if -value.translation.height > 100 {
-                                                showingDailyForecast = true
-                                            }
-                                            dragOffset = 0
-                                            isDraggingUp = false
                                         }
                                     }
                                 }
@@ -800,82 +790,52 @@ struct WeatherView: View {
                     
                     // 每日预报视图
                     if showingDailyForecast {
-                        VStack(spacing: 0) {
-                            // 添加滑动指示器
-                            RoundedRectangle(cornerRadius: 2.5)
-                                .fill(Color.white.opacity(0.3))
-                                .frame(width: 36, height: 5)
-                                .padding(.top, 8)
-                                .padding(.bottom, 8)
-                                .gesture(
-                                    DragGesture()
-                                        .onChanged { value in
-                                            // 实时跟随手指移动
-                                            if value.translation.height > 0 {
-                                                dragOffset = value.translation.height
-                                            }
-                                        }
-                                        .onEnded { value in
-                                            withAnimation(.spring()) {
-                                                if value.translation.height > 50 {
-                                                    showingDailyForecast = false
-                                                }
-                                                dragOffset = 0
-                                            }
-                                        }
-                                )
-                            
-                            // 标题
-                            Text("7天预报")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.white)
-                                .padding(.bottom, 16)
-                            
-                            DailyForecastView(forecast: weatherService.dailyForecast.map { day in
-                                DailyForecast(
-                                    weekday: dayFormatter.string(from: day.date),
-                                    date: day.date,
-                                    temperatureMin: day.lowTemperature,
-                                    temperatureMax: day.highTemperature,
-                                    symbolName: day.symbolName,
-                                    precipitationProbability: day.precipitationProbability
-                                )
-                            })
-                            .transition(.move(edge: .bottom))
-                        }
-                        .background {
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(.ultraThinMaterial)
-                                .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 4)
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                                        .blur(radius: 1)
-                                        .shadow(color: .white.opacity(0.1), radius: 2, x: 0, y: 0)
-                                }
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: geometry.size.height * 0.75)
-                        .offset(y: geometry.size.height - (geometry.size.height - 80) + (dragOffset > 0 ? dragOffset : 0))
-                        .animation(dragOffset > 0 ? .none : .spring(response: 0.3, dampingFraction: 0.8), value: showingDailyForecast)
-                        .gesture(
-                            DragGesture()
-                                .onChanged { value in
-                                    if value.translation.height > 0 {
-                                        withAnimation(.interactiveSpring()) {
+                        GeometryReader { geo in
+                            VStack(spacing: 0) {
+                                // 标题
+                                Text("7天预报")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .foregroundColor(.white)
+                                    .padding(.vertical, 16)
+                                
+                                DailyForecastView(forecast: weatherService.dailyForecast.map { day in
+                                    DailyForecast(
+                                        weekday: dayFormatter.string(from: day.date),
+                                        date: day.date,
+                                        temperatureMin: day.lowTemperature,
+                                        temperatureMax: day.highTemperature,
+                                        symbolName: day.symbolName,
+                                        precipitationProbability: day.precipitationProbability
+                                    )
+                                })
+                            }
+                            .frame(maxWidth: .infinity)
+                            .background {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .fill(.ultraThinMaterial)
+                                    .ignoresSafeArea()
+                            }
+                            .position(x: geo.size.width / 2, y: geo.size.height * 0.65)  // 将视图定位在屏幕偏下位置
+                            .offset(y: dragOffset)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        if value.translation.height > 0 {
                                             dragOffset = value.translation.height
                                         }
                                     }
-                                }
-                                .onEnded { value in
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        if value.translation.height > 50 {
-                                            showingDailyForecast = false
+                                    .onEnded { value in
+                                        withAnimation(.spring()) {
+                                            if value.translation.height > 50 {
+                                                showingDailyForecast = false
+                                            }
+                                            dragOffset = 0
                                         }
-                                        dragOffset = 0
                                     }
-                                }
-                        )
+                            )
+                        }
+                        .transition(.move(edge: .bottom))
+                        .zIndex(1)
                     }
                     
                     // 侧边栏菜单

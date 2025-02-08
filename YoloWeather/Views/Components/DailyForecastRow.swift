@@ -90,6 +90,10 @@ struct DailyForecastRow: View {
             }
             .frame(width: 40)
             
+            // Add spacing before temperature range
+            Spacer()
+                .frame(width: 20)
+            
             // Temperature range with gradient bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
@@ -108,14 +112,19 @@ struct DailyForecastRow: View {
                 }
                 .frame(height: geometry.size.height)
                 .overlay(
-                    HStack {
-                        Text("\(Int(round(forecast.lowTemperature)))°")
-                            .foregroundColor(.white.opacity(0.8))
+                    HStack(spacing: 0) {
+                        Text("\(Int(forecast.lowTemperature))°")
                             .font(.system(size: 16))
-                        Spacer()
-                        Text("\(Int(round(forecast.highTemperature)))°")
                             .foregroundColor(.white)
+                            .frame(width: 45, alignment: .trailing)
+                        
+                        Spacer()
+                            .frame(width: geometry.size.width - 100)
+                        
+                        Text("\(Int(forecast.highTemperature))°")
                             .font(.system(size: 16))
+                            .foregroundColor(.white)
+                            .frame(width: 45, alignment: .leading)
                     }
                 )
             }
