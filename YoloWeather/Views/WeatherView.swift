@@ -388,7 +388,14 @@ struct WeatherView: View {
                         .tint(.white)
                 } else {
                     Image(systemName: "location.circle.fill")
-                        .font(.system(size: 32))
+                        .font(.system(size: 18, weight: .medium))  // Increased from default size
+                        .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                        .frame(width: 36, height: 36)  // Increased touch target
+                        .background(
+                            Circle()
+                                .fill(Color.white.opacity(0.15))
+                                .frame(width: 34, height: 34)  // Slightly smaller than the touch target
+                        )
                 }
             }
             .frame(width: 64, height: 64)
@@ -401,11 +408,15 @@ struct WeatherView: View {
         Button {
             showingLocationPicker = true
         } label: {
-            Image(systemName: "plus.circle.fill")
-                .font(.system(size: 32))
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .medium))  // Increased from default size
                 .foregroundColor(.white)
-                .frame(width: 64, height: 64)
-                .contentShape(Rectangle())
+                .frame(width: 36, height: 36)  // Increased touch target
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.15))
+                        .frame(width: 34, height: 34)  // Slightly smaller than the touch target
+                )
         }
     }
     
@@ -422,8 +433,8 @@ struct WeatherView: View {
         let isNight = hour >= 18 || hour < 6
         let symbolName = getWeatherSymbolName(for: weather.weatherCondition, isNight: isNight)
         
-        // 使用 selectedLocation 的名称，因为这是用户当前选择的城市
-        let cityName = isUsingCurrentLocation ? locationService.locationName : selectedLocation.name
+        // 使用 WeatherService 中的当前城市名称，这样可以确保与实际天气数据一致
+        let cityName = weatherService.currentCityName ?? "未知城市"
         
         print("天气图标计算 - 城市: \(cityName)")
         print("天气图标计算 - 当地时间: \(hour)点")
@@ -550,12 +561,15 @@ struct WeatherView: View {
                                                         .background(Color.white.opacity(0.2))
                                                         .clipShape(Circle())
                                                 } else {
-                                                    Image(systemName: "location.circle.fill")
-                                                        .font(.system(size: 16))
-                                                        .foregroundColor(.white)
-                                                        .frame(width: 32, height: 32)
-                                                        .background(Color.white.opacity(0.2))
-                                                        .clipShape(Circle())
+                                                    Image(systemName: "location.fill")
+                                                        .font(.system(size: 18, weight: .medium))  // Increased from default size
+                                                        .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
+                                                        .frame(width: 36, height: 36)  // Increased touch target
+                                                        .background(
+                                                            Circle()
+                                                                .fill(Color.white.opacity(0.15))
+                                                                .frame(width: 34, height: 34)  // Slightly smaller than the touch target
+                                                        )
                                                 }
                                             }
                                             .disabled(locationService.isLocating || isLoadingWeather)
@@ -575,12 +589,15 @@ struct WeatherView: View {
                                                         UIBannerPresenter.shared.show(banner)
                                                     }
                                                 }) {
-                                                    Image(systemName: "plus.circle.fill")
-                                                        .font(.system(size: 16))
+                                                    Image(systemName: "plus")
+                                                        .font(.system(size: 20, weight: .medium))  // Increased from default size
                                                         .foregroundColor(.white)
-                                                        .frame(width: 32, height: 32)
-                                                        .background(Color.white.opacity(0.2))
-                                                        .clipShape(Circle())
+                                                        .frame(width: 36, height: 36)  // Increased touch target
+                                                        .background(
+                                                            Circle()
+                                                                .fill(Color.white.opacity(0.15))
+                                                                .frame(width: 34, height: 34)  // Slightly smaller than the touch target
+                                                        )
                                                 }
                                             }
                                         }
