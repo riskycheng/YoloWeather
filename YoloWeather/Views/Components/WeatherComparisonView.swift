@@ -260,58 +260,62 @@ private struct WeatherDayCard: View {
     let gradientColors: [Color]
     
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 8) {  // 减小整体间距
             // 左侧日期
             Text(title)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(.white)
-                .frame(width: 45, alignment: .leading)
+                .frame(width: 50, alignment: .leading)
             
             if let weather = weather {
                 // 天气图标
                 Image(weather.symbolName)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 28, height: 28)
+                    .frame(width: 32, height: 32)
                 
-                Spacer()
+                Spacer(minLength: 20)  // 确保最小间距
                 
-                // 温度区域
-                HStack(spacing: 20) {
+                // 温度区域 - 使用 HStack 水平排列
+                HStack(spacing: 20) {  // 调整温度区域的间距
                     // 最高温
-                    HStack(spacing: 4) {
+                    HStack(spacing: 2) {
                         Image(systemName: "arrow.up")
-                            .font(.system(size: 12))
+                            .font(.system(size: 14))
                             .foregroundColor(.orange)
                         Text("\(Int(round(weather.highTemperature)))°")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(minWidth: 30, alignment: .leading)  // 确保数字有最小宽度
                     }
                     
                     // 最低温
-                    HStack(spacing: 4) {
+                    HStack(spacing: 2) {
                         Image(systemName: "arrow.down")
-                            .font(.system(size: 12))
+                            .font(.system(size: 14))
                             .foregroundColor(.blue)
                         Text("\(Int(round(weather.lowTemperature)))°")
-                            .font(.system(size: 16, weight: .medium))
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(minWidth: 30, alignment: .leading)  // 确保数字有最小宽度
                     }
                 }
                 .foregroundColor(.white)
+                .padding(.trailing, 8)  // 右侧添加一些内边距
             } else {
                 if title == "昨天" {
                     Text("首日无历史数据")
-                        .font(.system(size: 14))
+                        .font(.system(size: 15))
                         .foregroundColor(.white.opacity(0.6))
                 } else {
                     Text("暂无数据")
-                        .font(.system(size: 14))
+                        .font(.system(size: 15))
                         .foregroundColor(.white.opacity(0.6))
                 }
                 Spacer()
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 16)
+        .frame(height: 64)
         .background(
             ZStack {
                 // 主背景
