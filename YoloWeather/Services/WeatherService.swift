@@ -48,6 +48,16 @@ class WeatherService: ObservableObject {
         let symbolName: String
     }
     
+    // 添加新的数据结构用于存储历史天气数据
+    private struct HistoricalWeatherData: Codable {
+        let date: Date
+        let condition: String
+        let symbolName: String
+        let lowTemperature: Double
+        let highTemperature: Double
+        let precipitationProbability: Double
+    }
+    
     private init() {
         location = CLLocation(latitude: 31.230416, longitude: 121.473701) // 默认上海
     }
@@ -68,37 +78,49 @@ class WeatherService: ObservableObject {
     
     // 获取昨天的天气数据
     func getYesterdayWeather(for cityName: String) -> DayWeatherInfo? {
-        let calendar = Calendar.current
-        let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) ?? Date()
-        
-        guard let historicalData = userDefaults.dictionary(forKey: historicalWeatherKey) as? [String: [String: Any]],
-              let cityData = historicalData[cityName],
-              let dateString = cityData["date"] as? String,
-              let date = ISO8601DateFormatter().date(from: dateString),
-              calendar.isDate(date, inSameDayAs: yesterday),
-              let condition = cityData["condition"] as? String,
-              let symbolName = cityData["symbolName"] as? String,
-              let lowTemp = cityData["lowTemperature"] as? Double,
-              let highTemp = cityData["highTemperature"] as? Double else {
+        guard let historicalData = UserDefaults.standard.dictionary(forKey: historicalWeatherKey) as? [String: [[String: Any]]],
+              let cityHistory = historicalData[cityName] else {
             return nil
         }
         
-        return DayWeatherInfo(
-            date: date,
-            condition: condition,
-            symbolName: symbolName,
-            lowTemperature: lowTemp,
-            highTemperature: highTemp,
-            precipitationProbability: cityData["precipitationProbability"] as? Double ?? 0
-        )
+        let calendar = Calendar.current
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        let yesterdayStart = calendar.startOfDay(for: yesterday)
+        
+        // 查找昨天的数据
+        for record in cityHistory {
+            guard let dateString = record["date"] as? String,
+                  let date = ISO8601DateFormatter().date(from: dateString),
+                  calendar.isDate(date, inSameDayAs: yesterdayStart),
+                  let condition = record["condition"] as? String,
+                  let symbolName = record["symbolName"] as? String,
+                  let lowTemp = record["lowTemperature"] as? Double,
+                  let highTemp = record["highTemperature"] as? Double else {
+                continue
+            }
+            
+            return DayWeatherInfo(
+                date: date,
+                condition: condition,
+                symbolName: symbolName,
+                lowTemperature: lowTemp,
+                highTemperature: highTemp,
+                precipitationProbability: record["precipitationProbability"] as? Double ?? 0
+            )
+        }
+        
+        return nil
     }
     
     // 存储今天的天气数据
     private func saveCurrentWeather(cityName: String, weather: DayWeatherInfo) {
-        var historicalData = userDefaults.dictionary(forKey: historicalWeatherKey) as? [String: [String: Any]] ?? [:]
+        var historicalData = UserDefaults.standard.dictionary(forKey: historicalWeatherKey) as? [String: [[String: Any]]] ?? [:]
         
-        // 存储天气数据
-        historicalData[cityName] = [
+        // 获取当前城市的历史数据
+        var cityHistory = historicalData[cityName] as? [[String: Any]] ?? []
+        
+        // 创建新的天气记录
+        let newWeatherRecord: [String: Any] = [
             "date": ISO8601DateFormatter().string(from: weather.date),
             "condition": weather.condition,
             "symbolName": weather.symbolName,
@@ -107,7 +129,36 @@ class WeatherService: ObservableObject {
             "precipitationProbability": weather.precipitationProbability ?? 0
         ]
         
-        userDefaults.set(historicalData, forKey: historicalWeatherKey)
+        // 检查是否已经存在今天的数据
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        
+        // 移除超过7天的数据
+        cityHistory = cityHistory.filter { record in
+            guard let dateString = record["date"] as? String,
+                  let date = ISO8601DateFormatter().date(from: dateString) else {
+                return false
+            }
+            let daysDifference = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: today).day ?? 0
+            return daysDifference <= 7
+        }
+        
+        // 更新或添加今天的数据
+        if let index = cityHistory.firstIndex(where: { record in
+            guard let dateString = record["date"] as? String,
+                  let date = ISO8601DateFormatter().date(from: dateString) else {
+                return false
+            }
+            return calendar.isDate(date, inSameDayAs: weather.date)
+        }) {
+            cityHistory[index] = newWeatherRecord
+        } else {
+            cityHistory.append(newWeatherRecord)
+        }
+        
+        // 更新存储
+        historicalData[cityName] = cityHistory
+        UserDefaults.standard.set(historicalData, forKey: historicalWeatherKey)
     }
     
     // 保存小时天气数据
@@ -801,5 +852,33 @@ class WeatherService: ObservableObject {
         } else {
             errorMessage = "发生未知错误: \(error.localizedDescription)"
         }
+    }
+    
+    // 获取指定城市的所有历史天气数据
+    func getHistoricalWeather(for cityName: String) -> [DayWeatherInfo] {
+        guard let historicalData = UserDefaults.standard.dictionary(forKey: historicalWeatherKey) as? [String: [[String: Any]]],
+              let cityHistory = historicalData[cityName] else {
+            return []
+        }
+        
+        return cityHistory.compactMap { record in
+            guard let dateString = record["date"] as? String,
+                  let date = ISO8601DateFormatter().date(from: dateString),
+                  let condition = record["condition"] as? String,
+                  let symbolName = record["symbolName"] as? String,
+                  let lowTemp = record["lowTemperature"] as? Double,
+                  let highTemp = record["highTemperature"] as? Double else {
+                return nil
+            }
+            
+            return DayWeatherInfo(
+                date: date,
+                condition: condition,
+                symbolName: symbolName,
+                lowTemperature: lowTemp,
+                highTemperature: highTemp,
+                precipitationProbability: record["precipitationProbability"] as? Double ?? 0
+            )
+        }.sorted { $0.date > $1.date }
     }
 }

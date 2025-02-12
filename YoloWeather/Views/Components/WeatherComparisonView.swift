@@ -39,21 +39,22 @@ struct WeatherComparisonView: View {
     }
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
             // 顶部标题区域
             Text("过去24小时 - 未来24小时")
                 .font(.system(size: 16))
                 .foregroundColor(.white.opacity(0.8))
-                .padding(.top, 16)
-                .padding(.bottom, 12)
+                .padding(.top, 24)
+                .padding(.bottom, 16)
             
             // 温度趋势图
             EnhancedTemperatureTrendView(data: comparisonData)
                 .frame(height: 160)
                 .padding(.horizontal)
+                .padding(.bottom, 8)
             
             // 天气卡片区域
-            VStack(spacing: 8) {
+            VStack(spacing: 12) {
                 ForEach(weatherCards, id: \.title) { item in
                     WeatherDayCard(
                         title: item.title,
@@ -69,9 +70,10 @@ struct WeatherComparisonView: View {
                let tomorrow = comparisonData.tomorrow {
                 WeatherChangeSummary(today: today, tomorrow: tomorrow)
                     .padding(.horizontal)
+                    .padding(.top, 8)
             }
             
-            Spacer(minLength: 0)
+            Spacer(minLength: 32)
         }
     }
 }
@@ -260,7 +262,7 @@ private struct WeatherDayCard: View {
     let gradientColors: [Color]
     
     var body: some View {
-        HStack(spacing: 8) {  // 减小整体间距
+        HStack(spacing: 8) {
             // 左侧日期
             Text(title)
                 .font(.system(size: 17, weight: .medium))
@@ -274,10 +276,10 @@ private struct WeatherDayCard: View {
                     .scaledToFit()
                     .frame(width: 32, height: 32)
                 
-                Spacer(minLength: 20)  // 确保最小间距
+                Spacer(minLength: 20)
                 
-                // 温度区域 - 使用 HStack 水平排列
-                HStack(spacing: 20) {  // 调整温度区域的间距
+                // 温度区域
+                HStack(spacing: 20) {
                     // 最高温
                     HStack(spacing: 2) {
                         Image(systemName: "arrow.up")
@@ -285,7 +287,7 @@ private struct WeatherDayCard: View {
                             .foregroundColor(.orange)
                         Text("\(Int(round(weather.highTemperature)))°")
                             .font(.system(size: 18, weight: .medium))
-                            .frame(minWidth: 30, alignment: .leading)  // 确保数字有最小宽度
+                            .frame(minWidth: 30, alignment: .leading)
                     }
                     
                     // 最低温
@@ -295,22 +297,23 @@ private struct WeatherDayCard: View {
                             .foregroundColor(.blue)
                         Text("\(Int(round(weather.lowTemperature)))°")
                             .font(.system(size: 18, weight: .medium))
-                            .frame(minWidth: 30, alignment: .leading)  // 确保数字有最小宽度
+                            .frame(minWidth: 30, alignment: .leading)
                     }
                 }
                 .foregroundColor(.white)
-                .padding(.trailing, 8)  // 右侧添加一些内边距
+                .frame(width: 120, alignment: .trailing)
             } else {
-                if title == "昨天" {
-                    Text("首日无历史数据")
-                        .font(.system(size: 15))
-                        .foregroundColor(.white.opacity(0.6))
-                } else {
-                    Text("暂无数据")
-                        .font(.system(size: 15))
-                        .foregroundColor(.white.opacity(0.6))
-                }
-                Spacer()
+                // 占位天气图标空间
+                Color.clear
+                    .frame(width: 32, height: 32)
+                
+                Spacer(minLength: 20)
+                
+                // 无数据文本，使用与温度区域相同的宽度
+                Text(title == "昨天" ? "首日无历史数据" : "暂无数据")
+                    .font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.6))
+                    .frame(width: 120, alignment: .center)
             }
         }
         .padding(.horizontal, 16)
@@ -371,6 +374,7 @@ private struct WeatherChangeSummary: View {
                 Text("天气变化提醒")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundColor(.white)
+                Spacer()
             }
             
             HStack(spacing: 4) {
@@ -383,6 +387,7 @@ private struct WeatherChangeSummary: View {
                 Text("\(temperatureChange > 0 ? "升高" : "降低") \(String(format: "%.1f", abs(temperatureChange)))°")
                     .foregroundColor(temperatureChange > 0 ? .orange : .blue)
                     .fontWeight(.medium)
+                Spacer()
             }
             .font(.system(size: 16))
             
@@ -401,17 +406,50 @@ private struct WeatherChangeSummary: View {
                     Text(tomorrow.condition)
                         .foregroundColor(.white)
                         .fontWeight(.medium)
+                    Spacer()
                 }
                 .font(.system(size: 16))
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 16)
+        .padding(.horizontal, 16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.15))
-                .shadow(color: .black.opacity(0.1), radius: 5, x: 0, y: 2)
+            ZStack {
+                // 主背景
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color(red: 0.25, green: 0.35, blue: 0.45))
+                    .opacity(0.6)
+                
+                // 顶部渐变光效
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.2),
+                        .white.opacity(0.05)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                
+                // 侧边渐变光效
+                LinearGradient(
+                    colors: [
+                        .white.opacity(0.2),
+                        .clear
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
+        .shadow(color: Color.white.opacity(0.1), radius: 1, x: 0, y: 1)
+        .frame(maxWidth: .infinity)  // 确保宽度填充父视图
     }
 } 
 
