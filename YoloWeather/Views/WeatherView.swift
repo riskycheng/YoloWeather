@@ -186,6 +186,7 @@ struct WeatherView: View {
     @StateObject private var citySearchService = CitySearchService.shared
     @State private var selectedLocation: PresetLocation = PresetLocation.presets[0]
     @State private var showingSideMenu = false
+    @State private var showingLeftSide = false  // 添加左侧栏状态
     @State private var showingDailyForecast = false
     @State private var isRefreshing = false
     @State private var isLoadingWeather = false
@@ -817,6 +818,48 @@ struct WeatherView: View {
                                     }
                             )
                     }
+
+                    // 添加左侧栏视图
+                    LeftSideView(isShowing: $showingLeftSide)
+                        .zIndex(2)
+
+                    // 添加边缘滑动手势识别
+                    GeometryReader { geo in
+                        HStack {
+                            // 左边缘区域
+                            Color.clear
+                                .frame(width: 20)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            if value.translation.width > 0 && !showingSideMenu {
+                                                withAnimation {
+                                                    showingLeftSide = true
+                                                }
+                                            }
+                                        }
+                                )
+                            
+                            Spacer()
+                            
+                            // 右边缘区域
+                            Color.clear
+                                .frame(width: 20)
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture()
+                                        .onChanged { value in
+                                            if value.translation.width < 0 && !showingLeftSide {
+                                                withAnimation {
+                                                    showingSideMenu = true
+                                                }
+                                            }
+                                        }
+                                )
+                        }
+                    }
+                    .allowsHitTesting(!isHourlyViewDragging)
                 }
             }
         }
