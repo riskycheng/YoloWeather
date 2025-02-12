@@ -3,6 +3,7 @@ import SwiftUI
 struct LeftSideView: View {
     @Binding var isShowing: Bool
     @State private var dragOffset: CGFloat = 0
+    @StateObject private var weatherService = WeatherService.shared
     
     var body: some View {
         GeometryReader { geometry in
@@ -22,10 +23,21 @@ struct LeftSideView: View {
                 // 左侧栏主容器
                 HStack(spacing: 0) {
                     VStack(spacing: 0) {
-                        Text("这是左侧栏")
-                            .font(.title)
+                        Text("天气趋势")
+                            .font(.title2)
+                            .fontWeight(.medium)
                             .foregroundColor(.white)
-                            .padding(.top, 50)
+                            .padding(.top, 60)
+                            .padding(.bottom, 20)
+                        
+                        if let currentWeather = weatherService.currentWeather {
+                            WeatherComparisonView(weatherService: weatherService)
+                                .padding(.horizontal)
+                        } else {
+                            ProgressView()
+                                .tint(.white)
+                                .padding()
+                        }
                         
                         Spacer()
                     }
