@@ -22,8 +22,10 @@ struct CurrentWeatherDisplayView: View {
             VStack(alignment: .leading, spacing: 8) {
                 // High temperature
                 HStack(spacing: 2) {
-                    Image(systemName: "arrowtriangle.up.fill")
-                        .font(.system(size: 10))
+                    Image(systemName: "arrowtriangle.up.circle.fill")
+                        .font(.system(size: 12))
+                        .symbolRenderingMode(.hierarchical)
+                        .imageScale(.large)
                     Text("\(Int(round(weather.highTemperature)))°")
                         .font(.system(size: 15))
                 }
@@ -31,8 +33,10 @@ struct CurrentWeatherDisplayView: View {
                 
                 // Low temperature
                 HStack(spacing: 2) {
-                    Image(systemName: "arrowtriangle.down.fill")
-                        .font(.system(size: 10))
+                    Image(systemName: "arrowtriangle.down.circle.fill")
+                        .font(.system(size: 12))
+                        .symbolRenderingMode(.hierarchical)
+                        .imageScale(.large)
                     Text("\(Int(round(weather.lowTemperature)))°")
                         .font(.system(size: 15))
                 }
