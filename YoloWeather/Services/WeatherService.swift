@@ -24,6 +24,11 @@ class WeatherService: ObservableObject {
     private var location: CLLocation
     private var cityWeatherCache: [String: CurrentWeather] = [:]
     
+    // 添加历史天气数据存储
+    private let userDefaults = UserDefaults.standard
+    private let historicalWeatherKey = "historical_weather"
+    private let hourlyWeatherKey = "hourly_weather"
+    
     // 城市坐标映射
     private let cityCoordinates: [String: CLLocation] = [
         "上海市": CLLocation(latitude: 31.2304, longitude: 121.4737),
@@ -34,6 +39,14 @@ class WeatherService: ObservableObject {
         "旧金山": CLLocation(latitude: 37.7749, longitude: -122.4194),
         "冰岛": CLLocation(latitude: 64.9631, longitude: -19.0208)
     ]
+    
+    // 添加小时天气数据结构
+    struct HourlyWeatherData: Codable {
+        let date: Date
+        let temperature: Double
+        let condition: String
+        let symbolName: String
+    }
     
     private init() {
         location = CLLocation(latitude: 31.230416, longitude: 121.473701) // 默认上海
@@ -51,6 +64,97 @@ class WeatherService: ObservableObject {
     // 清除当前城市名称
     func clearCurrentCityName() {
         currentCityName = nil
+    }
+    
+    // 获取昨天的天气数据
+    func getYesterdayWeather(for cityName: String) -> DayWeatherInfo? {
+        let calendar = Calendar.current
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: Date()) ?? Date()
+        
+        guard let historicalData = userDefaults.dictionary(forKey: historicalWeatherKey) as? [String: [String: Any]],
+              let cityData = historicalData[cityName],
+              let dateString = cityData["date"] as? String,
+              let date = ISO8601DateFormatter().date(from: dateString),
+              calendar.isDate(date, inSameDayAs: yesterday),
+              let condition = cityData["condition"] as? String,
+              let symbolName = cityData["symbolName"] as? String,
+              let lowTemp = cityData["lowTemperature"] as? Double,
+              let highTemp = cityData["highTemperature"] as? Double else {
+            return nil
+        }
+        
+        return DayWeatherInfo(
+            date: date,
+            condition: condition,
+            symbolName: symbolName,
+            lowTemperature: lowTemp,
+            highTemperature: highTemp,
+            precipitationProbability: cityData["precipitationProbability"] as? Double ?? 0
+        )
+    }
+    
+    // 存储今天的天气数据
+    private func saveCurrentWeather(cityName: String, weather: DayWeatherInfo) {
+        var historicalData = userDefaults.dictionary(forKey: historicalWeatherKey) as? [String: [String: Any]] ?? [:]
+        
+        // 存储天气数据
+        historicalData[cityName] = [
+            "date": ISO8601DateFormatter().string(from: weather.date),
+            "condition": weather.condition,
+            "symbolName": weather.symbolName,
+            "lowTemperature": weather.lowTemperature,
+            "highTemperature": weather.highTemperature,
+            "precipitationProbability": weather.precipitationProbability ?? 0
+        ]
+        
+        userDefaults.set(historicalData, forKey: historicalWeatherKey)
+    }
+    
+    // 保存小时天气数据
+    private func saveHourlyWeather(cityName: String, hourlyData: [HourlyWeatherData]) {
+        var allHourlyData = userDefaults.dictionary(forKey: hourlyWeatherKey) as? [String: [[String: Any]]] ?? [:]
+        
+        // 转换为可存储格式
+        let storableData = hourlyData.map { hourData -> [String: Any] in
+            return [
+                "date": ISO8601DateFormatter().string(from: hourData.date),
+                "temperature": hourData.temperature,
+                "condition": hourData.condition,
+                "symbolName": hourData.symbolName
+            ]
+        }
+        
+        allHourlyData[cityName] = storableData
+        userDefaults.set(allHourlyData, forKey: hourlyWeatherKey)
+    }
+    
+    // 获取过去24小时的天气数据
+    func getPast24HourWeather(for cityName: String) -> [HourlyWeatherData] {
+        guard let allHourlyData = userDefaults.dictionary(forKey: hourlyWeatherKey) as? [String: [[String: Any]]],
+              let cityData = allHourlyData[cityName] else {
+            return []
+        }
+        
+        let now = Date()
+        let past24Hours = Calendar.current.date(byAdding: .hour, value: -24, to: now)!
+        
+        return cityData.compactMap { hourData -> HourlyWeatherData? in
+            guard let dateString = hourData["date"] as? String,
+                  let date = ISO8601DateFormatter().date(from: dateString),
+                  let temperature = hourData["temperature"] as? Double,
+                  let condition = hourData["condition"] as? String,
+                  let symbolName = hourData["symbolName"] as? String,
+                  date >= past24Hours && date <= now else {
+                return nil
+            }
+            
+            return HourlyWeatherData(
+                date: date,
+                temperature: temperature,
+                condition: condition,
+                symbolName: symbolName
+            )
+        }
     }
     
     // 更新指定城市的天气数据
@@ -196,6 +300,25 @@ class WeatherService: ObservableObject {
             errorMessage = nil
             
             print("WeatherService - 天气数据更新完成")
+            
+            // 在成功获取天气数据后，存储今天的天气信息
+            if let cityName = cityName ?? self.currentCityName,
+               let todayWeather = dailyForecasts.first {
+                saveCurrentWeather(cityName: cityName, weather: todayWeather)
+            }
+            
+            // 保存小时天气数据
+            if let resolvedCityName = cityName ?? self.currentCityName {
+                let hourlyData = weather.hourlyForecast.map { hour in
+                    HourlyWeatherData(
+                        date: hour.date,
+                        temperature: hour.temperature.value,
+                        condition: getWeatherConditionText(hour.condition),
+                        symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isNight(for: hour.date, in: timezone))
+                    )
+                }
+                saveHourlyWeather(cityName: resolvedCityName, hourlyData: hourlyData)
+            }
             
         } catch {
             print("WeatherService - 更新天气数据失败: \(error.localizedDescription)")
