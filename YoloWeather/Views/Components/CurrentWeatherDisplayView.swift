@@ -1,13 +1,14 @@
 import SwiftUI
 
 struct CurrentWeatherDisplayView: View {
-    let weather: WeatherService.CurrentWeather  // Use WeatherService.CurrentWeather type
+    let weather: WeatherService.CurrentWeather
     let timeOfDay: WeatherTimeOfDay
-    let animationTrigger: UUID?  // Add trigger parameter
+    let animationTrigger: UUID?
     @State private var isAnimating = false
     
     var body: some View {
-        VStack(spacing: 0) {
+        HStack(alignment: .bottom, spacing: 4) {
+            // Main temperature
             FlipNumberView(
                 value: Int(round(weather.temperature)),
                 unit: "°",
@@ -16,6 +17,28 @@ struct CurrentWeatherDisplayView: View {
             )
             .font(.system(size: 96, weight: .medium, design: .rounded))
             .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
+            
+            // High/Low temperature indicators
+            VStack(alignment: .leading, spacing: 8) {
+                // High temperature
+                HStack(spacing: 2) {
+                    Image(systemName: "arrowtriangle.up.fill")
+                        .font(.system(size: 10))
+                    Text("\(Int(round(weather.highTemperature)))°")
+                        .font(.system(size: 15))
+                }
+                .foregroundColor(.white)
+                
+                // Low temperature
+                HStack(spacing: 2) {
+                    Image(systemName: "arrowtriangle.down.fill")
+                        .font(.system(size: 10))
+                    Text("\(Int(round(weather.lowTemperature)))°")
+                        .font(.system(size: 15))
+                }
+                .foregroundColor(.white)
+            }
+            .offset(y: -20)
         }
         .onAppear {
             withAnimation(Animation.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
