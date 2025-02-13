@@ -88,10 +88,25 @@ private struct EnhancedTemperatureTrendView: View {
     
     private var temperatures: [(high: Double, low: Double)] {
         [
-            (data.yesterday?.highTemperature ?? 0, data.yesterday?.lowTemperature ?? 0),
-            (data.today?.highTemperature ?? 0, data.today?.lowTemperature ?? 0),
-            (data.tomorrow?.highTemperature ?? 0, data.tomorrow?.lowTemperature ?? 0)
+            (round(data.yesterday?.highTemperature ?? 0), round(data.yesterday?.lowTemperature ?? 0)),
+            (round(data.today?.highTemperature ?? 0), round(data.today?.lowTemperature ?? 0)),
+            (round(data.tomorrow?.highTemperature ?? 0), round(data.tomorrow?.lowTemperature ?? 0))
         ]
+    }
+    
+    // 计算温度范围
+    private var temperatureRange: (min: Double, max: Double, range: Double) {
+        let allTemps = temperatures.flatMap { [$0.high, $0.low] }
+        let minTemp = round((allTemps.min() ?? 0) - 1)  // 对最小值取整
+        let maxTemp = round((allTemps.max() ?? 0) + 1)  // 对最大值取整
+        return (minTemp, maxTemp, max(maxTemp - minTemp, 1.0))
+    }
+    
+    // 计算Y坐标的辅助函数
+    private func calculateY(for temperature: Double, height: CGFloat) -> CGFloat {
+        let roundedTemp = round(temperature)  // 使用取整后的温度值
+        let range = temperatureRange
+        return height * (1 - (roundedTemp - range.min) / range.range)
     }
     
     var body: some View {
@@ -110,6 +125,24 @@ private struct EnhancedTemperatureTrendView: View {
                         }
                     }
                     
+                    // 高温曲线
+                    TemperatureLine(
+                        points: temperatures.map { $0.high },
+                        geometry: geometry,
+                        color: .orange,
+                        hasYesterdayData: data.yesterday != nil,
+                        temperatureRange: temperatureRange
+                    )
+                    
+                    // 低温曲线
+                    TemperatureLine(
+                        points: temperatures.map { $0.low },
+                        geometry: geometry,
+                        color: .blue,
+                        hasYesterdayData: data.yesterday != nil,
+                        temperatureRange: temperatureRange
+                    )
+                    
                     // 温度点和标签
                     ForEach(Array(temperatures.enumerated()), id: \.offset) { index, temp in
                         let x = step * CGFloat(index)
@@ -126,7 +159,7 @@ private struct EnhancedTemperatureTrendView: View {
                                 temperature: temp.high,
                                 position: CGPoint(
                                     x: x,
-                                    y: height * (1 - (temp.high - minTemp) / tempRange)
+                                    y: calculateY(for: temp.high, height: height)
                                 ),
                                 color: .orange
                             )
@@ -136,32 +169,12 @@ private struct EnhancedTemperatureTrendView: View {
                                 temperature: temp.low,
                                 position: CGPoint(
                                     x: x,
-                                    y: height * (1 - (temp.low - minTemp) / tempRange)
+                                    y: calculateY(for: temp.low, height: height)
                                 ),
                                 color: .blue
                             )
                         }
                     }
-                    
-                    // 高温曲线
-                    TemperatureLine(
-                        points: temperatures.map { $0.high },
-                        geometry: geometry,
-                        color: .orange,
-                        hasYesterdayData: data.yesterday != nil,
-                        minTemp: minTemp,
-                        maxTemp: maxTemp
-                    )
-                    
-                    // 低温曲线
-                    TemperatureLine(
-                        points: temperatures.map { $0.low },
-                        geometry: geometry,
-                        color: .blue,
-                        hasYesterdayData: data.yesterday != nil,
-                        minTemp: minTemp,
-                        maxTemp: maxTemp
-                    )
                 }
                 .frame(height: height)
                 
@@ -178,18 +191,6 @@ private struct EnhancedTemperatureTrendView: View {
             }
         }
     }
-    
-    private var minTemp: Double {
-        temperatures.map { min($0.high, $0.low) }.min() ?? 0
-    }
-    
-    private var maxTemp: Double {
-        temperatures.map { max($0.high, $0.low) }.max() ?? 0
-    }
-    
-    private var tempRange: Double {
-        maxTemp - minTemp
-    }
 }
 
 private struct TemperatureLine: View {
@@ -197,11 +198,12 @@ private struct TemperatureLine: View {
     let geometry: GeometryProxy
     let color: Color
     let hasYesterdayData: Bool
-    let minTemp: Double
-    let maxTemp: Double
+    let temperatureRange: (min: Double, max: Double, range: Double)
     
-    private var tempRange: Double {
-        maxTemp - minTemp
+    // 计算Y坐标的辅助函数
+    private func calculateY(for temperature: Double, height: CGFloat) -> CGFloat {
+        let roundedTemp = round(temperature)  // 使用取整后的温度值
+        return height * (1 - (roundedTemp - temperatureRange.min) / temperatureRange.range)
     }
     
     var body: some View {
@@ -210,17 +212,20 @@ private struct TemperatureLine: View {
         let step = width / CGFloat(points.count - 1)
         
         Path { path in
-            let todayIndex = 1
-            let tomorrowIndex = 2
+            // 如果有昨天的数据，从昨天开始画
+            let startIndex = hasYesterdayData ? 0 : 1
             
-            let todayX = step * CGFloat(todayIndex)
-            let tomorrowX = step * CGFloat(tomorrowIndex)
+            // 移动到起始点
+            let startX = step * CGFloat(startIndex)
+            let startY = calculateY(for: points[startIndex], height: height)
+            path.move(to: CGPoint(x: startX, y: startY))
             
-            let todayY = height * (1 - (points[todayIndex] - minTemp) / tempRange)
-            let tomorrowY = height * (1 - (points[tomorrowIndex] - minTemp) / tempRange)
-            
-            path.move(to: CGPoint(x: todayX, y: todayY))
-            path.addLine(to: CGPoint(x: tomorrowX, y: tomorrowY))
+            // 连续画线到后续的点
+            for index in (startIndex + 1)..<points.count {
+                let x = step * CGFloat(index)
+                let y = calculateY(for: points[index], height: height)
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
         }
         .stroke(
             color,
