@@ -63,15 +63,7 @@ struct WeatherComparisonView: View {
                     )
                 }
             }
-            .padding(.horizontal)
-            
-            // 底部天气变化总结
-            if let today = comparisonData.today,
-               let tomorrow = comparisonData.tomorrow {
-                WeatherChangeSummary(today: today, tomorrow: tomorrow)
-                    .padding(.horizontal)
-                    .padding(.top, 8)
-            }
+            .padding(.horizontal)  // 统一的水平内边距
             
             Spacer(minLength: 32)
         }
@@ -360,101 +352,6 @@ private struct WeatherDayCard: View {
         )
         .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
         .shadow(color: Color.white.opacity(0.1), radius: 1, x: 0, y: 1)
-    }
-}
-
-private struct WeatherChangeSummary: View {
-    let today: WeatherService.DayWeatherInfo
-    let tomorrow: WeatherService.DayWeatherInfo
-    
-    private var temperatureChange: Double {
-        tomorrow.highTemperature - today.highTemperature
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "bell.fill")
-                    .foregroundColor(.yellow)
-                Text("天气变化提醒")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            
-            HStack(spacing: 4) {
-                Image(systemName: temperatureChange > 0 ? "thermometer.sun.fill" : "thermometer.snowflake")
-                    .foregroundColor(temperatureChange > 0 ? .orange : .blue)
-                    .font(.system(size: 16))
-                
-                Text("明天气温将")
-                    .foregroundColor(.white) +
-                Text("\(temperatureChange > 0 ? "升高" : "降低") \(String(format: "%.1f", abs(temperatureChange)))°")
-                    .foregroundColor(temperatureChange > 0 ? .orange : .blue)
-                    .fontWeight(.medium)
-                Spacer()
-            }
-            .font(.system(size: 16))
-            
-            if today.condition != tomorrow.condition {
-                HStack(spacing: 4) {
-                    Image(systemName: "cloud.sun.fill")
-                        .foregroundColor(.yellow)
-                        .font(.system(size: 16))
-                    Text("天气将从")
-                        .foregroundColor(.white) +
-                    Text(today.condition)
-                        .foregroundColor(.white)
-                        .fontWeight(.medium) +
-                    Text("转为")
-                        .foregroundColor(.white) +
-                    Text(tomorrow.condition)
-                        .foregroundColor(.white)
-                        .fontWeight(.medium)
-                    Spacer()
-                }
-                .font(.system(size: 16))
-            }
-        }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 16)
-        .background(
-            ZStack {
-                // 主背景
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(red: 0.25, green: 0.35, blue: 0.45))
-                    .opacity(0.6)
-                
-                // 顶部渐变光效
-                LinearGradient(
-                    colors: [
-                        .white.opacity(0.2),
-                        .white.opacity(0.05)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                
-                // 侧边渐变光效
-                LinearGradient(
-                    colors: [
-                        .white.opacity(0.2),
-                        .clear
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-        .shadow(color: Color.white.opacity(0.1), radius: 1, x: 0, y: 1)
-        .frame(maxWidth: .infinity)  // 确保宽度填充父视图
     }
 } 
 
