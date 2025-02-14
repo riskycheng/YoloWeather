@@ -56,9 +56,6 @@ struct HourlyForecastView: View {
             insertion: .move(edge: .bottom).combined(with: .opacity),
             removal: .move(edge: .bottom).combined(with: .opacity)
         ))
-        .onAppear {
-            print("HourlyForecastView - Bottom boundary reached")
-        }
     }
 }
 

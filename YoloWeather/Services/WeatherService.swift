@@ -210,16 +210,12 @@ class WeatherService: ObservableObject {
     
     // 更新指定城市的天气数据
     func updateWeather(for location: CLLocation, cityName: String? = nil) async {
-        print("WeatherService - 开始获取天气数据")
-        
         // 如果提供了城市名称，使用预设的城市坐标
         let weatherLocation: CLLocation
         if let cityName = cityName, let cityLocation = cityCoordinates[cityName] {
             weatherLocation = cityLocation
-            print("WeatherService - 使用预设城市坐标: \(cityName) (\(weatherLocation.coordinate.latitude), \(weatherLocation.coordinate.longitude))")
         } else {
             weatherLocation = location
-            print("WeatherService - 使用提供的坐标: \(location.coordinate.latitude), \(location.coordinate.longitude)")
         }
         
         // 清除之前的数据
@@ -234,11 +230,9 @@ class WeatherService: ObservableObject {
             let resolvedCityName: String
             if let providedCityName = cityName {
                 resolvedCityName = providedCityName
-                print("WeatherService - 使用提供的城市名称: \(resolvedCityName)")
             } else {
                 if let geocodedCity = await reverseGeocode(location: weatherLocation) {
                     resolvedCityName = geocodedCity
-                    print("WeatherService - 通过地理编码获取到城市名称: \(resolvedCityName)")
                 } else {
                     throw WeatherError.cityNameResolutionFailed
                 }
@@ -246,140 +240,99 @@ class WeatherService: ObservableObject {
             
             // 更新当前选中的城市名称
             self.currentCityName = resolvedCityName
-            print("WeatherService - 已更新当前选中城市为: \(resolvedCityName)")
             
-            // 获取时区
+            // 获取时区信息
             let timezone = await calculateTimezone(for: weatherLocation, cityName: resolvedCityName)
-            print("WeatherService - 使用时区: \(timezone.identifier)")
             
             // 获取天气数据
             let weather = try await weatherService.weather(for: weatherLocation)
-            print("WeatherService - 成功获取天气数据")
-            
-            // 使用获取到的时区创建日历
-            var calendar = Calendar.current
-            calendar.timeZone = timezone
-            
-            // 获取当前时间在目标时区的小时数
-            let now = Date()
-            let currentHour = calendar.component(.hour, from: now)
-            let isNightTime = isNight(for: now, in: timezone)
-            
-            print("WeatherService - 目标时区: \(timezone.identifier)")
-            print("WeatherService - UTC时间: \(now)")
-            print("WeatherService - 当地时间: \(currentHour)点")
-            print("WeatherService - 是否夜晚: \(isNightTime)")
-            
-            let symbolName = getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime)
-            let dailyForecast = weather.dailyForecast.forecast.first
             
             // 更新当前天气
-            let currentWeatherData = CurrentWeather(
-                date: weather.currentWeather.date,
+            let now = Date()
+            let currentHour = Calendar.current.component(.hour, from: now)
+            let isNightTime = currentHour >= 18 || currentHour < 6
+            
+            // 更新当前天气数据
+            currentWeather = CurrentWeather(
+                date: now,
                 temperature: weather.currentWeather.temperature.value,
                 feelsLike: weather.currentWeather.apparentTemperature.value,
                 condition: getWeatherConditionText(weather.currentWeather.condition),
-                symbolName: symbolName,
+                symbolName: getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime),
                 windSpeed: weather.currentWeather.wind.speed.value,
-                precipitationChance: weather.hourlyForecast.first?.precipitationChance ?? 0,
+                precipitationChance: weather.hourlyForecast.forecast.first?.precipitationChance ?? 0.0,
                 uvIndex: Int(weather.currentWeather.uvIndex.value),
                 humidity: weather.currentWeather.humidity,
-                airQualityIndex: 0,
+                airQualityIndex: 75,
                 pressure: weather.currentWeather.pressure.value,
                 visibility: weather.currentWeather.visibility.value,
                 timezone: timezone,
                 weatherCondition: weather.currentWeather.condition,
-                highTemperature: dailyForecast?.highTemperature.value ?? weather.currentWeather.temperature.value + 3,
-                lowTemperature: dailyForecast?.lowTemperature.value ?? weather.currentWeather.temperature.value - 3
+                highTemperature: weather.dailyForecast.forecast.first?.highTemperature.value ?? weather.currentWeather.temperature.value + 2,
+                lowTemperature: weather.dailyForecast.forecast.first?.lowTemperature.value ?? weather.currentWeather.temperature.value - 2
             )
             
             // 更新小时预报
-            var forecasts: [HourlyForecast] = []
-            for hour in weather.hourlyForecast.filter({ $0.date.timeIntervalSince(Date()) >= 0 }).prefix(24) {
-                let hourComponent = calendar.component(.hour, from: hour.date)
-                let isHourNight = isNight(for: hour.date, in: timezone)
+            hourlyForecast = weather.hourlyForecast.forecast.prefix(24).map { hour in
+                let hourComponent = Calendar.current.component(.hour, from: hour.date)
+                let isHourNight = hourComponent >= 18 || hourComponent < 6
                 
-                print("WeatherService - 小时预报 - 时间: \(hour.date), 当地时间: \(hourComponent)点, 是否夜晚: \(isHourNight)")
-                
-                let forecast = HourlyForecast(
-                    id: UUID(),
+                return HourlyForecast(
                     temperature: hour.temperature.value,
                     condition: hour.condition,
                     date: hour.date,
                     symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isHourNight),
                     conditionText: getWeatherConditionText(hour.condition)
                 )
-                forecasts.append(forecast)
             }
             
             // 更新每日预报
-            var dailyForecasts: [DayWeatherInfo] = []
-            for day in weather.dailyForecast.forecast.prefix(7) {
-                let daySymbolName = getWeatherSymbolName(condition: day.condition, isNight: false)
-                
-                let forecast = DayWeatherInfo(
+            dailyForecast = weather.dailyForecast.forecast.prefix(10).map { day in
+                DayWeatherInfo(
                     date: day.date,
                     condition: getWeatherConditionText(day.condition),
-                    symbolName: daySymbolName,
+                    symbolName: getWeatherSymbolName(condition: day.condition, isNight: false),
                     lowTemperature: day.lowTemperature.value,
                     highTemperature: day.highTemperature.value,
                     precipitationProbability: day.precipitationChance
                 )
-                dailyForecasts.append(forecast)
             }
             
-            // 更新数据
-            if let cityName = cityName {
-                // 更新缓存
-                cityWeatherCache[cityName] = currentWeatherData
-                print("WeatherService - 已更新城市天气缓存: \(cityName)")
-                
-                // 直接更新显示数据，因为这是用户选择的城市
-                print("WeatherService - 更新显示数据为城市: \(cityName)")
-                self.currentWeather = currentWeatherData
-                self.hourlyForecast = forecasts
-                self.dailyForecast = dailyForecasts
-            } else {
-                // 如果没有城市名称，直接更新所有数据
-                print("WeatherService - 无城市名称，更新所有数据")
-                self.currentWeather = currentWeatherData
-                self.hourlyForecast = forecasts
-                self.dailyForecast = dailyForecasts
-            }
-            
+            // 更新最后更新时间
             lastUpdateTime = Date()
-            errorMessage = nil
             
-            print("WeatherService - 天气数据更新完成")
-            
-            // 在成功获取天气数据后，存储今天的天气信息
-            if let cityName = cityName ?? self.currentCityName,
-               let todayWeather = dailyForecasts.first {
-                saveCurrentWeather(cityName: cityName, weather: todayWeather)
+            // 保存当前天气数据到历史记录
+            if let todayWeather = dailyForecast.first {
+                saveCurrentWeather(cityName: resolvedCityName, weather: todayWeather)
             }
             
             // 保存小时天气数据
-            if let resolvedCityName = cityName ?? self.currentCityName {
-                let hourlyData = weather.hourlyForecast.map { hour in
-                    HourlyWeatherData(
-                        date: hour.date,
-                        temperature: hour.temperature.value,
-                        condition: getWeatherConditionText(hour.condition),
-                        symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isNight(for: hour.date, in: timezone))
-                    )
-                }
-                saveHourlyWeather(cityName: resolvedCityName, hourlyData: hourlyData)
+            let hourlyData = hourlyForecast.map { forecast in
+                HourlyWeatherData(
+                    date: forecast.date,
+                    temperature: forecast.temperature,
+                    condition: forecast.conditionText,
+                    symbolName: forecast.symbolName
+                )
+            }
+            saveHourlyWeather(cityName: resolvedCityName, hourlyData: hourlyData)
+            
+            // 更新城市天气缓存
+            if let current = currentWeather {
+                cityWeatherCache[resolvedCityName] = current
             }
             
+            errorMessage = nil
         } catch {
+            // 保留错误日志
             print("WeatherService - 更新天气数据失败: \(error.localizedDescription)")
-            handleError(error)
+            errorMessage = error.localizedDescription
             
-            // 如果缓存中有数据，使用缓存数据
-            if let cityName = self.currentCityName,
+            // 尝试使用缓存数据
+            if let cityName = cityName ?? currentCityName,
                let cachedWeather = cityWeatherCache[cityName] {
-                self.currentWeather = cachedWeather
                 print("WeatherService - 使用缓存数据: \(cityName)")
+                currentWeather = cachedWeather
             }
         }
     }
@@ -485,21 +438,15 @@ class WeatherService: ObservableObject {
     
     private func calculateTimezone(for location: CLLocation, cityName: String? = nil) async -> TimeZone {
         let geocoder = CLGeocoder()
-        print("正在计算位置 (\(location.coordinate.latitude), \(location.coordinate.longitude)) 的时区")
         
         // 如果有城市名称，优先使用城市名称判断时区
         if let cityName = cityName {
-            print("使用城市名称判断时区: \(cityName)")
-            
             // 中国城市的特殊处理
             if cityName == "香港" {
-                print("检测到香港，使用Asia/Hong_Kong时区")
                 return TimeZone(identifier: "Asia/Hong_Kong")!
             } else if cityName == "澳门" {
-                print("检测到澳门，使用Asia/Macau时区")
                 return TimeZone(identifier: "Asia/Macau")!
             } else if cityName.hasSuffix("市") || cityName.hasSuffix("省") || cityName == "台北" {
-                print("检测到中国大陆/台湾城市，使用Asia/Shanghai时区")
                 return TimeZone(identifier: "Asia/Shanghai")!
             }
             
@@ -518,7 +465,6 @@ class WeatherService: ObservableObject {
             ]
             
             if let knownCity = knownCities.first(where: { $0.name == cityName }) {
-                print("找到匹配的已知城市: \(cityName), 使用时区: \(knownCity.timezone)")
                 return TimeZone(identifier: knownCity.timezone)!
             }
         }
@@ -529,17 +475,14 @@ class WeatherService: ObservableObject {
             // 香港特别行政区的经纬度范围
             if location.coordinate.longitude >= 113.8 && location.coordinate.longitude <= 114.4 &&
                location.coordinate.latitude >= 22.1 && location.coordinate.latitude <= 22.6 {
-                print("根据经纬度判断为香港地区，使用Asia/Hong_Kong时区")
                 return TimeZone(identifier: "Asia/Hong_Kong")!
             }
             // 澳门特别行政区的经纬度范围
             else if location.coordinate.longitude >= 113.5 && location.coordinate.longitude <= 113.6 &&
                     location.coordinate.latitude >= 22.1 && location.coordinate.latitude <= 22.2 {
-                print("根据经纬度判断为澳门地区，使用Asia/Macau时区")
                 return TimeZone(identifier: "Asia/Macau")!
             }
             else {
-                print("根据经纬度判断为中国大陆地区，使用Asia/Shanghai时区")
                 return TimeZone(identifier: "Asia/Shanghai")!
             }
         }
@@ -549,17 +492,12 @@ class WeatherService: ObservableObject {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
             
             if let placemark = placemarks.first {
-                print("获取到位置信息: \(placemark.locality ?? "未知城市"), \(placemark.administrativeArea ?? "未知地区"), \(placemark.country ?? "未知国家")")
-                
                 if let placemarkTimezone = placemark.timeZone {
-                    print("从位置信息获取到时区: \(placemarkTimezone.identifier)")
                     return placemarkTimezone
                 }
                 
                 // 如果没有直接获取到时区，根据国家和经度来判断
                 if let countryCode = placemark.isoCountryCode {
-                    print("尝试根据国家代码确定时区: \(countryCode)")
-                    
                     switch countryCode {
                     case "CN": // 中国
                         return TimeZone(identifier: "Asia/Shanghai")!
@@ -598,7 +536,6 @@ class WeatherService: ObservableObject {
                         }
                     default:
                         let defaultTZ = getDefaultTimezone(for: location)
-                        print("未找到国家对应的时区，使用经纬度计算的时区: \(defaultTZ.identifier)")
                         return defaultTZ
                     }
                 }
@@ -606,22 +543,16 @@ class WeatherService: ObservableObject {
             
             // 如果地理编码失败，使用经纬度范围判断
             let defaultTZ = getDefaultTimezone(for: location)
-            print("未能获取位置信息，使用经纬度计算的时区: \(defaultTZ.identifier)")
             return defaultTZ
             
         } catch {
-            print("反地理编码错误: \(error.localizedDescription)")
             let defaultTZ = getDefaultTimezone(for: location)
-            print("使用经纬度计算的时区: \(defaultTZ.identifier)")
             return defaultTZ
         }
     }
     
     // 获取天气图标名称
     internal func getWeatherSymbolName(condition: WeatherCondition, isNight: Bool) -> String {
-        print("天气图标计算 - 天气状况: \(condition)")
-        print("天气图标计算 - 是否夜晚: \(isNight)")
-        
         let symbolName: String
         switch condition {
         case .clear:
@@ -668,7 +599,6 @@ class WeatherService: ObservableObject {
             symbolName = isNight ? "moon_stars" : "sunny"
         }
         
-        print("天气图标计算 - 选择的图标: \(symbolName)")
         return symbolName
     }
     
@@ -690,7 +620,7 @@ class WeatherService: ObservableObject {
     
     // 小时预报结构体
     struct HourlyForecast: Identifiable {
-        let id: UUID
+        let id = UUID()
         let temperature: Double
         let condition: WeatherCondition
         let date: Date
@@ -779,28 +709,21 @@ class WeatherService: ObservableObject {
         )
         
         // 模拟24小时预报
-        var hourlyForecast: [HourlyForecast] = []
-        let condition = "晴"
-        
-        for i in 0..<24 {
+        service.hourlyForecast = (0..<24).map { i -> HourlyForecast in
             let futureDate = Calendar.current.date(byAdding: .hour, value: i, to: now)!
             let calendar = Calendar.current
             let hourComponent = calendar.component(.hour, from: futureDate)
             let isNight = hourComponent < 6 || hourComponent >= 18
             let symbol = isNight ? "full_moon" : "sunny"
             
-            let forecast = HourlyForecast(
-                id: UUID(),
+            return HourlyForecast(
                 temperature: 25 + Double.random(in: -5...5),
                 condition: .clear,
                 date: futureDate,
                 symbolName: symbol,
-                conditionText: condition
+                conditionText: "晴"
             )
-            hourlyForecast.append(forecast)
         }
-        
-        service.hourlyForecast = hourlyForecast
         
         // 模拟每日预报
         service.dailyForecast = [
@@ -817,8 +740,6 @@ class WeatherService: ObservableObject {
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
             if let placemark = placemarks.first {
-                print("反向地理编码结果 - 国家: \(placemark.country ?? "未知"), 行政区: \(placemark.administrativeArea ?? "未知"), 城市: \(placemark.locality ?? "未知")")
-                
                 // 中国城市的特殊处理
                 if placemark.isoCountryCode == "CN" {
                     if let city = placemark.locality {
@@ -831,10 +752,8 @@ class WeatherService: ObservableObject {
                     return placemark.locality ?? placemark.administrativeArea
                 }
             }
-            print("反向地理编码未能解析出城市名称")
             return nil
         } catch {
-            print("反向地理编码失败: \(error.localizedDescription)")
             return nil
         }
     }

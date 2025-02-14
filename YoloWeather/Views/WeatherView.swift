@@ -202,6 +202,7 @@ struct WeatherView: View {
     @State private var isDraggingUp = false
     @State private var isTouchInHourlyView = false
     @State private var sideMenuGestureEnabled = true
+    @State private var errorMessage: String?
     
     private func ensureMinimumLoadingTime(startTime: Date) async {
         let timeElapsed = Date().timeIntervalSince(startTime)
@@ -260,59 +261,33 @@ struct WeatherView: View {
     
     private func updateTimeOfDay() {
         if let weather = weatherService.currentWeather {
-            var calendar = Calendar.current
-            calendar.timeZone = weather.timezone
-            
-            let hour = calendar.component(.hour, from: Date())
-            let date = Date()
-            
-            // 创建格式化器显示完整时间
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            formatter.timeZone = weather.timezone
-            
-            timeOfDay = (hour >= 18 || hour < 6) ? .night : .day
-            print("城市: \(locationService.locationName)")
-            print("当前UTC时间: \(formatter.string(from: date))")
-            print("时区: \(weather.timezone.identifier) (偏移: \(weather.timezone.secondsFromGMT()/3600)小时)")
-            print("当地时间: \(formatter.string(from: date))")
-            print("小时数: \(hour), 主题: \(timeOfDay)")
+            let hour = Calendar.current.component(.hour, from: Date())
+            timeOfDay = hour >= 18 || hour < 6 ? .night : .day
         }
     }
     
     private func refreshWeather() async {
-        print("开始刷新天气数据")
+        let startTime = Date()
         isRefreshing = true
-        defer { isRefreshing = false }
         
-        let refreshStartTime = Date()
-        
-        // 只更新当前选中的城市天气
-        if isUsingCurrentLocation {
-            print("使用当前位置更新天气")
-            if let currentLocation = locationService.currentLocation {
-                await weatherService.updateWeather(for: currentLocation, cityName: locationService.locationName)
-                // 确保当前位置模式下不会使用预设城市
-                selectedLocation = PresetLocation(name: locationService.locationName ?? "当前位置", location: currentLocation)
+        do {
+            if isUsingCurrentLocation, let currentLocation = locationService.currentLocation {
+                await weatherService.updateWeather(for: currentLocation)
+            } else {
+                await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
             }
-        } else {
-            print("使用选中的城市更新天气: \(selectedLocation.name)")
-            print("城市坐标: 纬度 \(selectedLocation.location.coordinate.latitude), 经度 \(selectedLocation.location.coordinate.longitude)")
-            await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
-            // 确保选中的城市与天气服务状态同步
-            if let currentCityName = weatherService.currentCityName, currentCityName != selectedLocation.name,
-               let cityLocation = weatherService.getPresetLocation(for: currentCityName) {
-                selectedLocation = PresetLocation(name: currentCityName, location: cityLocation)
-            }
+            
+            updateTimeOfDay()
+            animationTrigger = UUID()
+            showSuccessToast = true
+            
+            // 确保加载动画至少显示1秒
+            await ensureMinimumLoadingTime(startTime: startTime)
+        } catch {
+            errorMessage = error.localizedDescription
         }
         
-        updateTimeOfDay()
-        
-        let timeElapsed = Date().timeIntervalSince(refreshStartTime)
-        if timeElapsed < 1.0 {
-            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
-        }
-        
+        isRefreshing = false
         lastRefreshTime = Date()
     }
     
@@ -434,15 +409,6 @@ struct WeatherView: View {
         let isNight = hour >= 18 || hour < 6
         let symbolName = getWeatherSymbolName(for: weather.weatherCondition, isNight: isNight)
         
-        // 使用 WeatherService 中的当前城市名称，这样可以确保与实际天气数据一致
-        let cityName = weatherService.currentCityName ?? "未知城市"
-        
-        print("天气图标计算 - 城市: \(cityName)")
-        print("天气图标计算 - 当地时间: \(hour)点")
-        print("天气图标计算 - 是否夜晚: \(isNight)")
-        print("天气图标计算 - 天气状况: \(weather.weatherCondition)")
-        print("天气图标计算 - 选择的图标: \(symbolName)")
-        
         return (symbolName, hour, isNight)
     }
     
@@ -456,12 +422,6 @@ struct WeatherView: View {
                     .frame(width: 160, height: 160)
                     .offset(x: 60, y: 0)
                     .modifier(ScalingEffectModifier())
-                    .onAppear {
-                        print("城市时区: \(weather.timezone.identifier)")
-                        print("当地时间: \(weatherInfo.hour)点")
-                        print("是否夜晚: \(weatherInfo.isNight)")
-                        print("选择的图标: \(weatherInfo.symbolName)")
-                    }
             }
         }
     }
@@ -916,17 +876,12 @@ struct WeatherView: View {
     
     @MainActor
     private func handleLocationSelection(_ location: PresetLocation) {
-        print("主视图 - 选择城市: \(location.name)")
-        print("主视图 - 城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
-        
         // 开始加载
         isLoadingWeather = true
         let startTime = Date()
         
         // 使用 Task 包装异步操作
         Task {
-            print("主视图 - 正在使用 WeatherService 获取天气数据...")
-            
             // 1. 更新 UI 状态
             isUsingCurrentLocation = false
             selectedLocation = location
@@ -938,7 +893,6 @@ struct WeatherView: View {
             
             // 3. 获取新数据
             await weatherService.updateWeather(for: location.location, cityName: location.name)
-            print("主视图 - 天气数据更新完成")
             
             // 4. 更新时间相关设置
             updateTimeOfDay()

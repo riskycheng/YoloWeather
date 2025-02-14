@@ -105,7 +105,6 @@ class CitySearchService: ObservableObject {
     
     func searchCities(query: String) async -> [PresetLocation] {
         let cleanQuery = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        print("搜索城市: \(cleanQuery)")
         
         if cleanQuery.isEmpty {
             return getHotCities()
@@ -116,7 +115,6 @@ class CitySearchService: ObservableObject {
         // 1. 搜索预设城市
         let presetResults = searchPresetCities(query: cleanQuery)
         results.formUnion(presetResults)
-        print("预设城市搜索结果数量: \(presetResults.count)")
         
         // 2. 使用在线搜索补充结果
         do {
@@ -173,8 +171,8 @@ class CitySearchService: ObservableObject {
             }
             
             results.formUnion(onlineResults)
-            print("在线搜索结果数量: \(onlineResults.count)")
         } catch {
+            // 保留错误日志，因为这对于诊断问题很重要
             print("在线城市搜索出错: \(error.localizedDescription)")
         }
         
@@ -193,7 +191,6 @@ class CitySearchService: ObservableObject {
             }
             .prefix(20)
         
-        print("最终结果数量: \(finalResults.count)")
         return Array(finalResults)
     }
     
@@ -262,12 +259,8 @@ class CitySearchService: ObservableObject {
     }
     
     func addToRecentSearches(_ location: PresetLocation) {
-        print("CitySearchService - 添加城市到最近搜索: \(location.name)")
-        print("CitySearchService - 传入的坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
-        
         // 如果是预设城市，使用预设的坐标
         if let presetLocation = allCities.first(where: { $0.name == location.name }) {
-            print("CitySearchService - 找到预设城市，使用预设坐标")
             let updatedLocation = PresetLocation(
                 name: location.name,
                 location: presetLocation.location,
@@ -287,10 +280,7 @@ class CitySearchService: ObservableObject {
             
             // 保存到本地
             saveRecentSearches()
-            
-            print("CitySearchService - 更新后的坐标: 纬度 \(updatedLocation.location.coordinate.latitude), 经度 \(updatedLocation.location.coordinate.longitude)")
         } else {
-            print("CitySearchService - 非预设城市，使用传入的坐标")
             // 如果已经存在，先移除
             recentSearches.removeAll { $0.name == location.name }
             

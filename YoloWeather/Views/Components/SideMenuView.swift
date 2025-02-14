@@ -60,9 +60,6 @@ private struct WeatherInfoView: View {
         isLoading = true
         defer { isLoading = false }
         
-        print("SideMenuView - 开始加载城市天气: \(location.name)")
-        print("SideMenuView - 城市坐标: 纬度 \(location.location.coordinate.latitude), 经度 \(location.location.coordinate.longitude)")
-        
         do {
             // 使用 WeatherService 获取天气数据，一定要传入城市名称
             await WeatherService.shared.updateWeather(for: location.location, cityName: location.name)
@@ -70,10 +67,10 @@ private struct WeatherInfoView: View {
             // 从缓存中获取更新后的天气数据
             if let updatedWeather = WeatherService.shared.getCachedWeather(for: location.name) {
                 self.weather = updatedWeather
-                print("SideMenuView - 成功更新城市天气: \(location.name)")
             }
         } catch {
-            print("SideMenuView - 获取天气数据失败: \(error.localizedDescription)")
+            // 错误处理
+            self.weather = nil
         }
     }
 }
@@ -270,23 +267,17 @@ struct SavedCityCard: View {
         guard !isEditMode else { return }
         
         isLoading = true
-        print("SavedCityCard - 开始加载城市天气: \(location.name)")
         
         // 如果是预设城市，使用预设的坐标
         let cityLocation: CLLocation
         if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == location.name }) {
             cityLocation = presetLocation.location
-            print("SavedCityCard - 使用预设城市坐标")
         } else {
             cityLocation = location.location
-            print("SavedCityCard - 使用传入的坐标")
         }
-        
-        print("SavedCityCard - 城市坐标: 纬度 \(cityLocation.coordinate.latitude), 经度 \(cityLocation.coordinate.longitude)")
         
         // 先尝试从缓存获取天气数据
         if let cachedWeather = WeatherService.shared.getCachedWeather(for: location.name) {
-            print("SavedCityCard - 使用缓存的天气数据: \(location.name)")
             self.weather = cachedWeather
             isLoading = false
             return
@@ -298,7 +289,6 @@ struct SavedCityCard: View {
         // 更新完成后，从缓存中获取天气数据
         if let updatedWeather = WeatherService.shared.getCachedWeather(for: location.name) {
             self.weather = updatedWeather
-            print("SavedCityCard - 成功更新城市天气: \(location.name)")
         }
         
         isLoading = false

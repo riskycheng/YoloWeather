@@ -24,7 +24,6 @@ class LocationService: NSObject, ObservableObject {
         
         super.init()
         
-        logger.info("Initializing LocationService")
         locationManager.delegate = self
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
         locationManager.distanceFilter = 1000 // Update if location changes by 1km
@@ -41,22 +40,16 @@ class LocationService: NSObject, ObservableObject {
     }
     
     private func checkLocationAuthorization() {
-        logger.info("Checking location authorization: \(self.locationManager.authorizationStatus.rawValue)")
-        
         switch self.locationManager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
-            logger.info("Location authorization already granted")
             startUpdatingLocation()
         case .denied, .restricted:
-            logger.warning("Location authorization denied")
             self.errorMessage = "请在设置中允许访问位置信息"
             // 使用默认位置
             useDefaultLocation()
         case .notDetermined:
-            logger.info("Location authorization not determined")
             requestLocationPermission()
         @unknown default:
-            logger.error("Unknown location authorization status")
             self.errorMessage = "位置服务状态未知"
             // 使用默认位置
             useDefaultLocation()
@@ -70,39 +63,29 @@ class LocationService: NSObject, ObservableObject {
     }
     
     func requestLocationPermission() {
-        logger.info("Requesting location permission")
-        
         // Check if location services are enabled at the system level
         if !CLLocationManager.locationServicesEnabled() {
-            logger.error("Location services are disabled at system level")
             self.errorMessage = "请在系统设置中开启定位服务"
             useDefaultLocation()
             return
         }
         
-        logger.info("Current authorization status: \(self.locationManager.authorizationStatus.rawValue)")
-        
         // Request permission based on current status
         switch self.locationManager.authorizationStatus {
         case .notDetermined:
-            logger.info("Requesting when in use authorization")
             locationManager.requestWhenInUseAuthorization()
         case .denied, .restricted:
-            logger.warning("Location access denied, prompting to open settings")
             self.errorMessage = "请在设置中允许访问位置信息"
             useDefaultLocation()
         case .authorizedWhenInUse, .authorizedAlways:
-            logger.info("Location already authorized, starting updates")
             startUpdatingLocation()
         @unknown default:
-            logger.error("Unknown authorization status")
             self.errorMessage = "位置服务状态未知"
             useDefaultLocation()
         }
     }
     
     func startUpdatingLocation() {
-        logger.info("Starting location updates")
         retryCount = 0
         isLocating = true
         errorMessage = nil
@@ -110,7 +93,6 @@ class LocationService: NSObject, ObservableObject {
     }
     
     func stopUpdatingLocation() {
-        logger.info("Stopping location updates")
         isLocating = false
         locationManager.stopUpdatingLocation()
     }
@@ -163,10 +145,8 @@ class LocationService: NSObject, ObservableObject {
                             self?.locationName = "未知位置"
                         }
                     }
-                    self?.logger.info("Location name updated: \(self?.locationName ?? "")")
                 } else {
                     self?.locationName = "未知位置"
-                    self?.logger.warning("No placemark found")
                 }
             }
         }
@@ -176,22 +156,18 @@ class LocationService: NSObject, ObservableObject {
 extension LocationService: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { 
-            logger.warning("No location received")
             return 
         }
         
         // Only update if accuracy is good enough
         guard location.horizontalAccuracy >= 0 else { 
-            logger.warning("Invalid accuracy: \(location.horizontalAccuracy)")
             return 
         }
         guard location.horizontalAccuracy <= 1000 else { 
-            logger.warning("Poor accuracy: \(location.horizontalAccuracy)")
             return 
         }
         
         Task { @MainActor in
-            logger.info("Location updated: \(location.coordinate.latitude), \(location.coordinate.longitude)")
             self.currentLocation = location
             self.retryCount = 0 // 重置重试计数
             self.updateLocationName(for: location)
@@ -202,7 +178,7 @@ extension LocationService: CLLocationManagerDelegate {
     
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
-            logger.error("Location error: \(error.localizedDescription)")
+            self.logger.error("Location error: \(error.localizedDescription)")
             
             if let clError = error as? CLError {
                 switch clError.code {
@@ -235,22 +211,16 @@ extension LocationService: CLLocationManagerDelegate {
         Task { @MainActor in
             self.authorizationStatus = manager.authorizationStatus
             
-            logger.info("Authorization status changed to: \(manager.authorizationStatus.rawValue)")
-            
             switch manager.authorizationStatus {
             case .authorizedWhenInUse, .authorizedAlways:
-                logger.info("Location authorization granted")
                 self.errorMessage = nil
                 self.startUpdatingLocation()
             case .denied, .restricted:
-                logger.warning("Location authorization denied")
                 self.errorMessage = "请在设置中允许访问位置信息"
                 self.useDefaultLocation()
             case .notDetermined:
-                logger.info("Location authorization not determined")
                 self.requestLocationPermission()
             @unknown default:
-                logger.error("Unknown location authorization status")
                 self.errorMessage = "位置服务状态未知"
                 self.useDefaultLocation()
             }
