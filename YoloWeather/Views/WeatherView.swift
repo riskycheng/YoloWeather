@@ -899,17 +899,28 @@ struct WeatherView: View {
             lastRefreshTime = Date()
             
             // 5. 确保最小加载时间
-            let timeElapsed = Date().timeIntervalSince(startTime)
-            if timeElapsed < 1.0 {
-                try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
-            }
+            await ensureMinimumLoadingTime(startTime: startTime)
             
-            // 6. 完成加载
+            // 6. 触发动画更新
+            animationTrigger = UUID()
+            
+            // 7. 完成加载
             isLoadingWeather = false
             
-            // 7. 关闭侧边栏
+            // 8. 关闭侧边栏
             withAnimation {
                 showingSideMenu = false
+            }
+            
+            // 9. 打印日志以便调试
+            if let currentWeather = weatherService.currentWeather {
+                print("\n=== 已切换到城市: \(location.name) ===")
+                print("当前温度: \(Int(round(currentWeather.temperature)))°")
+                print("天气状况: \(currentWeather.condition)")
+                print("最高温度: \(Int(round(currentWeather.highTemperature)))°")
+                print("最低温度: \(Int(round(currentWeather.lowTemperature)))°")
+            } else {
+                print("\n=== 警告：切换到城市 \(location.name) 后未能获取天气数据 ===")
             }
         }
     }

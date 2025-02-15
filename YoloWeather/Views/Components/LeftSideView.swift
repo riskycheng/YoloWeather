@@ -83,5 +83,27 @@ struct LeftSideView: View {
             .animation(.spring(response: 0.35, dampingFraction: 0.86), value: isShowing)
         }
         .edgesIgnoringSafeArea(.all)
+        .onAppear {
+            if let currentWeather = weatherService.currentWeather {
+                print("\n=== 当前天气趋势 ===")
+                print("实时天气:")
+                print("- 温度: \(Int(round(currentWeather.temperature)))°")
+                print("- 天气: \(currentWeather.condition)")
+                print("- 体感温度: \(Int(round(currentWeather.feelsLike)))°")
+                
+                print("\n未来24小时天气:")
+                for (index, forecast) in weatherService.hourlyForecast.prefix(24).enumerated() {
+                    print("[\(index + 1)小时后] 温度: \(Int(round(forecast.temperature)))° 天气: \(forecast.conditionText)")
+                }
+                
+                print("\n未来7天天气:")
+                for (index, forecast) in weatherService.dailyForecast.prefix(7).enumerated() {
+                    print("第\(index + 1)天:")
+                    print("- 最高温: \(Int(round(forecast.highTemperature)))°")
+                    print("- 最低温: \(Int(round(forecast.lowTemperature)))°")
+                    print("- 天气: \(forecast.condition)")
+                }
+            }
+        }
     }
 } 

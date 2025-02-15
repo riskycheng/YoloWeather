@@ -66,10 +66,13 @@ private struct WeatherInfoView: View {
             
             // 从缓存中获取更新后的天气数据
             if let updatedWeather = WeatherService.shared.getCachedWeather(for: location.name) {
-                self.weather = updatedWeather
+                withAnimation {
+                    self.weather = updatedWeather
+                }
             }
         } catch {
             // 错误处理
+            print("加载天气数据失败: \(error.localizedDescription)")
             self.weather = nil
         }
     }
@@ -718,7 +721,7 @@ struct SideMenuView: View {
     @State private var searchText = ""
     @State private var isSearching = false
     @State private var isEditMode = false
-    @State private var dragOffset: CGFloat = 0 // 添加拖动偏移量状态
+    @State private var dragOffset: CGFloat = 0
     @State private var dragState = DragState()
     @State private var draggingItem: PresetLocation?
     @State private var searchResults: [PresetLocation] = []
@@ -798,6 +801,32 @@ struct SideMenuView: View {
             }
         }
         .edgesIgnoringSafeArea(.all)
+        .task {
+            // 先加载所有城市的天气数据
+            await loadAllCitiesWeather()
+            
+            // 打印当前选中的城市
+            print("\n当前选中城市: \(selectedLocation.name)")
+            
+            // 打印收藏的城市列表及其天气信息
+            print("\n=== 收藏城市列表（共\(citySearchService.recentSearches.count)个）===")
+            for (index, city) in citySearchService.recentSearches.enumerated() {
+                print("\n[\(index + 1)] 城市: \(city.name)")
+                if let weather = WeatherService.shared.getCachedWeather(for: city.name) {
+                    print("- 温度: \(Int(round(weather.temperature)))°")
+                    print("- 天气: \(weather.condition)")
+                    print("- 最高温: \(Int(round(weather.highTemperature)))°")
+                    print("- 最低温: \(Int(round(weather.lowTemperature)))°")
+                } else {
+                    print("- 天气数据尚未加载")
+                }
+            }
+            
+            // 如果没有收藏的城市，打印提示
+            if citySearchService.recentSearches.isEmpty {
+                print("暂无收藏城市")
+            }
+        }
     }
     
     private func resetState() {
@@ -830,5 +859,21 @@ struct SideMenuView: View {
         withAnimation {
             isShowing = false
         }
+    }
+    
+    private func loadAllCitiesWeather() async {
+        print("\n开始加载所有城市天气数据...")
+        for city in citySearchService.recentSearches {
+            print("正在加载 \(city.name) 的天气数据...")
+            let cityLocation: CLLocation
+            if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == city.name }) {
+                cityLocation = presetLocation.location
+            } else {
+                cityLocation = city.location
+            }
+            
+            await WeatherService.shared.updateWeather(for: cityLocation, cityName: city.name)
+        }
+        print("所有城市天气数据加载完成\n")
     }
 }

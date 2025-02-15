@@ -67,7 +67,6 @@ class WeatherService: ObservableObject {
         hourlyForecast = []
         dailyForecast = []
         lastUpdateTime = nil
-        currentCityName = nil
         errorMessage = nil
     }
     
@@ -218,7 +217,7 @@ class WeatherService: ObservableObject {
             weatherLocation = location
         }
         
-        // 清除之前的数据
+        // 清除当前天气数据
         clearCurrentWeather()
         
         self.location = weatherLocation
@@ -238,7 +237,7 @@ class WeatherService: ObservableObject {
                 }
             }
             
-            // 更新当前选中的城市名称
+            // 更新当前城市名称
             self.currentCityName = resolvedCityName
             
             // 获取时区信息
@@ -253,7 +252,7 @@ class WeatherService: ObservableObject {
             let isNightTime = currentHour >= 18 || currentHour < 6
             
             // 更新当前天气数据
-            currentWeather = CurrentWeather(
+            let newCurrentWeather = CurrentWeather(
                 date: now,
                 temperature: weather.currentWeather.temperature.value,
                 feelsLike: weather.currentWeather.apparentTemperature.value,
@@ -271,6 +270,10 @@ class WeatherService: ObservableObject {
                 highTemperature: weather.dailyForecast.forecast.first?.highTemperature.value ?? weather.currentWeather.temperature.value + 2,
                 lowTemperature: weather.dailyForecast.forecast.first?.lowTemperature.value ?? weather.currentWeather.temperature.value - 2
             )
+            
+            // 更新当前天气和缓存
+            currentWeather = newCurrentWeather
+            cityWeatherCache[resolvedCityName] = newCurrentWeather
             
             // 更新小时预报
             hourlyForecast = weather.hourlyForecast.forecast.prefix(24).map { hour in
@@ -317,12 +320,15 @@ class WeatherService: ObservableObject {
             }
             saveHourlyWeather(cityName: resolvedCityName, hourlyData: hourlyData)
             
-            // 更新城市天气缓存
-            if let current = currentWeather {
-                cityWeatherCache[resolvedCityName] = current
-            }
-            
             errorMessage = nil
+            
+            // 打印日志
+            print("\n=== 更新天气数据成功: \(resolvedCityName) ===")
+            print("当前温度: \(Int(round(newCurrentWeather.temperature)))°")
+            print("天气状况: \(newCurrentWeather.condition)")
+            print("最高温度: \(Int(round(newCurrentWeather.highTemperature)))°")
+            print("最低温度: \(Int(round(newCurrentWeather.lowTemperature)))°\n")
+            
         } catch {
             // 保留错误日志
             print("WeatherService - 更新天气数据失败: \(error.localizedDescription)")
