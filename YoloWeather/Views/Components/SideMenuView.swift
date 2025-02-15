@@ -802,30 +802,8 @@ struct SideMenuView: View {
         }
         .edgesIgnoringSafeArea(.all)
         .task {
-            // 先加载所有城市的天气数据
+            // 加载所有城市的天气数据
             await loadAllCitiesWeather()
-            
-            // 打印当前选中的城市
-            print("\n当前选中城市: \(selectedLocation.name)")
-            
-            // 打印收藏的城市列表及其天气信息
-            print("\n=== 收藏城市列表（共\(citySearchService.recentSearches.count)个）===")
-            for (index, city) in citySearchService.recentSearches.enumerated() {
-                print("\n[\(index + 1)] 城市: \(city.name)")
-                if let weather = WeatherService.shared.getCachedWeather(for: city.name) {
-                    print("- 温度: \(Int(round(weather.temperature)))°")
-                    print("- 天气: \(weather.condition)")
-                    print("- 最高温: \(Int(round(weather.highTemperature)))°")
-                    print("- 最低温: \(Int(round(weather.lowTemperature)))°")
-                } else {
-                    print("- 天气数据尚未加载")
-                }
-            }
-            
-            // 如果没有收藏的城市，打印提示
-            if citySearchService.recentSearches.isEmpty {
-                print("暂无收藏城市")
-            }
         }
     }
     
@@ -845,8 +823,6 @@ struct SideMenuView: View {
     }
     
     private func handleLocationSelection(_ location: PresetLocation) {
-        print("SideMenuView - 选中城市: \(location.name)")
-        
         if isEditMode {
             return
         }
@@ -862,18 +838,7 @@ struct SideMenuView: View {
     }
     
     private func loadAllCitiesWeather() async {
-        print("\n开始加载所有城市天气数据...")
-        for city in citySearchService.recentSearches {
-            print("正在加载 \(city.name) 的天气数据...")
-            let cityLocation: CLLocation
-            if let presetLocation = CitySearchService.shared.allCities.first(where: { $0.name == city.name }) {
-                cityLocation = presetLocation.location
-            } else {
-                cityLocation = city.location
-            }
-            
-            await WeatherService.shared.updateWeather(for: cityLocation, cityName: city.name)
-        }
-        print("所有城市天气数据加载完成\n")
+        let cities = citySearchService.recentSearches.map { $0.name }
+        await WeatherService.shared.batchUpdateWeather(for: cities)
     }
 }

@@ -23,6 +23,10 @@ class WeatherService: ObservableObject {
     
     private var location: CLLocation
     private var cityWeatherCache: [String: CurrentWeather] = [:]
+    private var isBatchUpdating: Bool = false
+    private var totalCities: Int = 0
+    private var currentCityIndex: Int = 0
+    private var batchUpdateStartTime: Date?
     
     // 添加历史天气数据存储
     private let userDefaults = UserDefaults.standard
@@ -31,13 +35,77 @@ class WeatherService: ObservableObject {
     
     // 城市坐标映射
     private let cityCoordinates: [String: CLLocation] = [
-        "上海市": CLLocation(latitude: 31.2304, longitude: 121.4737),
+        // 华北地区
         "北京市": CLLocation(latitude: 39.9042, longitude: 116.4074),
+        "天津市": CLLocation(latitude: 39.0842, longitude: 117.2009),
+        "石家庄市": CLLocation(latitude: 38.0428, longitude: 114.5149),
+        "太原市": CLLocation(latitude: 37.8706, longitude: 112.5489),
+        "呼和浩特市": CLLocation(latitude: 40.8427, longitude: 111.7498),
+
+        // 东北地区
+        "沈阳市": CLLocation(latitude: 41.8057, longitude: 123.4315),
+        "长春市": CLLocation(latitude: 43.8168, longitude: 125.3240),
+        "哈尔滨市": CLLocation(latitude: 45.8038, longitude: 126.5340),
+        "大连市": CLLocation(latitude: 38.9140, longitude: 121.6147),
+
+        // 华东地区
+        "上海市": CLLocation(latitude: 31.2304, longitude: 121.4737),
+        "南京市": CLLocation(latitude: 32.0603, longitude: 118.7969),
+        "杭州市": CLLocation(latitude: 30.2741, longitude: 120.1551),
+        "济南市": CLLocation(latitude: 36.6512, longitude: 117.1201),
+        "青岛市": CLLocation(latitude: 36.0671, longitude: 120.3826),
+        "厦门市": CLLocation(latitude: 24.4798, longitude: 118.0894),
+        "福州市": CLLocation(latitude: 26.0745, longitude: 119.2965),
+        "合肥市": CLLocation(latitude: 31.8206, longitude: 117.2272),
+        "南昌市": CLLocation(latitude: 28.6820, longitude: 115.8579),
+        "苏州市": CLLocation(latitude: 31.2989, longitude: 120.5853),
+        "宁波市": CLLocation(latitude: 29.8683, longitude: 121.5440),
+        "无锡市": CLLocation(latitude: 31.4900, longitude: 120.3117),
+        "高邮市": CLLocation(latitude: 32.7811, longitude: 119.4461),
+
+        // 中南地区
+        "广州市": CLLocation(latitude: 23.1291, longitude: 113.2644),
+        "深圳市": CLLocation(latitude: 22.5431, longitude: 114.0579),
+        "武汉市": CLLocation(latitude: 30.5928, longitude: 114.3055),
+        "长沙市": CLLocation(latitude: 28.2278, longitude: 112.9388),
+        "南宁市": CLLocation(latitude: 22.8170, longitude: 108.3665),
+        "海口市": CLLocation(latitude: 20.0440, longitude: 110.1920),
+        "郑州市": CLLocation(latitude: 34.7472, longitude: 113.6249),
+
+        // 西南地区
+        "重庆市": CLLocation(latitude: 29.4316, longitude: 106.9123),
+        "成都市": CLLocation(latitude: 30.5728, longitude: 104.0668),
+        "贵阳市": CLLocation(latitude: 26.6470, longitude: 106.6302),
+        "昆明市": CLLocation(latitude: 24.8801, longitude: 102.8329),
+        "拉萨市": CLLocation(latitude: 29.6500, longitude: 91.1409),
+
+        // 西北地区
+        "西安市": CLLocation(latitude: 34.3416, longitude: 108.9398),
+        "兰州市": CLLocation(latitude: 36.0611, longitude: 103.8343),
+        "西宁市": CLLocation(latitude: 36.6232, longitude: 101.7804),
+        "银川市": CLLocation(latitude: 38.4872, longitude: 106.2309),
+        "乌鲁木齐市": CLLocation(latitude: 43.8256, longitude: 87.6168),
+
+        // 特别行政区
         "香港": CLLocation(latitude: 22.3193, longitude: 114.1694),
+        "澳门": CLLocation(latitude: 22.1987, longitude: 113.5439),
+
+        // 国际城市
         "东京": CLLocation(latitude: 35.6762, longitude: 139.6503),
+        "首尔": CLLocation(latitude: 37.5665, longitude: 126.9780),
         "新加坡": CLLocation(latitude: 1.3521, longitude: 103.8198),
-        "旧金山": CLLocation(latitude: 37.7749, longitude: -122.4194),
-        "冰岛": CLLocation(latitude: 64.9631, longitude: -19.0208)
+        "曼谷": CLLocation(latitude: 13.7563, longitude: 100.5018),
+        "吉隆坡": CLLocation(latitude: 3.1390, longitude: 101.6869),
+        "纽约": CLLocation(latitude: 40.7128, longitude: -74.0060),
+        "伦敦": CLLocation(latitude: 51.5074, longitude: -0.1278),
+        "巴黎": CLLocation(latitude: 48.8566, longitude: 2.3522),
+        "柏林": CLLocation(latitude: 52.5200, longitude: 13.4050),
+        "莫斯科": CLLocation(latitude: 55.7558, longitude: 37.6173),
+        "悉尼": CLLocation(latitude: -33.8688, longitude: 151.2093),
+        "墨尔本": CLLocation(latitude: -37.8136, longitude: 144.9631),
+        "迪拜": CLLocation(latitude: 25.2048, longitude: 55.2708),
+        "温哥华": CLLocation(latitude: 49.2827, longitude: -123.1207),
+        "多伦多": CLLocation(latitude: 43.6532, longitude: -79.3832)
     ]
     
     // 添加小时天气数据结构
@@ -207,8 +275,24 @@ class WeatherService: ObservableObject {
         }
     }
     
+    // 添加批量更新方法
+    func batchUpdateWeather(for cities: [String]) async {
+        self.totalCities = cities.count
+        self.currentCityIndex = 0
+        self.batchUpdateStartTime = Date()
+        
+        for city in cities {
+            if let location = cityCoordinates[city] {
+                await updateWeather(for: location, cityName: city, isBatchUpdate: true, totalCities: cities.count)
+            }
+        }
+        
+        // 批量更新完成后显示汇总信息
+        showBatchUpdateSummary()
+    }
+    
     // 更新指定城市的天气数据
-    func updateWeather(for location: CLLocation, cityName: String? = nil) async {
+    func updateWeather(for location: CLLocation, cityName: String? = nil, isBatchUpdate: Bool = false, totalCities: Int = 0) async {
         // 如果提供了城市名称，使用预设的城市坐标
         let weatherLocation: CLLocation
         if let cityName = cityName, let cityLocation = cityCoordinates[cityName] {
@@ -223,6 +307,10 @@ class WeatherService: ObservableObject {
         self.location = weatherLocation
         isLoading = true
         defer { isLoading = false }
+        
+        if isBatchUpdate {
+            currentCityIndex += 1
+        }
         
         do {
             // 如果没有提供城市名称，尝试进行反向地理编码
@@ -322,24 +410,19 @@ class WeatherService: ObservableObject {
             
             errorMessage = nil
             
-            // 打印日志
-            print("\n=== 更新天气数据成功: \(resolvedCityName) ===")
-            print("当前温度: \(Int(round(newCurrentWeather.temperature)))°")
-            print("天气状况: \(newCurrentWeather.condition)")
-            print("最高温度: \(Int(round(newCurrentWeather.highTemperature)))°")
-            print("最低温度: \(Int(round(newCurrentWeather.lowTemperature)))°\n")
-            
         } catch {
-            // 保留错误日志
-            print("WeatherService - 更新天气数据失败: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             
-            // 尝试使用缓存数据
             if let cityName = cityName ?? currentCityName,
                let cachedWeather = cityWeatherCache[cityName] {
-                print("WeatherService - 使用缓存数据: \(cityName)")
                 currentWeather = cachedWeather
             }
+        }
+        
+        if isBatchUpdate && currentCityIndex == totalCities {
+            self.batchUpdateStartTime = nil
+            self.totalCities = 0
+            self.currentCityIndex = 0
         }
     }
     
@@ -805,5 +888,71 @@ class WeatherService: ObservableObject {
                 precipitationProbability: record["precipitationProbability"] as? Double ?? 0
             )
         }.sorted { $0.date > $1.date }
+    }
+    
+    // 修改批量更新完成后的汇总显示方法
+    func showBatchUpdateSummary() {
+        var output = ""
+        
+        // 显示当前选中城市的天气
+        if let currentCity = currentCityName,
+           let weather = cityWeatherCache[currentCity] {
+            output += "\n当前城市: \(currentCity)"
+            output += String(format: "\n🌡️ %d° | %@ | %d° - %d°",
+                        Int(round(weather.temperature)),
+                        weather.condition,
+                        Int(round(weather.lowTemperature)),
+                        Int(round(weather.highTemperature)))
+        }
+        
+        // 显示所有收藏城市的天气列表
+        output += "\n\n收藏城市天气:"
+        output += formatCityWeatherList()
+        
+        print(output)
+    }
+    
+    // 修改格式化城市列表显示的方法
+    func formatCityWeatherList() -> String {
+        // 获取所有缓存的城市天气数据并按温度排序
+        let cities = cityWeatherCache.keys.sorted { city1, city2 in
+            guard let weather1 = cityWeatherCache[city1],
+                  let weather2 = cityWeatherCache[city2] else {
+                return false
+            }
+            return weather1.temperature > weather2.temperature
+        }
+        
+        var output = ""
+        
+        // 计算温度范围
+        if let maxTemp = cities.compactMap({ cityWeatherCache[$0]?.temperature }).max(),
+           let minTemp = cities.compactMap({ cityWeatherCache[$0]?.temperature }).min() {
+            output += String(format: "温度范围: %.0f° - %.0f°", maxTemp, minTemp)
+        }
+        
+        // 创建表格头部
+        output += "\n\n城市         温度     天气     温度范围"
+        output += "\n----------------------------------------"
+        
+        // 填充表格内容
+        for city in cities {
+            if let weather = cityWeatherCache[city] {
+                let cityPadded = city.padding(toLength: 12, withPad: " ", startingAt: 0)
+                let tempStr = String(format: "%2d°", Int(round(weather.temperature)))
+                let weatherStr = weather.condition.padding(toLength: 8, withPad: " ", startingAt: 0)
+                let rangeStr = String(format: "%2d° - %2d°", 
+                                    Int(round(weather.lowTemperature)),
+                                    Int(round(weather.highTemperature)))
+                
+                output += String(format: "\n%@%-6@%-8@%@",
+                               cityPadded,
+                               tempStr,
+                               weatherStr,
+                               rangeStr)
+            }
+        }
+        
+        return output
     }
 }
