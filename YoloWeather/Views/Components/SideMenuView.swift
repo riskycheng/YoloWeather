@@ -780,11 +780,13 @@ struct SideMenuView: View {
                     .onChanged { value in
                         // 只处理从左向右的滑动
                         if value.translation.width > 0 {
-                            dragOffset = value.translation.width
+                            withAnimation(.interactiveSpring()) {
+                                dragOffset = value.translation.width
+                            }
                         }
                     }
                     .onEnded { value in
-                        withAnimation(.easeInOut) {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
                             // 如果滑动距离超过阈值，关闭侧边栏
                             if value.translation.width > geometry.size.width * 0.3 {
                                 isShowing = false

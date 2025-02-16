@@ -601,7 +601,7 @@ struct WeatherView: View {
                                     // 处理左右滑动
                                     if !isHourlyViewDragging && !showingSideMenu && !showingDailyForecast && 
                                        value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) {
-                                        withAnimation(.easeInOut) {
+                                        withAnimation(.easeInOut(duration: 0.3)) {
                                             showingSideMenu = true
                                         }
                                         return
@@ -610,28 +610,36 @@ struct WeatherView: View {
                                     // 处理上下滑动
                                     if showingDailyForecast && value.translation.height > 0 {
                                         // 在显示预报时，实时跟随下滑手势
-                                        withAnimation(.interactiveSpring()) {
-                                            dragOffset = value.translation.height
-                                        }
+                                        dragOffset = value.translation.height
                                         // 取消任何可能的刷新状态
                                         isRefreshing = false
                                     } else if !showingDailyForecast && value.translation.height < 0 {
                                         // 未显示预报时，实时跟随上滑手势
                                         if -value.translation.height > 50 {
-                                            withAnimation(.spring()) {
-                                                showingDailyForecast = true
+                                            withAnimation(.easeInOut(duration: 0.2)) {
+                                                isDraggingUp = true
                                             }
                                         }
                                     }
                                 }
                                 .onEnded { value in
-                                    if showingDailyForecast && value.translation.height > 0 {
-                                        // 处理下滑收起
-                                        withAnimation(.spring()) {
-                                            if value.translation.height > 50 {
+                                    if showingDailyForecast {
+                                        // 处理下滑结束
+                                        withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
+                                            if value.translation.height > 100 {
                                                 showingDailyForecast = false
+                                                dragOffset = 0
+                                            } else {
+                                                dragOffset = 0
                                             }
-                                            dragOffset = 0
+                                        }
+                                    } else {
+                                        // 处理上滑结束
+                                        withAnimation(.interactiveSpring(response: 0.3, dampingFraction: 0.8)) {
+                                            if -value.translation.height > 100 {
+                                                showingDailyForecast = true
+                                            }
+                                            isDraggingUp = false
                                         }
                                     }
                                 }
