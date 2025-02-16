@@ -112,20 +112,14 @@ private struct EnhancedTemperatureTrendView: View {
         return (minTemp, maxTemp, max(maxTemp - minTemp, 1.0))
     }
     
-    private func calculateY(for temperature: Double, height: CGFloat) -> CGFloat {
-        let roundedTemp = round(temperature)
-        return height * (1 - (roundedTemp - temperatureRange.min) / temperatureRange.range)
-    }
-    
     var body: some View {
         VStack(spacing: 16) {
             GeometryReader { geometry in
                 let width = geometry.size.width
                 let height = geometry.size.height * 0.7
-                let step = width / CGFloat(timePoints.count - 1)
                 
                 ZStack {
-                    // 背景网格
+                    // 背景网格线
                     VStack(spacing: height / 4) {
                         ForEach(0..<5) { _ in
                             Divider()
@@ -133,81 +127,89 @@ private struct EnhancedTemperatureTrendView: View {
                         }
                     }
                     
-                    // 温度曲线区域
+                    // 绘制折线
                     Path { path in
-                        // 高温曲线
-                        path.move(to: CGPoint(x: 0, y: calculateY(for: temperatures[0].high, height: height)))
-                        for i in 1..<temperatures.count {
-                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: calculateY(for: temperatures[i].high, height: height)))
+                        let points = calculatePoints(width: width, height: height)
+                        path.move(to: points[0])
+                        for point in points.dropFirst() {
+                            path.addLine(to: point)
                         }
                     }
-                    .stroke(
-                        LinearGradient(
-                            colors: [.orange, .orange.opacity(0.7)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
-                    )
+                    .stroke(Color.orange, lineWidth: 2)
                     
-                    // 低温曲线
+                    // 绘制低温折线
                     Path { path in
-                        path.move(to: CGPoint(x: 0, y: calculateY(for: temperatures[0].low, height: height)))
-                        for i in 1..<temperatures.count {
-                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: calculateY(for: temperatures[i].low, height: height)))
+                        let points = calculateLowPoints(width: width, height: height)
+                        path.move(to: points[0])
+                        for point in points.dropFirst() {
+                            path.addLine(to: point)
                         }
                     }
-                    .stroke(
-                        LinearGradient(
-                            colors: [.blue, .blue.opacity(0.7)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        ),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
-                    )
+                    .stroke(Color.blue, lineWidth: 2)
                     
-                    // 温度点和标签
-                    ForEach(Array(temperatures.enumerated()), id: \.offset) { index, temp in
-                        let x = step * CGFloat(index)
+                    // 绘制节点和温度标签
+                    ForEach(0..<3) { index in
+                        let highPoints = calculatePoints(width: width, height: height)
+                        let lowPoints = calculateLowPoints(width: width, height: height)
                         
-                        // 高温点
+                        // 高温节点
                         Circle()
                             .fill(Color.orange)
                             .frame(width: 8, height: 8)
-                            .position(x: x, y: calculateY(for: temp.high, height: height))
-                            .overlay(
-                                Text("\(Int(round(temp.high)))°")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.orange)
-                                    .offset(y: -16)
-                            )
+                            .position(highPoints[index])
                         
-                        // 低温点
+                        // 高温标签
+                        Text("\(Int(round(temperatures[index].high)))°")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                            .position(x: highPoints[index].x, y: highPoints[index].y - 15)
+                        
+                        // 低温节点
                         Circle()
                             .fill(Color.blue)
                             .frame(width: 8, height: 8)
-                            .position(x: x, y: calculateY(for: temp.low, height: height))
-                            .overlay(
-                                Text("\(Int(round(temp.low)))°")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.blue)
-                                    .offset(y: 16)
-                            )
+                            .position(lowPoints[index])
+                        
+                        // 低温标签
+                        Text("\(Int(round(temperatures[index].low)))°")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                            .position(x: lowPoints[index].x, y: lowPoints[index].y + 15)
                     }
                 }
-                .frame(height: height)
                 
-                // 时间轴
+                // 时间标签
                 HStack {
-                    ForEach(timePoints, id: \.self) { point in
-                        Text(point)
+                    ForEach(timePoints.indices, id: \.self) { index in
+                        Text(timePoints[index])
                             .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.top, height + 24)
+                .frame(maxWidth: .infinity)
+                .position(x: width / 2, y: height + 20)
             }
+        }
+    }
+    
+    private func calculatePoints(width: CGFloat, height: CGFloat) -> [CGPoint] {
+        let spacing = width / 2
+        return temperatures.enumerated().map { index, temp in
+            let x = spacing * CGFloat(index)
+            let normalizedY = (temp.high - temperatureRange.min) / temperatureRange.range
+            let y = height * (1 - normalizedY)
+            return CGPoint(x: x, y: y)
+        }
+    }
+    
+    private func calculateLowPoints(width: CGFloat, height: CGFloat) -> [CGPoint] {
+        let spacing = width / 2
+        return temperatures.enumerated().map { index, temp in
+            let x = spacing * CGFloat(index)
+            let normalizedY = (temp.low - temperatureRange.min) / temperatureRange.range
+            let y = height * (1 - normalizedY)
+            return CGPoint(x: x, y: y)
         }
     }
 }

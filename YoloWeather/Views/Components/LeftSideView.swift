@@ -29,10 +29,12 @@ struct LeftSideView: View {
                                 weatherService: weatherService,
                                 selectedLocation: selectedLocation
                             )
+                            .padding(.top, 50) // 添加顶部间距以避免与 SafeArea 重叠
                         } else {
                             ProgressView()
                                 .tint(.white)
                                 .padding()
+                                .padding(.top, 50) // 同样为加载状态添加顶部间距
                         }
                     }
                     .frame(width: min(geometry.size.width * 0.85, 340))
