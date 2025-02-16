@@ -928,24 +928,24 @@ class WeatherService: ObservableObject {
         // 计算温度范围
         if let maxTemp = cities.compactMap({ cityWeatherCache[$0]?.temperature }).max(),
            let minTemp = cities.compactMap({ cityWeatherCache[$0]?.temperature }).min() {
-            output += String(format: "温度范围: %.0f° - %.0f°", maxTemp, minTemp)
+            output += String(format: "收藏城市天气:温度范围: %.0f° - %.0f°", maxTemp, minTemp)
         }
         
         // 创建表格头部
-        output += "\n\n城市         温度     天气     温度范围"
+        output += "\n\n城市          温度      天气       温度范围"
         output += "\n----------------------------------------"
         
         // 填充表格内容
         for city in cities {
             if let weather = cityWeatherCache[city] {
                 let cityPadded = city.padding(toLength: 12, withPad: " ", startingAt: 0)
-                let tempStr = String(format: "%2d°", Int(round(weather.temperature)))
-                let weatherStr = weather.condition.padding(toLength: 8, withPad: " ", startingAt: 0)
+                let tempStr = String(format: "%2d°", Int(round(weather.temperature))).padding(toLength: 10, withPad: " ", startingAt: 0)
+                let weatherStr = weather.condition.padding(toLength: 10, withPad: " ", startingAt: 0)
                 let rangeStr = String(format: "%2d° - %2d°", 
                                     Int(round(weather.lowTemperature)),
                                     Int(round(weather.highTemperature)))
                 
-                output += String(format: "\n%@%-6@%-8@%@",
+                output += String(format: "\n%@%@%@%@",
                                cityPadded,
                                tempStr,
                                weatherStr,
