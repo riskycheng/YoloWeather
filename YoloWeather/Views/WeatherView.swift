@@ -791,7 +791,7 @@ struct WeatherView: View {
                     }
 
                     // 添加左侧栏视图
-                    LeftSideView(isShowing: $showingLeftSide)
+                    LeftSideView(isShowing: $showingLeftSide, selectedLocation: $selectedLocation)
                         .zIndex(2)
 
                     // 添加边缘滑动手势识别

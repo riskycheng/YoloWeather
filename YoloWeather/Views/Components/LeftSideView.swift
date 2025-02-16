@@ -4,6 +4,7 @@ struct LeftSideView: View {
     @Binding var isShowing: Bool
     @State private var dragOffset: CGFloat = 0
     @StateObject private var weatherService = WeatherService.shared
+    @Binding var selectedLocation: PresetLocation
     
     var body: some View {
         GeometryReader { geometry in
@@ -31,8 +32,11 @@ struct LeftSideView: View {
                             .padding(.bottom, 20)
                         
                         if let currentWeather = weatherService.currentWeather {
-                            WeatherComparisonView(weatherService: weatherService)
-                                .padding(.horizontal)
+                            WeatherComparisonView(
+                                weatherService: weatherService,
+                                selectedLocation: selectedLocation
+                            )
+                            .padding(.horizontal, 8)  // 减小水平内边距以增加卡片宽度
                         } else {
                             ProgressView()
                                 .tint(.white)
@@ -41,9 +45,9 @@ struct LeftSideView: View {
                         
                         Spacer()
                     }
-                    .frame(width: min(geometry.size.width * 0.75, 300))
+                    .frame(width: min(geometry.size.width * 0.85, 340))  // 增加侧边栏宽度
                     .background(Color(red: 0.25, green: 0.35, blue: 0.45))
-                    .offset(x: isShowing ? 0 : -min(geometry.size.width * 0.75, 300))
+                    .offset(x: isShowing ? 0 : -min(geometry.size.width * 0.85, 340))
                     
                     Spacer()
                 }
@@ -106,4 +110,4 @@ struct LeftSideView: View {
             }
         }
     }
-} 
+}

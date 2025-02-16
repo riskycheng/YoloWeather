@@ -2,20 +2,29 @@ import SwiftUI
 
 struct WeatherComparisonView: View {
     let weatherService: WeatherService
+    let selectedLocation: PresetLocation
     
     private var comparisonData: (yesterday: WeatherService.DayWeatherInfo?, today: WeatherService.DayWeatherInfo?, tomorrow: WeatherService.DayWeatherInfo?) {
-        let today = weatherService.dailyForecast.first
-        let tomorrow = weatherService.dailyForecast.dropFirst().first
+        // 获取昨天的天气数据
+        let yesterdayWeather = weatherService.getYesterdayWeather(for: selectedLocation.name)
         
-        // 从存储中获取昨天的天气数据
-        let yesterdayWeather: WeatherService.DayWeatherInfo?
-        if let cityName = weatherService.currentCityName {
-            yesterdayWeather = weatherService.getYesterdayWeather(for: cityName)
-        } else {
-            yesterdayWeather = nil
+        // 获取今天的天气数据，使用当前天气的温度
+        var todayWeather = weatherService.dailyForecast.first
+        if let currentWeather = weatherService.currentWeather {
+            todayWeather = WeatherService.DayWeatherInfo(
+                date: Date(),
+                condition: currentWeather.condition,
+                symbolName: currentWeather.symbolName,
+                lowTemperature: currentWeather.lowTemperature,
+                highTemperature: currentWeather.highTemperature,
+                precipitationProbability: 0.0
+            )
         }
         
-        return (yesterdayWeather, today, tomorrow)
+        // 获取明天的天气数据
+        let tomorrow = weatherService.dailyForecast.dropFirst().first
+        
+        return (yesterdayWeather, todayWeather, tomorrow)
     }
     
     private var weatherCards: [(title: String, weather: WeatherService.DayWeatherInfo?, colors: [Color])] {
@@ -53,17 +62,18 @@ struct WeatherComparisonView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 8)
             
-            // 天气卡片区域
-            VStack(spacing: 12) {
+            // 天气卡片区域 - 修改为3列布局，减小间距增加卡片宽度
+            HStack(spacing: 4) {
                 ForEach(weatherCards, id: \.title) { item in
                     WeatherDayCard(
                         title: item.title,
                         weather: item.weather,
                         gradientColors: item.colors
                     )
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal)  // 统一的水平内边距
+            .padding(.horizontal, 4)  // 减小水平内边距
             
             Spacer(minLength: 32)
         }
@@ -259,99 +269,51 @@ private struct WeatherDayCard: View {
     let gradientColors: [Color]
     
     var body: some View {
-        HStack(spacing: 8) {
-            // 左侧日期
+        VStack(spacing: 12) {
             Text(title)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 15, weight: .medium))
                 .foregroundColor(.white)
-                .frame(width: 50, alignment: .leading)
             
             if let weather = weather {
-                // 天气图标
-                Image(weather.symbolName)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 32, height: 32)
-                
-                Spacer(minLength: 20)
-                
-                // 温度区域
-                HStack(spacing: 20) {
-                    // 最高温
-                    HStack(spacing: 2) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 14))
-                            .foregroundColor(.orange)
-                        Text("\(Int(round(weather.highTemperature)))°")
-                            .font(.system(size: 18, weight: .medium))
-                            .frame(minWidth: 30, alignment: .leading)
-                    }
+                VStack(spacing: 8) {
+                    Image(weather.symbolName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
                     
-                    // 最低温
-                    HStack(spacing: 2) {
-                        Image(systemName: "arrow.down")
-                            .font(.system(size: 14))
-                            .foregroundColor(.blue)
-                        Text("\(Int(round(weather.lowTemperature)))°")
-                            .font(.system(size: 18, weight: .medium))
-                            .frame(minWidth: 30, alignment: .leading)
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 12))
+                        Text("\(Int(round(weather.highTemperature)))°")
+                            .font(.system(size: 16))
                     }
+                    .foregroundColor(.orange)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 12))
+                        Text("\(Int(round(weather.lowTemperature)))°")
+                            .font(.system(size: 16))
+                    }
+                    .foregroundColor(.blue)
                 }
-                .foregroundColor(.white)
-                .frame(width: 120, alignment: .trailing)
             } else {
-                // 占位天气图标空间
-                Color.clear
-                    .frame(width: 32, height: 32)
-                
-                Spacer(minLength: 20)
-                
-                // 无数据文本，使用与温度区域相同的宽度
-                Text(title == "昨天" ? "首日无历史数据" : "暂无数据")
-                    .font(.system(size: 15))
+                Text("暂无数据")
+                    .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.6))
-                    .frame(width: 120, alignment: .center)
             }
         }
-        .padding(.horizontal, 16)
+        .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
-        .frame(height: 64)
         .background(
-            ZStack {
-                // 主背景
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(red: 0.25, green: 0.35, blue: 0.45))
-                    .opacity(0.6)
-                
-                // 顶部渐变光效
-                LinearGradient(
-                    colors: [
-                        .white.opacity(0.2),
-                        .white.opacity(0.05)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: gradientColors,
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                
-                // 侧边渐变光效
-                LinearGradient(
-                    colors: [
-                        .white.opacity(0.2),
-                        .clear
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-            }
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 4)
-        .shadow(color: Color.white.opacity(0.1), radius: 1, x: 0, y: 1)
     }
-} 
-
+}
