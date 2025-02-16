@@ -44,6 +44,15 @@ struct PresetLocation: Identifiable, Codable, Hashable {
         currentTemperature = try container.decode(Double?.self, forKey: .currentTemperature)
     }
     
+    // 便捷访问坐标的计算属性
+    var latitude: CLLocationDegrees {
+        location.coordinate.latitude
+    }
+    
+    var longitude: CLLocationDegrees {
+        location.coordinate.longitude
+    }
+    
     // 实现 Hashable，只基于城市名称
     func hash(into hasher: inout Hasher) {
         hasher.combine(name)
@@ -51,7 +60,7 @@ struct PresetLocation: Identifiable, Codable, Hashable {
     
     // 实现 Equatable，只基于城市名称
     static func == (lhs: PresetLocation, rhs: PresetLocation) -> Bool {
-        return lhs.name == rhs.name
+        lhs.name == rhs.name
     }
     
     static let presets: [PresetLocation] = [

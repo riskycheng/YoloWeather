@@ -48,22 +48,31 @@ struct WeatherComparisonView: View {
     }
     
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: 20) {
             // 顶部标题区域
-            Text("过去24小时 - 未来24小时")
-                .font(.system(size: 16))
-                .foregroundColor(.white.opacity(0.8))
-                .padding(.top, 24)
-                .padding(.bottom, 16)
+            VStack(spacing: 4) {
+                Text("天气趋势")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(.white)
+                Text("过去24小时 - 未来24小时")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.top, 16)
             
             // 温度趋势图
             EnhancedTemperatureTrendView(data: comparisonData)
-                .frame(height: 160)
+                .frame(height: 180)
                 .padding(.horizontal)
-                .padding(.bottom, 8)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.white.opacity(0.05))
+                )
+                .padding(.horizontal, 12)
             
-            // 天气卡片区域 - 修改为3列布局，减小间距增加卡片宽度
-            HStack(spacing: 4) {
+            // 天气卡片区域
+            HStack(spacing: 8) {
                 ForEach(weatherCards, id: \.title) { item in
                     WeatherDayCard(
                         title: item.title,
@@ -73,9 +82,9 @@ struct WeatherComparisonView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, 4)  // 减小水平内边距
+            .padding(.horizontal, 12)
             
-            Spacer(minLength: 32)
+            Spacer(minLength: 20)
         }
     }
 }
@@ -96,23 +105,20 @@ private struct EnhancedTemperatureTrendView: View {
         ]
     }
     
-    // 计算温度范围
     private var temperatureRange: (min: Double, max: Double, range: Double) {
         let allTemps = temperatures.flatMap { [$0.high, $0.low] }
-        let minTemp = round((allTemps.min() ?? 0) - 1)  // 对最小值取整
-        let maxTemp = round((allTemps.max() ?? 0) + 1)  // 对最大值取整
+        let minTemp = round((allTemps.min() ?? 0) - 2)
+        let maxTemp = round((allTemps.max() ?? 0) + 2)
         return (minTemp, maxTemp, max(maxTemp - minTemp, 1.0))
     }
     
-    // 计算Y坐标的辅助函数
     private func calculateY(for temperature: Double, height: CGFloat) -> CGFloat {
-        let roundedTemp = round(temperature)  // 使用取整后的温度值
-        let range = temperatureRange
-        return height * (1 - (roundedTemp - range.min) / range.range)
+        let roundedTemp = round(temperature)
+        return height * (1 - (roundedTemp - temperatureRange.min) / temperatureRange.range)
     }
     
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 16) {
             GeometryReader { geometry in
                 let width = geometry.size.width
                 let height = geometry.size.height * 0.7
@@ -121,61 +127,72 @@ private struct EnhancedTemperatureTrendView: View {
                 ZStack {
                     // 背景网格
                     VStack(spacing: height / 4) {
-                        ForEach(0..<4) { _ in
+                        ForEach(0..<5) { _ in
                             Divider()
                                 .background(Color.white.opacity(0.1))
                         }
                     }
                     
-                    // 高温曲线
-                    TemperatureLine(
-                        points: temperatures.map { $0.high },
-                        geometry: geometry,
-                        color: .orange,
-                        hasYesterdayData: data.yesterday != nil,
-                        temperatureRange: temperatureRange
+                    // 温度曲线区域
+                    Path { path in
+                        // 高温曲线
+                        path.move(to: CGPoint(x: 0, y: calculateY(for: temperatures[0].high, height: height)))
+                        for i in 1..<temperatures.count {
+                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: calculateY(for: temperatures[i].high, height: height)))
+                        }
+                    }
+                    .stroke(
+                        LinearGradient(
+                            colors: [.orange, .orange.opacity(0.7)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
                     )
                     
                     // 低温曲线
-                    TemperatureLine(
-                        points: temperatures.map { $0.low },
-                        geometry: geometry,
-                        color: .blue,
-                        hasYesterdayData: data.yesterday != nil,
-                        temperatureRange: temperatureRange
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: calculateY(for: temperatures[0].low, height: height)))
+                        for i in 1..<temperatures.count {
+                            path.addLine(to: CGPoint(x: step * CGFloat(i), y: calculateY(for: temperatures[i].low, height: height)))
+                        }
+                    }
+                    .stroke(
+                        LinearGradient(
+                            colors: [.blue, .blue.opacity(0.7)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
                     )
                     
                     // 温度点和标签
                     ForEach(Array(temperatures.enumerated()), id: \.offset) { index, temp in
                         let x = step * CGFloat(index)
                         
-                        if index == 0 && data.yesterday == nil {
-                            // 如果是昨天且没有数据，显示提示文字
-                            Text("无历史数据")
-                                .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.6))
-                                .position(x: x + 10, y: height * 0.4)
-                        } else {
-                            // 高温点
-                            TemperaturePoint(
-                                temperature: temp.high,
-                                position: CGPoint(
-                                    x: x,
-                                    y: calculateY(for: temp.high, height: height)
-                                ),
-                                color: .orange
+                        // 高温点
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 8, height: 8)
+                            .position(x: x, y: calculateY(for: temp.high, height: height))
+                            .overlay(
+                                Text("\(Int(round(temp.high)))°")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.orange)
+                                    .offset(y: -16)
                             )
-                            
-                            // 低温点
-                            TemperaturePoint(
-                                temperature: temp.low,
-                                position: CGPoint(
-                                    x: x,
-                                    y: calculateY(for: temp.low, height: height)
-                                ),
-                                color: .blue
+                        
+                        // 低温点
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 8, height: 8)
+                            .position(x: x, y: calculateY(for: temp.low, height: height))
+                            .overlay(
+                                Text("\(Int(round(temp.low)))°")
+                                    .font(.system(size: 14, weight: .medium))
+                                    .foregroundColor(.blue)
+                                    .offset(y: 16)
                             )
-                        }
                     }
                 }
                 .frame(height: height)
@@ -189,77 +206,9 @@ private struct EnhancedTemperatureTrendView: View {
                             .frame(maxWidth: .infinity)
                     }
                 }
-                .padding(.top, height + 10)
+                .padding(.top, height + 24)
             }
         }
-    }
-}
-
-private struct TemperatureLine: View {
-    let points: [Double]
-    let geometry: GeometryProxy
-    let color: Color
-    let hasYesterdayData: Bool
-    let temperatureRange: (min: Double, max: Double, range: Double)
-    
-    // 计算Y坐标的辅助函数
-    private func calculateY(for temperature: Double, height: CGFloat) -> CGFloat {
-        let roundedTemp = round(temperature)  // 使用取整后的温度值
-        return height * (1 - (roundedTemp - temperatureRange.min) / temperatureRange.range)
-    }
-    
-    var body: some View {
-        let height = geometry.size.height * 0.7
-        let width = geometry.size.width
-        let step = width / CGFloat(points.count - 1)
-        
-        Path { path in
-            // 如果有昨天的数据，从昨天开始画
-            let startIndex = hasYesterdayData ? 0 : 1
-            
-            // 移动到起始点
-            let startX = step * CGFloat(startIndex)
-            let startY = calculateY(for: points[startIndex], height: height)
-            path.move(to: CGPoint(x: startX, y: startY))
-            
-            // 连续画线到后续的点
-            for index in (startIndex + 1)..<points.count {
-                let x = step * CGFloat(index)
-                let y = calculateY(for: points[index], height: height)
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        .stroke(
-            color,
-            style: StrokeStyle(
-                lineWidth: 2,
-                lineCap: .round,
-                lineJoin: .round
-            )
-        )
-    }
-}
-
-private struct TemperaturePoint: View {
-    let temperature: Double
-    let position: CGPoint
-    let color: Color
-    
-    var body: some View {
-        ZStack {
-            // 先绘制圆点，确保它在正确的位置
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-                .shadow(color: color.opacity(0.5), radius: 2, x: 0, y: 0)
-            
-            // 温度文字放在圆点上方
-            Text("\(Int(round(temperature)))°")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white)
-                .offset(y: -20)  // 将文字向上偏移
-        }
-        .position(x: position.x, y: position.y)  // 使用精确的位置
     }
 }
 
@@ -275,27 +224,32 @@ private struct WeatherDayCard: View {
                 .foregroundColor(.white)
             
             if let weather = weather {
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
+                    // 天气图标
                     Image(weather.symbolName)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 40, height: 40)
+                        .frame(width: 44, height: 44)
+                        .shadow(color: .white.opacity(0.2), radius: 5, x: 0, y: 0)
                     
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 12))
-                        Text("\(Int(round(weather.highTemperature)))°")
-                            .font(.system(size: 16))
+                    // 温度信息
+                    VStack(spacing: 8) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.up")
+                                .font(.system(size: 12))
+                            Text("\(Int(round(weather.highTemperature)))°")
+                                .font(.system(size: 18, weight: .medium))
+                        }
+                        .foregroundColor(.orange)
+                        
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down")
+                                .font(.system(size: 12))
+                            Text("\(Int(round(weather.lowTemperature)))°")
+                                .font(.system(size: 18, weight: .medium))
+                        }
+                        .foregroundColor(.blue)
                     }
-                    .foregroundColor(.orange)
-                    
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.down")
-                            .font(.system(size: 12))
-                        Text("\(Int(round(weather.lowTemperature)))°")
-                            .font(.system(size: 16))
-                    }
-                    .foregroundColor(.blue)
                 }
             } else {
                 Text("暂无数据")
@@ -306,14 +260,27 @@ private struct WeatherDayCard: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 16)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(
-                    LinearGradient(
-                        colors: gradientColors,
-                        startPoint: .top,
-                        endPoint: .bottom
+            ZStack {
+                // 主背景
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            colors: gradientColors,
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
                     )
-                )
+                
+                // 玻璃态效果
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(0.1))
+                    .blur(radius: 1)
+                
+                // 边框
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            }
         )
+        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
     }
 }

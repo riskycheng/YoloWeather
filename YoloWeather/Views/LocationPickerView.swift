@@ -139,7 +139,7 @@ struct LocationPickerView: View {
             
             switch locationService.authorizationStatus {
             case .notDetermined:
-                locationService.requestLocationPermission()
+                locationService.startUpdatingLocation() // 这会自动请求权限
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 
             case .denied, .restricted:
@@ -149,31 +149,35 @@ struct LocationPickerView: View {
                 return
                 
             case .authorizedWhenInUse, .authorizedAlways:
-                break
-                
+                locationService.startUpdatingLocation()
+            
             @unknown default:
+                locationErrorMessage = "位置服务状态未知"
+                showLocationError = true
+                isRequestingLocation = false
                 return
             }
             
-            locationService.startUpdatingLocation()
-            
-            for _ in 0..<5 {
-                if let location = locationService.currentLocation {
-                    await MainActor.run {
-                        isUsingCurrentLocation = true
-                        onLocationSelected(location)
-                        dismiss()
-                    }
-                    return
+            // 等待位置更新（最多5秒）
+            let startTime = Date()
+            while locationService.currentCity == nil && locationService.locationError == nil {
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+                if Date().timeIntervalSince(startTime) > 5 {
+                    break
                 }
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
             }
             
-            await MainActor.run {
-                locationErrorMessage = "获取位置信息超时，请重试"
+            if let currentCity = locationService.currentCity,
+               let matchingLocation = PresetLocation.presets.first(where: { $0.name == currentCity }) {
+                selectedLocation = matchingLocation
+                isUsingCurrentLocation = true
+                onLocationSelected(matchingLocation.location)
+            } else if let error = locationService.locationError {
+                locationErrorMessage = error.localizedDescription
                 showLocationError = true
-                isRequestingLocation = false
             }
+            
+            isRequestingLocation = false
         }
     }
 }

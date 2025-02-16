@@ -188,8 +188,9 @@ struct WeatherView: View {
         didSet {
             // Update the location services whenever selectedLocation changes
             Task {
-                locationService.locationName = selectedLocation.name
+                // 使用新的属性名
                 locationService.currentLocation = selectedLocation.location
+                locationService.currentCity = selectedLocation.name
                 await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
                 lastRefreshTime = Date()
                 updateTimeOfDay()
@@ -229,52 +230,42 @@ struct WeatherView: View {
         isLoadingWeather = true
         let startTime = Date()
         
-        // 重置状态，确保获取新的位置
-        locationService.currentLocation = nil
-        isUsingCurrentLocation = false
-        
-        // 请求位置更新
+        // 尝试获取当前位置
         locationService.startUpdatingLocation()
         
-        // 等待位置信息（设置5秒超时）
-        let locationStartTime = Date()
-        while locationService.currentLocation == nil && locationService.errorMessage == nil {
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
-            if Date().timeIntervalSince(locationStartTime) > 5 {
+        // 等待获取到城市信息（最多5秒）
+        for await _ in AsyncStream(unfolding: { try? await Task.sleep(nanoseconds: 500_000_000); return () }) {
+            if let currentCity = locationService.currentCity {
+                // 如果当前城市在预设列表中，更新选中的城市
+                if let cityLocation = PresetLocation.presets.first(where: { $0.name == currentCity }) {
+                    selectedLocation = cityLocation
+                    await refreshWeather()
+                }
+                break
+            }
+            
+            // 最多等待5秒
+            if Date().timeIntervalSince(startTime) > 5 {
                 break
             }
         }
         
-        if let currentLocation = locationService.currentLocation {
-            // 使用当前位置
-            isUsingCurrentLocation = true
-            await weatherService.updateWeather(for: currentLocation)
-            
-            // 如果能匹配到城市名，更新选中的城市
-            if let cityName = weatherService.currentCityName,
-               let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
-                selectedLocation = matchingLocation
-                locationService.locationName = cityName
+        // 如果没有获取到位置，尝试加载上次选择的城市
+        if locationService.currentCity == nil {
+            if let lastCity = UserDefaults.standard.string(forKey: "LastSelectedCity"),
+               let lastLocation = PresetLocation.presets.first(where: { $0.name == lastCity }) {
+                selectedLocation = lastLocation
+                await refreshWeather()
             }
-            updateTimeOfDay()
-        } else {
-            // 如果获取位置失败，使用默认城市（上海）
-            let defaultLocation = PresetLocation.presets.first(where: { $0.name == "上海市" }) ?? PresetLocation.presets[0]
-            selectedLocation = defaultLocation
-            await weatherService.updateWeather(for: defaultLocation.location, cityName: defaultLocation.name)
-            locationService.locationName = defaultLocation.name
-            updateTimeOfDay()
         }
         
-        await ensureMinimumLoadingTime(startTime: startTime)
-        isLoadingWeather = false
-    }
-    
-    private func updateTimeOfDay() {
-        if let weather = weatherService.currentWeather {
-            let hour = Calendar.current.component(.hour, from: Date())
-            timeOfDay = hour >= 18 || hour < 6 ? .night : .day
+        // 确保加载动画至少显示1秒
+        let timeElapsed = Date().timeIntervalSince(startTime)
+        if timeElapsed < 1.0 {
+            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
         }
+        
+        isLoadingWeather = false
     }
     
     private func refreshWeather() async {
@@ -282,94 +273,38 @@ struct WeatherView: View {
         isRefreshing = true
         
         do {
-            if isUsingCurrentLocation, let currentLocation = locationService.currentLocation {
-                await weatherService.updateWeather(for: currentLocation)
-            } else {
-                await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
+            // 保存最后选择的城市
+            UserDefaults.standard.set(selectedLocation.name, forKey: "LastSelectedCity")
+            
+            // 获取城市的坐标
+            let location = CLLocation(
+                latitude: selectedLocation.latitude,
+                longitude: selectedLocation.longitude
+            )
+            
+            // 更新天气数据
+            await weatherService.updateWeather(
+                for: location,
+                cityName: selectedLocation.name
+            )
+            
+            // 确保刷新动画至少显示1秒
+            let elapsedTime = Date().timeIntervalSince(startTime)
+            if elapsedTime < 1.0 {
+                try? await Task.sleep(nanoseconds: UInt64((1.0 - elapsedTime) * 1_000_000_000))
             }
-            
-            updateTimeOfDay()
-            animationTrigger = UUID()
-            showSuccessToast = true
-            
-            // 确保加载动画至少显示1秒
-            await ensureMinimumLoadingTime(startTime: startTime)
         } catch {
-            errorMessage = error.localizedDescription
+            print("Failed to refresh weather: \(error)")
         }
         
         isRefreshing = false
-        lastRefreshTime = Date()
     }
     
-    private func updateLocation(_ location: CLLocation?) async {
-        if let location = location {
-            // Using current location
-            isUsingCurrentLocation = true
-            locationService.currentLocation = location
-            await weatherService.updateWeather(for: location)
-            // Update the location name from weather service
-            if let cityName = weatherService.currentCityName {
-                locationService.locationName = cityName
-                // Find and update selectedLocation if it exists
-                if let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
-                    selectedLocation = matchingLocation
-                }
-            }
-        } else {
-            // Using preset location
-            isUsingCurrentLocation = false
-            locationService.locationName = selectedLocation.name
-            locationService.currentLocation = selectedLocation.location
-            await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
+    private func updateTimeOfDay() {
+        if let weather = weatherService.currentWeather {
+            let hour = Calendar.current.component(.hour, from: Date())
+            timeOfDay = hour >= 18 || hour < 6 ? .night : .day
         }
-        
-        lastRefreshTime = Date()
-        updateTimeOfDay()
-    }
-    
-    private func handleLocationButtonTap() async {
-        isLoadingWeather = true
-        let startTime = Date()
-        
-        // 重置状态
-        locationService.currentLocation = nil
-        isUsingCurrentLocation = false
-        
-        // 请求位置更新
-        locationService.startUpdatingLocation()
-        
-        // 等待位置信息（设置5秒超时）
-        let locationStartTime = Date()
-        while locationService.currentLocation == nil && locationService.errorMessage == nil {
-            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
-            if Date().timeIntervalSince(locationStartTime) > 5 {
-                break
-            }
-        }
-        
-        if let currentLocation = locationService.currentLocation {
-            // 使用当前位置
-            isUsingCurrentLocation = true
-            await weatherService.updateWeather(for: currentLocation)
-            
-            // 如果能匹配到城市名，更新选中的城市
-            if let cityName = weatherService.currentCityName,
-               let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
-                selectedLocation = matchingLocation
-                locationService.locationName = cityName
-            }
-            updateTimeOfDay()
-        } else if let error = locationService.errorMessage {
-            errorMessage = error
-        }
-        
-        // 确保最少加载时间
-        let timeElapsed = Date().timeIntervalSince(startTime)
-        if timeElapsed < 1.0 {
-            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
-        }
-        isLoadingWeather = false
     }
     
     private func logTimeInfo(timezone: TimeZone, hour: Int, isNight: Bool) {
@@ -486,27 +421,20 @@ struct WeatherView: View {
                                                     
                                                     // 等待位置信息（设置5秒超时）
                                                     let locationStartTime = Date()
-                                                    while locationService.currentLocation == nil && locationService.errorMessage == nil {
+                                                    while locationService.currentCity == nil && locationService.locationError == nil {
                                                         try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
                                                         if Date().timeIntervalSince(locationStartTime) > 5 {
                                                             break
                                                         }
                                                     }
                                                     
-                                                    if let currentLocation = locationService.currentLocation {
-                                                        // 使用当前位置
+                                                    if let currentCity = locationService.currentCity,
+                                                       let matchingLocation = PresetLocation.presets.first(where: { $0.name == currentCity }) {
+                                                        selectedLocation = matchingLocation
                                                         isUsingCurrentLocation = true
-                                                        await weatherService.updateWeather(for: currentLocation)
-                                                        
-                                                        // 如果能匹配到城市名，更新选中的城市
-                                                        if let cityName = weatherService.currentCityName,
-                                                           let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
-                                                            selectedLocation = matchingLocation
-                                                            locationService.locationName = cityName
-                                                        }
-                                                        updateTimeOfDay()
-                                                    } else if let error = locationService.errorMessage {
-                                                        errorMessage = error
+                                                        await refreshWeather()
+                                                    } else if let error = locationService.locationError {
+                                                        errorMessage = error.localizedDescription
                                                     }
                                                     
                                                     // 确保最少加载时间
@@ -653,7 +581,7 @@ struct WeatherView: View {
                                     // 处理左右滑动
                                     if !isHourlyViewDragging && !showingSideMenu && !showingDailyForecast && 
                                        value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) {
-                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                        withAnimation(.easeInOut) {
                                             showingSideMenu = true
                                         }
                                         return
@@ -904,7 +832,8 @@ struct WeatherView: View {
             isUsingCurrentLocation = false
             selectedLocation = location
             lastSelectedLocationName = location.name
-            locationService.locationName = location.name
+            locationService.currentCity = location.name
+            locationService.currentLocation = location.location
             
             // 2. 清除旧数据
             weatherService.clearCurrentWeather()
