@@ -184,7 +184,20 @@ struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
     @StateObject private var locationService = LocationService()
     @StateObject private var citySearchService = CitySearchService.shared
-    @State private var selectedLocation: PresetLocation = PresetLocation.presets[0]
+    @State private var selectedLocation: PresetLocation = PresetLocation.presets[0] {
+        didSet {
+            // Update the location services whenever selectedLocation changes
+            Task {
+                locationService.locationName = selectedLocation.name
+                locationService.currentLocation = selectedLocation.location
+                await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
+                lastRefreshTime = Date()
+                updateTimeOfDay()
+                // Save the selected location
+                lastSelectedLocationName = selectedLocation.name
+            }
+        }
+    }
     @State private var showingSideMenu = false
     @State private var showingLeftSide = false  // 添加左侧栏状态
     @State private var showingDailyForecast = false
@@ -293,106 +306,44 @@ struct WeatherView: View {
     
     private func updateLocation(_ location: CLLocation?) async {
         if let location = location {
+            // Using current location
+            isUsingCurrentLocation = true
             locationService.currentLocation = location
             await weatherService.updateWeather(for: location)
+            // Update the location name from weather service
+            if let cityName = weatherService.currentCityName {
+                locationService.locationName = cityName
+                // Find and update selectedLocation if it exists
+                if let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
+                    selectedLocation = matchingLocation
+                }
+            }
         } else {
+            // Using preset location
+            isUsingCurrentLocation = false
             locationService.locationName = selectedLocation.name
             locationService.currentLocation = selectedLocation.location
             await weatherService.updateWeather(for: selectedLocation.location, cityName: selectedLocation.name)
         }
         
         lastRefreshTime = Date()
-        updateTimeOfDay()  // 确保在位置更新后立即更新主题
+        updateTimeOfDay()
     }
     
     private func handleLocationButtonTap() async {
-        // Always trigger animation when location button is tapped
-        animationTrigger = UUID()
-        
-        // 设置位置更新回调
-        locationService.onLocationUpdated = { location in
-            Task {
-                // 等待位置名称更新完成
-                await locationService.waitForLocationNameUpdate()
-                
-                // 更新天气信息并触发动画
-                await weatherService.updateWeather(for: location, cityName: locationService.locationName)
-                lastRefreshTime = Date()
-                updateTimeOfDay()
-                
-                // 显示定位成功的提示
-                let generator = UINotificationFeedbackGenerator()
-                generator.notificationOccurred(.success)
-                withAnimation {
-                    let banner = UIBanner(title: "定位成功", subtitle: "已切换到当前位置", type: .success)
-                    UIBannerPresenter.shared.show(banner)
-                }
-            }
-        }
-        
-        // 请求定位权限
-        locationService.requestLocationPermission()
-        
-        // 开始更新位置
-        locationService.startUpdatingLocation()
-        
-        // 设置为使用当前位置
-        isUsingCurrentLocation = true
-        
-        // If we already have a location, trigger an immediate refresh
         if let currentLocation = locationService.currentLocation {
-            await weatherService.updateWeather(for: currentLocation, cityName: locationService.locationName)
+            isUsingCurrentLocation = true
+            // First update the weather service with the current location
+            await weatherService.updateWeather(for: currentLocation)
+            
+            // Then update the location service with the resolved city name
+            if let cityName = weatherService.currentCityName,
+               let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
+                selectedLocation = matchingLocation
+            }
+            
             lastRefreshTime = Date()
             updateTimeOfDay()
-        }
-    }
-    
-    private var locationButton: some View {
-        Button {
-            Task { @MainActor in
-                await handleLocationButtonTap()
-            }
-        } label: {
-            HStack(spacing: 4) {
-                if locationService.isLocating {
-                    ProgressView()
-                        .scaleEffect(1.0)
-                        .tint(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                } else if isLoadingWeather {
-                    ProgressView()
-                        .scaleEffect(0.8)
-                        .tint(.white)
-                } else {
-                    Image(systemName: "location.circle.fill")
-                        .font(.system(size: 18, weight: .medium))  // Increased from default size
-                        .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                        .frame(width: 36, height: 36)  // Increased touch target
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.15))
-                                .frame(width: 34, height: 34)  // Slightly smaller than the touch target
-                        )
-                }
-            }
-            .frame(width: 64, height: 64)
-        }
-        .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDay))
-        .disabled(locationService.isLocating || isLoadingWeather) // 定位过程中禁用按钮
-    }
-    
-    private var cityPickerButton: some View {
-        Button {
-            showingLocationPicker = true
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 20, weight: .medium))  // Increased from default size
-                .foregroundColor(.white)
-                .frame(width: 36, height: 36)  // Increased touch target
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(0.15))
-                        .frame(width: 34, height: 34)  // Slightly smaller than the touch target
-                )
         }
     }
     
@@ -554,11 +505,11 @@ struct WeatherView: View {
                                                         .font(.system(size: 20, weight: .medium))  // Increased from default size
                                                         .foregroundColor(.white)
                                                         .frame(width: 36, height: 36)  // Increased touch target
-                                                        .background(
+                                                        .background {
                                                             Circle()
                                                                 .fill(Color.white.opacity(0.15))
                                                                 .frame(width: 34, height: 34)  // Slightly smaller than the touch target
-                                                        )
+                                                        }
                                                 }
                                             }
                                         }
@@ -590,7 +541,7 @@ struct WeatherView: View {
                                             WeatherContentView(
                                                 weather: weather,
                                                 timeOfDay: timeOfDay,
-                                                locationName: isUsingCurrentLocation ? locationService.locationName : selectedLocation.name,
+                                                locationName: weatherService.currentCityName ?? selectedLocation.name,
                                                 animationTrigger: animationTrigger
                                             )
                                             .opacity(showingDailyForecast ? 0 : 1) // 添加透明度动画

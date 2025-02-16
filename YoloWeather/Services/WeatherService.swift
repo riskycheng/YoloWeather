@@ -293,18 +293,18 @@ class WeatherService: ObservableObject {
     
     // 更新指定城市的天气数据
     func updateWeather(for location: CLLocation, cityName: String? = nil, isBatchUpdate: Bool = false, totalCities: Int = 0) async {
-        // 如果提供了城市名称，使用预设的城市坐标
-        let weatherLocation: CLLocation
-        if let cityName = cityName, let cityLocation = cityCoordinates[cityName] {
-            weatherLocation = cityLocation
+        // 如果提供了城市名称，直接使用它
+        if let cityName = cityName {
+            self.currentCityName = cityName
+            let weatherLocation = cityCoordinates[cityName] ?? location
         } else {
-            weatherLocation = location
+            let weatherLocation = location
+            // 只有在没有提供城市名称时才进行反向地理编码
+            if let geocodedCity = await reverseGeocode(location: location) {
+                self.currentCityName = geocodedCity
+            }
         }
         
-        // 清除当前天气数据
-        clearCurrentWeather()
-        
-        self.location = weatherLocation
         isLoading = true
         defer { isLoading = false }
         
@@ -313,39 +313,27 @@ class WeatherService: ObservableObject {
         }
         
         do {
-            // 如果没有提供城市名称，尝试进行反向地理编码
-            let resolvedCityName: String
-            if let providedCityName = cityName {
-                resolvedCityName = providedCityName
-            } else {
-                if let geocodedCity = await reverseGeocode(location: weatherLocation) {
-                    resolvedCityName = geocodedCity
-                } else {
-                    throw WeatherError.cityNameResolutionFailed
-                }
-            }
-            
-            // 更新当前城市名称
-            self.currentCityName = resolvedCityName
-            
             // 获取时区信息
-            let timezone = await calculateTimezone(for: weatherLocation, cityName: resolvedCityName)
+            let timezone = await calculateTimezone(for: location, cityName: self.currentCityName)
             
             // 获取天气数据
-            let weather = try await weatherService.weather(for: weatherLocation)
+            let weather = try await weatherService.weather(for: location)
             
             // 更新当前天气
             let now = Date()
             let currentHour = Calendar.current.component(.hour, from: now)
             let isNightTime = currentHour >= 18 || currentHour < 6
             
+            // Convert WeatherKit condition to our custom WeatherCondition
+            let newCondition = convertWeatherKitCondition(weather.currentWeather.condition)
+            
             // 更新当前天气数据
             let newCurrentWeather = CurrentWeather(
                 date: now,
                 temperature: weather.currentWeather.temperature.value,
                 feelsLike: weather.currentWeather.apparentTemperature.value,
-                condition: getWeatherConditionText(weather.currentWeather.condition),
-                symbolName: getWeatherSymbolName(condition: weather.currentWeather.condition, isNight: isNightTime),
+                condition: newCondition.description,
+                symbolName: getWeatherSymbolName(condition: newCondition, isNight: isNightTime),
                 windSpeed: weather.currentWeather.wind.speed.value,
                 precipitationChance: weather.hourlyForecast.forecast.first?.precipitationChance ?? 0.0,
                 uvIndex: Int(weather.currentWeather.uvIndex.value),
@@ -354,35 +342,37 @@ class WeatherService: ObservableObject {
                 pressure: weather.currentWeather.pressure.value,
                 visibility: weather.currentWeather.visibility.value,
                 timezone: timezone,
-                weatherCondition: weather.currentWeather.condition,
+                weatherCondition: newCondition,
                 highTemperature: weather.dailyForecast.forecast.first?.highTemperature.value ?? weather.currentWeather.temperature.value + 2,
                 lowTemperature: weather.dailyForecast.forecast.first?.lowTemperature.value ?? weather.currentWeather.temperature.value - 2
             )
             
             // 更新当前天气和缓存
             currentWeather = newCurrentWeather
-            cityWeatherCache[resolvedCityName] = newCurrentWeather
+            cityWeatherCache[self.currentCityName ?? ""] = newCurrentWeather
             
             // 更新小时预报
             hourlyForecast = weather.hourlyForecast.forecast.prefix(24).map { hour in
                 let hourComponent = Calendar.current.component(.hour, from: hour.date)
                 let isHourNight = hourComponent >= 18 || hourComponent < 6
+                let condition = convertWeatherKitCondition(hour.condition)
                 
                 return HourlyForecast(
                     temperature: hour.temperature.value,
-                    condition: hour.condition,
+                    condition: condition,
                     date: hour.date,
-                    symbolName: getWeatherSymbolName(condition: hour.condition, isNight: isHourNight),
-                    conditionText: getWeatherConditionText(hour.condition)
+                    symbolName: getWeatherSymbolName(condition: condition, isNight: isHourNight),
+                    conditionText: condition.description
                 )
             }
             
             // 更新每日预报
             dailyForecast = weather.dailyForecast.forecast.prefix(10).map { day in
-                DayWeatherInfo(
+                let condition = convertWeatherKitCondition(day.condition)
+                return DayWeatherInfo(
                     date: day.date,
-                    condition: getWeatherConditionText(day.condition),
-                    symbolName: getWeatherSymbolName(condition: day.condition, isNight: false),
+                    condition: condition.description,
+                    symbolName: getWeatherSymbolName(condition: condition, isNight: false),
                     lowTemperature: day.lowTemperature.value,
                     highTemperature: day.highTemperature.value,
                     precipitationProbability: day.precipitationChance
@@ -394,7 +384,7 @@ class WeatherService: ObservableObject {
             
             // 保存当前天气数据到历史记录
             if let todayWeather = dailyForecast.first {
-                saveCurrentWeather(cityName: resolvedCityName, weather: todayWeather)
+                saveCurrentWeather(cityName: self.currentCityName ?? "", weather: todayWeather)
             }
             
             // 保存小时天气数据
@@ -406,7 +396,7 @@ class WeatherService: ObservableObject {
                     symbolName: forecast.symbolName
                 )
             }
-            saveHourlyWeather(cityName: resolvedCityName, hourlyData: hourlyData)
+            saveHourlyWeather(cityName: self.currentCityName ?? "", hourlyData: hourlyData)
             
             errorMessage = nil
             
@@ -476,6 +466,48 @@ class WeatherService: ObservableObject {
             return "台风"
         default:
             return "晴间多云"
+        }
+    }
+    
+    // Convert WeatherKit condition to our custom WeatherCondition
+    private func convertWeatherKitCondition(_ condition: WeatherKit.WeatherCondition) -> WeatherCondition {
+        switch condition {
+        case .clear:
+            return .clear
+        case .cloudy, .mostlyCloudy:
+            return .cloudy
+        case .mostlyClear, .partlyCloudy:
+            return .partlyCloudy
+        case .drizzle:
+            return .drizzle
+        case .rain, .heavyRain:
+            return .rain
+        case .snow, .heavySnow, .flurries, .wintryMix:
+            return .snow
+        case .sleet:
+            return .sleet
+        case .freezingDrizzle:
+            return .freezingDrizzle
+        case .strongStorms, .thunderstorms:
+            return .strongStorms
+        case .windy:
+            return .windy
+        case .foggy:
+            return .foggy
+        case .haze:
+            return .haze
+        case .hot:
+            return .hot
+        case .blizzard:
+            return .blizzard
+        case .blowingDust:
+            return .blowingDust
+        case .tropicalStorm:
+            return .tropicalStorm
+        case .hurricane:
+            return .hurricane
+        default:
+            return .clear
         }
     }
     
