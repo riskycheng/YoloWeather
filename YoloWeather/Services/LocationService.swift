@@ -3,17 +3,22 @@ import CoreLocation
 import os.log
 
 @MainActor
-class LocationService: NSObject, ObservableObject {
+class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
+    static let shared = LocationService()
     private let locationManager = CLLocationManager()
-    @Published var currentLocation: CLLocation?
-    @Published var locationError: Error?
-    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
-    @Published var currentCity: String?
     
-    override init() {
+    @Published var currentLocation: CLLocation?
+    @Published var currentCity: String?
+    @Published private(set) var authorizationStatus: CLAuthorizationStatus
+    @Published var locationError: Error?
+    
+    override private init() {
+        authorizationStatus = locationManager.authorizationStatus
+        
         super.init()
         locationManager.delegate = self
-        locationManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers // 城市级别精度足够
+        locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
+        locationManager.distanceFilter = 5000 // 5公里更新一次
         
         // 检查并请求权限
         checkLocationAuthorization()
@@ -33,18 +38,28 @@ class LocationService: NSObject, ObservableObject {
     }
     
     func startUpdatingLocation() {
-        locationManager.startUpdatingLocation()
+        // 检查是否已经有权限
+        switch locationManager.authorizationStatus {
+        case .notDetermined:
+            locationManager.requestWhenInUseAuthorization()
+        case .authorizedWhenInUse, .authorizedAlways:
+            locationManager.startUpdatingLocation()
+        default:
+            break
+        }
     }
     
     func stopUpdatingLocation() {
         locationManager.stopUpdatingLocation()
     }
-}
-
-extension LocationService: CLLocationManagerDelegate {
+    
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationStatus = manager.authorizationStatus
-        checkLocationAuthorization()
+        
+        if manager.authorizationStatus == .authorizedWhenInUse ||
+           manager.authorizationStatus == .authorizedAlways {
+            locationManager.startUpdatingLocation()
+        }
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -53,27 +68,26 @@ extension LocationService: CLLocationManagerDelegate {
         // 更新位置
         currentLocation = location
         
-        // 反向地理编码获取城市名
+        // 获取城市名称
         let geocoder = CLGeocoder()
-        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    self?.locationError = error
-                    return
+        Task {
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(location)
+                if let city = placemarks.first?.locality ?? placemarks.first?.administrativeArea {
+                    currentCity = city
                 }
-                
-                if let placemark = placemarks?.first,
-                   let city = placemark.locality ?? placemark.administrativeArea {
-                    // 确保城市名以"市"结尾
-                    let cityName = city.hasSuffix("市") ? city : city + "市"
-                    self?.currentCity = cityName
-                    self?.stopUpdatingLocation() // 获取到城市后停止更新
-                }
+            } catch {
+                print("地理编码失败: \(error.localizedDescription)")
+                locationError = error
             }
         }
+        
+        // 获取到位置后停止更新
+        locationManager.stopUpdatingLocation()
     }
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("位置获取失败: \(error.localizedDescription)")
         locationError = error
     }
 }

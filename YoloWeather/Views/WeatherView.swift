@@ -182,7 +182,7 @@ private struct WeatherContentView: View {
 // MARK: - Main Weather View
 struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
-    @StateObject private var locationService = LocationService()
+    @StateObject private var locationService = LocationService.shared
     @StateObject private var citySearchService = CitySearchService.shared
     @State private var selectedLocation: PresetLocation = PresetLocation.presets[0] {
         didSet {
@@ -240,20 +240,52 @@ struct WeatherView: View {
         isLoadingWeather = true
         defer { isLoadingWeather = false }
         
-        // 首先尝试加载上次选择的城市
+        // 1. 首先尝试获取当前位置
+        locationService.startUpdatingLocation()
+        
+        // 等待获取位置（最多5秒）
+        let startTime = Date()
+        while locationService.currentLocation == nil {
+            if Date().timeIntervalSince(startTime) > 5 {
+                break
+            }
+            try? await Task.sleep(nanoseconds: 500_000_000) // 等待0.5秒
+        }
+        
+        if let currentLocation = locationService.currentLocation {
+            // 使用地理编码器获取城市名称
+            let geocoder = CLGeocoder()
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(currentLocation)
+                if let city = placemarks.first?.locality ?? placemarks.first?.administrativeArea {
+                    // 查找匹配的预设城市
+                    if let matchedCity = PresetLocation.presets.first(where: { $0.name.contains(city) }) {
+                        selectedLocation = matchedCity
+                        return
+                    }
+                    
+                    // 如果没有匹配的预设城市，创建一个新的
+                    let newLocation = PresetLocation(
+                        name: city,
+                        location: currentLocation
+                    )
+                    selectedLocation = newLocation
+                    return
+                }
+            } catch {
+                print("地理编码失败: \(error.localizedDescription)")
+            }
+        }
+        
+        // 2. 如果无法获取当前位置，尝试加载上次选择的城市
         if let lastCity = lastSelectedLocationName,
            let location = PresetLocation.presets.first(where: { $0.name == lastCity }) {
             selectedLocation = location
+            return
         }
         
-        // 无论是否有上次选择的城市，都要确保加载当前选择城市的天气
-        await weatherService.updateWeather(
-            for: selectedLocation.location,
-            cityName: selectedLocation.name
-        )
-        
-        lastRefreshTime = Date()
-        updateTimeOfDay()
+        // 3. 如果都失败了，使用默认城市（上海）
+        selectedLocation = PresetLocation.presets[0]
     }
     
     private func refreshWeather() async {
