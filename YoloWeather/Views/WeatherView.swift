@@ -216,6 +216,7 @@ struct WeatherView: View {
     @State private var isTouchInHourlyView = false
     @State private var sideMenuGestureEnabled = true
     @State private var errorMessage: String?
+    @Environment(\.scenePhase) private var scenePhase
     
     private func ensureMinimumLoadingTime(startTime: Date) async {
         let timeElapsed = Date().timeIntervalSince(startTime)
@@ -228,27 +229,16 @@ struct WeatherView: View {
         isLoadingWeather = true
         let startTime = Date()
         
-        // 1. 尝试加载上次选择的城市
-        if let lastLocationName = lastSelectedLocationName,
-           let savedLocation = PresetLocation.presets.first(where: { location in
-               location.name == lastLocationName
-           }) {
-            selectedLocation = savedLocation
-            await weatherService.updateWeather(for: savedLocation.location, cityName: savedLocation.name)
-            locationService.locationName = savedLocation.name
-            updateTimeOfDay()
-            await ensureMinimumLoadingTime(startTime: startTime)
-            isLoadingWeather = false
-            return
-        }
+        // 重置状态，确保获取新的位置
+        locationService.currentLocation = nil
+        isUsingCurrentLocation = false
         
-        // 2. 尝试使用当前位置
-        locationService.requestLocationPermission()
+        // 请求位置更新
         locationService.startUpdatingLocation()
         
         // 等待位置信息（设置5秒超时）
         let locationStartTime = Date()
-        while locationService.currentLocation == nil {
+        while locationService.currentLocation == nil && locationService.errorMessage == nil {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
             if Date().timeIntervalSince(locationStartTime) > 5 {
                 break
@@ -257,11 +247,19 @@ struct WeatherView: View {
         
         if let currentLocation = locationService.currentLocation {
             // 使用当前位置
+            isUsingCurrentLocation = true
             await weatherService.updateWeather(for: currentLocation)
+            
+            // 如果能匹配到城市名，更新选中的城市
+            if let cityName = weatherService.currentCityName,
+               let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
+                selectedLocation = matchingLocation
+                locationService.locationName = cityName
+            }
             updateTimeOfDay()
         } else {
-            // 使用默认城市（上海）
-            let defaultLocation = PresetLocation.presets[0]
+            // 如果获取位置失败，使用默认城市（上海）
+            let defaultLocation = PresetLocation.presets.first(where: { $0.name == "上海市" }) ?? PresetLocation.presets[0]
             selectedLocation = defaultLocation
             await weatherService.updateWeather(for: defaultLocation.location, cityName: defaultLocation.name)
             locationService.locationName = defaultLocation.name
@@ -331,20 +329,47 @@ struct WeatherView: View {
     }
     
     private func handleLocationButtonTap() async {
+        isLoadingWeather = true
+        let startTime = Date()
+        
+        // 重置状态
+        locationService.currentLocation = nil
+        isUsingCurrentLocation = false
+        
+        // 请求位置更新
+        locationService.startUpdatingLocation()
+        
+        // 等待位置信息（设置5秒超时）
+        let locationStartTime = Date()
+        while locationService.currentLocation == nil && locationService.errorMessage == nil {
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+            if Date().timeIntervalSince(locationStartTime) > 5 {
+                break
+            }
+        }
+        
         if let currentLocation = locationService.currentLocation {
+            // 使用当前位置
             isUsingCurrentLocation = true
-            // First update the weather service with the current location
             await weatherService.updateWeather(for: currentLocation)
             
-            // Then update the location service with the resolved city name
+            // 如果能匹配到城市名，更新选中的城市
             if let cityName = weatherService.currentCityName,
                let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
                 selectedLocation = matchingLocation
+                locationService.locationName = cityName
             }
-            
-            lastRefreshTime = Date()
             updateTimeOfDay()
+        } else if let error = locationService.errorMessage {
+            errorMessage = error
         }
+        
+        // 确保最少加载时间
+        let timeElapsed = Date().timeIntervalSince(startTime)
+        if timeElapsed < 1.0 {
+            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+        }
+        isLoadingWeather = false
     }
     
     private func logTimeInfo(timezone: TimeZone, hour: Int, isNight: Bool) {
@@ -453,16 +478,43 @@ struct WeatherView: View {
                                             // Location button
                                             Button(action: {
                                                 Task {
-                                                    if citySearchService.recentSearches.contains(where: { $0.name == locationService.locationName }) {
-                                                        isLoadingWeather = true
-                                                        let startTime = Date()
-                                                        await handleLocationButtonTap()
-                                                        let timeElapsed = Date().timeIntervalSince(startTime)
-                                                        if timeElapsed < 1.0 {
-                                                            try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+                                                    isLoadingWeather = true
+                                                    let startTime = Date()
+                                                    
+                                                    // 请求位置更新
+                                                    locationService.startUpdatingLocation()
+                                                    
+                                                    // 等待位置信息（设置5秒超时）
+                                                    let locationStartTime = Date()
+                                                    while locationService.currentLocation == nil && locationService.errorMessage == nil {
+                                                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+                                                        if Date().timeIntervalSince(locationStartTime) > 5 {
+                                                            break
                                                         }
-                                                        isLoadingWeather = false
                                                     }
+                                                    
+                                                    if let currentLocation = locationService.currentLocation {
+                                                        // 使用当前位置
+                                                        isUsingCurrentLocation = true
+                                                        await weatherService.updateWeather(for: currentLocation)
+                                                        
+                                                        // 如果能匹配到城市名，更新选中的城市
+                                                        if let cityName = weatherService.currentCityName,
+                                                           let matchingLocation = PresetLocation.presets.first(where: { $0.name == cityName }) {
+                                                            selectedLocation = matchingLocation
+                                                            locationService.locationName = cityName
+                                                        }
+                                                        updateTimeOfDay()
+                                                    } else if let error = locationService.errorMessage {
+                                                        errorMessage = error
+                                                    }
+                                                    
+                                                    // 确保最少加载时间
+                                                    let timeElapsed = Date().timeIntervalSince(startTime)
+                                                    if timeElapsed < 1.0 {
+                                                        try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
+                                                    }
+                                                    isLoadingWeather = false
                                                 }
                                             }) {
                                                 if isLoadingWeather {
@@ -474,17 +526,17 @@ struct WeatherView: View {
                                                         .clipShape(Circle())
                                                 } else {
                                                     Image(systemName: "location.fill")
-                                                        .font(.system(size: 18, weight: .medium))  // Increased from default size
+                                                        .font(.system(size: 18, weight: .medium))
                                                         .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                                                        .frame(width: 36, height: 36)  // Increased touch target
+                                                        .frame(width: 36, height: 36)
                                                         .background(
                                                             Circle()
                                                                 .fill(Color.white.opacity(0.15))
-                                                                .frame(width: 34, height: 34)  // Slightly smaller than the touch target
+                                                                .frame(width: 34, height: 34)
                                                         )
                                                 }
                                             }
-                                            .disabled(locationService.isLocating || isLoadingWeather)
+                                            .disabled(isLoadingWeather)
                                             
                                             // Add button - only show if current city is not in the list
                                             if !citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) {
@@ -502,13 +554,13 @@ struct WeatherView: View {
                                                     }
                                                 }) {
                                                     Image(systemName: "plus")
-                                                        .font(.system(size: 20, weight: .medium))  // Increased from default size
+                                                        .font(.system(size: 20, weight: .medium))
                                                         .foregroundColor(.white)
-                                                        .frame(width: 36, height: 36)  // Increased touch target
+                                                        .frame(width: 36, height: 36)
                                                         .background {
                                                             Circle()
                                                                 .fill(Color.white.opacity(0.15))
-                                                                .frame(width: 34, height: 34)  // Slightly smaller than the touch target
+                                                                .frame(width: 34, height: 34)
                                                         }
                                                 }
                                             }
@@ -795,6 +847,13 @@ struct WeatherView: View {
         )
         .task {
             await loadInitialWeather()
+        }
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .active {
+                Task {
+                    await loadInitialWeather()
+                }
+            }
         }
     }
     

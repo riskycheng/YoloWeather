@@ -28,37 +28,33 @@ class LocationService: NSObject, ObservableObject {
         locationManager.desiredAccuracy = kCLLocationAccuracyKilometer
         locationManager.distanceFilter = 1000 // Update if location changes by 1km
         
-        // 在模拟器上使用默认位置
-        #if targetEnvironment(simulator)
-        let defaultLocation = CLLocation(latitude: 31.2304, longitude: 121.4737) // 上海
-        self.currentLocation = defaultLocation
-        updateLocationName(for: defaultLocation)
-        #else
-        // Check initial status
+        // Check initial status and request location
         checkLocationAuthorization()
-        #endif
     }
     
     private func checkLocationAuthorization() {
-        switch self.locationManager.authorizationStatus {
+        // Check if location services are enabled
+        guard CLLocationManager.locationServicesEnabled() else {
+            self.errorMessage = "请在系统设置中开启定位服务"
+            return
+        }
+        
+        switch locationManager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:
             startUpdatingLocation()
         case .denied, .restricted:
             self.errorMessage = "请在设置中允许访问位置信息"
-            // 使用默认位置
-            useDefaultLocation()
         case .notDetermined:
-            requestLocationPermission()
+            locationManager.requestWhenInUseAuthorization()
         @unknown default:
             self.errorMessage = "位置服务状态未知"
-            // 使用默认位置
-            useDefaultLocation()
         }
     }
     
     private func useDefaultLocation() {
+        // 默认使用上海坐标
         let defaultLocation = CLLocation(latitude: 31.2304, longitude: 121.4737) // 上海
-        self.currentLocation = defaultLocation
+        currentLocation = defaultLocation
         updateLocationName(for: defaultLocation)
     }
     
@@ -89,12 +85,45 @@ class LocationService: NSObject, ObservableObject {
         retryCount = 0
         isLocating = true
         errorMessage = nil
-        locationManager.requestLocation()
+        currentLocation = nil  // 重置当前位置，确保获取新的位置
+        
+        // 检查系统位置服务是否启用
+        guard CLLocationManager.locationServicesEnabled() else {
+            errorMessage = "请在系统设置中开启定位服务"
+            isLocating = false
+            return
+        }
+        
+        // 检查权限状态
+        switch locationManager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            // 清除之前的代理回调
+            locationManager.delegate = nil
+            locationManager.delegate = self
+            
+            // 配置位置管理器
+            locationManager.desiredAccuracy = kCLLocationAccuracyBest  // 使用最高精度
+            locationManager.distanceFilter = kCLDistanceFilterNone     // 任何距离变化都更新
+            
+            // 开始更新位置
+            locationManager.startUpdatingLocation()
+            
+        case .notDetermined:
+            locationManager.requestWhenInUseAuthorization()
+            
+        case .denied, .restricted:
+            errorMessage = "请在设置中允许访问位置信息"
+            isLocating = false
+            
+        @unknown default:
+            errorMessage = "位置服务状态未知"
+            isLocating = false
+        }
     }
     
     func stopUpdatingLocation() {
-        isLocating = false
         locationManager.stopUpdatingLocation()
+        isLocating = false
     }
     
     func waitForLocationNameUpdate() async {
@@ -155,24 +184,20 @@ class LocationService: NSObject, ObservableObject {
 
 extension LocationService: CLLocationManagerDelegate {
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { 
-            return 
-        }
-        
-        // Only update if accuracy is good enough
-        guard location.horizontalAccuracy >= 0 else { 
-            return 
-        }
-        guard location.horizontalAccuracy <= 1000 else { 
-            return 
-        }
+        guard let location = locations.last else { return }
         
         Task { @MainActor in
+            // 确保位置精度在可接受范围内
+            guard location.horizontalAccuracy >= 0 && location.horizontalAccuracy <= 100 else {
+                return
+            }
+            
             self.currentLocation = location
-            self.retryCount = 0 // 重置重试计数
+            self.retryCount = 0
             self.updateLocationName(for: location)
             self.onLocationUpdated?(location)
             self.isLocating = false
+            self.locationManager.stopUpdatingLocation()
         }
     }
     
@@ -213,16 +238,16 @@ extension LocationService: CLLocationManagerDelegate {
             
             switch manager.authorizationStatus {
             case .authorizedWhenInUse, .authorizedAlways:
-                self.errorMessage = nil
+                // 获得权限后立即开始更新位置
                 self.startUpdatingLocation()
             case .denied, .restricted:
                 self.errorMessage = "请在设置中允许访问位置信息"
-                self.useDefaultLocation()
+                self.isLocating = false
             case .notDetermined:
-                self.requestLocationPermission()
+                break // 等待用户响应权限请求
             @unknown default:
                 self.errorMessage = "位置服务状态未知"
-                self.useDefaultLocation()
+                self.isLocating = false
             }
         }
     }
