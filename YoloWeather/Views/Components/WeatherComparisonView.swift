@@ -8,9 +8,9 @@ struct WeatherComparisonView: View {
         // 获取昨天的天气数据
         let yesterdayWeather = weatherService.getYesterdayWeather(for: selectedLocation.name)
         
-        // 获取今天的天气数据，使用当前天气的温度
-        var todayWeather = weatherService.dailyForecast.first
-        if let currentWeather = weatherService.currentWeather {
+        // 获取今天的天气数据
+        var todayWeather: WeatherService.DayWeatherInfo?
+        if let currentWeather = weatherService.getCachedWeather(for: selectedLocation.name) {
             todayWeather = WeatherService.DayWeatherInfo(
                 date: Date(),
                 condition: currentWeather.condition,
@@ -116,16 +116,18 @@ private struct EnhancedTemperatureTrendView: View {
         VStack(spacing: 16) {
             GeometryReader { geometry in
                 let width = geometry.size.width
-                let height = geometry.size.height * 0.7
+                let height = geometry.size.height * 0.85
                 
                 ZStack {
-                    // 背景网格线
+                    // 添加水平参考线
                     VStack(spacing: height / 4) {
                         ForEach(0..<5) { _ in
-                            Divider()
-                                .background(Color.white.opacity(0.1))
+                            Rectangle()
+                                .fill(Color.white.opacity(0.1))
+                                .frame(height: 1)
                         }
                     }
+                    .frame(height: height)
                     
                     // 绘制折线
                     Path { path in
@@ -149,46 +151,45 @@ private struct EnhancedTemperatureTrendView: View {
                     
                     // 绘制节点和温度标签
                     ForEach(0..<3) { index in
-                        let highPoints = calculatePoints(width: width, height: height)
-                        let lowPoints = calculateLowPoints(width: width, height: height)
+                        let temp = temperatures[index]
+                        let spacing = width / 2
+                        let x = spacing * CGFloat(index)
                         
                         // 高温节点
+                        let normalizedHighY = (temp.high - temperatureRange.min) / temperatureRange.range
+                        let highY = height * (1 - normalizedHighY)
+                        
                         Circle()
                             .fill(Color.orange)
                             .frame(width: 8, height: 8)
-                            .position(highPoints[index])
+                            .position(x: x, y: highY)
                         
-                        // 高温标签
-                        Text("\(Int(round(temperatures[index].high)))°")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                            .position(x: highPoints[index].x, y: highPoints[index].y - 15)
+                        Text("\(Int(temp.high))°")
+                            .foregroundColor(.orange)
+                            .font(.system(size: 14, weight: .medium))
+                            .position(x: x, y: highY - 20)
                         
                         // 低温节点
+                        let normalizedLowY = (temp.low - temperatureRange.min) / temperatureRange.range
+                        let lowY = height * (1 - normalizedLowY)
+                        
                         Circle()
                             .fill(Color.blue)
                             .frame(width: 8, height: 8)
-                            .position(lowPoints[index])
+                            .position(x: x, y: lowY)
                         
-                        // 低温标签
-                        Text("\(Int(round(temperatures[index].low)))°")
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                            .position(x: lowPoints[index].x, y: lowPoints[index].y + 15)
-                    }
-                }
-                
-                // 时间标签
-                HStack {
-                    ForEach(timePoints.indices, id: \.self) { index in
+                        Text("\(Int(temp.low))°")
+                            .foregroundColor(.blue)
+                            .font(.system(size: 14, weight: .medium))
+                            .position(x: x, y: lowY + 20)
+                        
+                        // 日期标签
                         Text(timePoints[index])
                             .font(.system(size: 14))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
+                            .foregroundColor(.white.opacity(0.7))
+                            .position(x: x, y: height + 25)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .position(x: width / 2, y: height + 20)
             }
         }
     }

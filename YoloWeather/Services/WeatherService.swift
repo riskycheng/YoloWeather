@@ -294,14 +294,22 @@ class WeatherService: ObservableObject {
     // 更新指定城市的天气数据
     func updateWeather(for location: CLLocation, cityName: String? = nil, isBatchUpdate: Bool = false, totalCities: Int = 0) async {
         // 如果提供了城市名称，直接使用它
+        let weatherLocation: CLLocation
         if let cityName = cityName {
             self.currentCityName = cityName
-            let weatherLocation = cityCoordinates[cityName] ?? location
+            // 使用提供的位置，而不是从cityCoordinates获取
+            weatherLocation = location
         } else {
-            let weatherLocation = location
-            // 只有在没有提供城市名称时才进行反向地理编码
-            if let geocodedCity = await reverseGeocode(location: location) {
-                self.currentCityName = geocodedCity
+            weatherLocation = location
+            // 如果没有提供城市名称，尝试通过坐标反向查找
+            let geocoder = CLGeocoder()
+            do {
+                let placemarks = try await geocoder.reverseGeocodeLocation(location)
+                if let city = placemarks.first?.locality {
+                    self.currentCityName = city
+                }
+            } catch {
+                print("无法获取城市名称: \(error.localizedDescription)")
             }
         }
         
@@ -314,10 +322,10 @@ class WeatherService: ObservableObject {
         
         do {
             // 获取时区信息
-            let timezone = await calculateTimezone(for: location, cityName: self.currentCityName)
+            let timezone = await calculateTimezone(for: weatherLocation, cityName: self.currentCityName)
             
             // 获取天气数据
-            let weather = try await weatherService.weather(for: location)
+            let weather = try await weatherService.weather(for: weatherLocation)
             
             // 更新当前天气
             let now = Date()
@@ -349,7 +357,9 @@ class WeatherService: ObservableObject {
             
             // 更新当前天气和缓存
             currentWeather = newCurrentWeather
-            cityWeatherCache[self.currentCityName ?? ""] = newCurrentWeather
+            if let cityName = self.currentCityName {
+                cityWeatherCache[cityName] = newCurrentWeather
+            }
             
             // 更新小时预报
             hourlyForecast = weather.hourlyForecast.forecast.prefix(24).map { hour in
