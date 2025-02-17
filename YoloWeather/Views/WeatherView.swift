@@ -179,11 +179,31 @@ private struct WeatherContentView: View {
     }
 }
 
+// 添加 TimeOfDayManager 类
+private class TimeOfDayManager: ObservableObject {
+    @Published var timeOfDay: WeatherTimeOfDay = .day
+    
+    init() {
+        NotificationCenter.default.addObserver(
+            forName: .updateWeatherTimeOfDay,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let timeOfDay = notification.value as? WeatherTimeOfDay {
+                withAnimation {
+                    self?.timeOfDay = timeOfDay
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Main Weather View
 struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
     @StateObject private var locationService = LocationService.shared
     @StateObject private var citySearchService = CitySearchService.shared
+    @StateObject private var timeOfDayManager = TimeOfDayManager()
     @State private var selectedLocation: PresetLocation = PresetLocation.presets[0] {
         didSet {
             Task {
@@ -201,7 +221,11 @@ struct WeatherView: View {
                 // 更新相关状态
                 isLoadingWeather = false
                 lastRefreshTime = Date()
+                
+                // 根据城市当地时间更新主题
                 updateTimeOfDay()
+                print("已根据城市 \(selectedLocation.name) 的当地时间更新主题")
+                
                 lastSelectedLocationName = selectedLocation.name
                 
                 // 保存选择的城市
@@ -220,7 +244,6 @@ struct WeatherView: View {
     @State private var isUsingCurrentLocation = false
     @AppStorage("lastSelectedLocation") private var lastSelectedLocationName: String?
     @State private var showingLocationPicker = false
-    @State private var timeOfDay: WeatherTimeOfDay = .day
     @State private var dragOffset: CGFloat = 0
     @State private var showSuccessToast = false
     @State private var isDraggingUp = false
@@ -228,6 +251,10 @@ struct WeatherView: View {
     @State private var sideMenuGestureEnabled = true
     @State private var errorMessage: String?
     @Environment(\.scenePhase) private var scenePhase
+    
+    private var timeOfDay: WeatherTimeOfDay {
+        timeOfDayManager.timeOfDay
+    }
     
     private func ensureMinimumLoadingTime(startTime: Date) async {
         let timeElapsed = Date().timeIntervalSince(startTime)
@@ -322,8 +349,17 @@ struct WeatherView: View {
     
     private func updateTimeOfDay() {
         if let weather = weatherService.currentWeather {
-            let hour = Calendar.current.component(.hour, from: Date())
-            timeOfDay = hour >= 18 || hour < 6 ? .night : .day
+            var calendar = Calendar.current
+            calendar.timeZone = weather.timezone
+            let hour = calendar.component(.hour, from: Date())
+            
+            // 根据当地时间判断是否是白天（6:00-18:00为白天）
+            timeOfDayManager.timeOfDay = (hour >= 6 && hour < 18) ? .day : .night
+            
+            print("\n=== 更新时间主题 ===")
+            print("城市时区：\(weather.timezone.identifier)")
+            print("当地时间：\(hour)点")
+            print("使用主题：\(timeOfDay == .day ? "白天" : "夜晚")")
         }
     }
     
@@ -336,8 +372,8 @@ struct WeatherView: View {
     private func calculateWeatherSymbol(weather: WeatherService.CurrentWeather) -> (symbolName: String, hour: Int, isNight: Bool) {
         var calendar = Calendar.current
         calendar.timeZone = weather.timezone
-        let hour = calendar.component(.hour, from: weather.date)
-        let isNight = hour >= 18 || hour < 6
+        let hour = calendar.component(.hour, from: Date())
+        let isNight = hour < 6 || hour >= 18
         let symbolName = getWeatherSymbolName(for: weather.weatherCondition, isNight: isNight)
         
         return (symbolName, hour, isNight)
@@ -429,21 +465,21 @@ struct WeatherView: View {
                                 VStack(spacing: 0) {
                                     // 顶部工具栏
                                     HStack {
-                                        LocationButton(selectedLocation: $selectedLocation)
+                                        LocationButton(selectedLocation: $selectedLocation, animationTrigger: $animationTrigger)
+                                            .frame(width: 44, height: 44)
                                         
                                         Spacer()
                                         
-                                        Button(action: {
-                                            withAnimation(.easeInOut) {
-                                                showingSideMenu.toggle()
+                                        Button {
+                                            withAnimation {
+                                                showingSideMenu = true
                                             }
-                                        }) {
-                                            Image(systemName: "line.3.horizontal")
-                                                .font(.system(size: 24))
-                                                .foregroundColor(.white)
+                                        } label: {
+                                            toolbarButton("line.3.horizontal")
                                         }
                                     }
-                                    .padding()
+                                    .padding(.horizontal, 16)
+                                    .padding(.top, 8)
                                     
                                     if isRefreshing || isLoadingWeather {
                                         WeatherLoadingView()

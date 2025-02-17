@@ -8,6 +8,7 @@ struct LocationButton: View {
     @State private var engine: CHHapticEngine?
     @State private var isAnimating = false
     @Binding var selectedLocation: PresetLocation
+    @Binding var animationTrigger: UUID
     
     var body: some View {
         Button(action: {
@@ -112,6 +113,26 @@ struct LocationButton: View {
                     print("开始更新天气信息...")
                     await weatherService.updateWeather(for: matchedCity.location, cityName: matchedCity.name)
                     print("天气信息更新完成")
+                    
+                    // 更新主题
+                    if let weather = weatherService.currentWeather {
+                        print("\n=== 更新时间主题 ===")
+                        var calendar = Calendar.current
+                        calendar.timeZone = weather.timezone
+                        let hour = calendar.component(.hour, from: Date())
+                        
+                        // 根据当地时间判断是否是白天（6:00-18:00为白天）
+                        let timeOfDay: WeatherTimeOfDay = (hour >= 6 && hour < 18) ? .day : .night
+                        print("城市时区：\(weather.timezone.identifier)")
+                        print("当地时间：\(hour)点")
+                        print("使用主题：\(timeOfDay == .day ? "白天" : "夜晚")")
+                        
+                        // 通知 WeatherView 更新主题
+                        NotificationCenter.default.post(name: .updateWeatherTimeOfDay, value: timeOfDay)
+                        
+                        // 触发动画更新
+                        animationTrigger = UUID()
+                    }
                 } else {
                     // 2. 如果没有找到匹配的预设城市，创建一个新的位置
                     print("在预设城市中未找到匹配，创建新的城市位置：\(cityName)")
@@ -126,6 +147,26 @@ struct LocationButton: View {
                     print("开始更新天气信息...")
                     await weatherService.updateWeather(for: location, cityName: cityName)
                     print("天气信息更新完成")
+                    
+                    // 更新主题
+                    if let weather = weatherService.currentWeather {
+                        print("\n=== 更新时间主题 ===")
+                        var calendar = Calendar.current
+                        calendar.timeZone = weather.timezone
+                        let hour = calendar.component(.hour, from: Date())
+                        
+                        // 根据当地时间判断是否是白天（6:00-18:00为白天）
+                        let timeOfDay: WeatherTimeOfDay = (hour >= 6 && hour < 18) ? .day : .night
+                        print("城市时区：\(weather.timezone.identifier)")
+                        print("当地时间：\(hour)点")
+                        print("使用主题：\(timeOfDay == .day ? "白天" : "夜晚")")
+                        
+                        // 通知 WeatherView 更新主题
+                        NotificationCenter.default.post(name: .updateWeatherTimeOfDay, value: timeOfDay)
+                        
+                        // 触发动画更新
+                        animationTrigger = UUID()
+                    }
                 }
             } catch {
                 print("定位过程发生错误：\(error.localizedDescription)")
@@ -146,6 +187,6 @@ private struct LocationButtonStyle: ButtonStyle {
 }
 
 #Preview {
-    LocationButton(selectedLocation: .constant(PresetLocation.presets[0]))
+    LocationButton(selectedLocation: .constant(PresetLocation.presets[0]), animationTrigger: .constant(UUID()))
         .preferredColorScheme(.dark)
 } 
