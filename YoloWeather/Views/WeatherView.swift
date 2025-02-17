@@ -429,90 +429,7 @@ struct WeatherView: View {
                                 VStack(spacing: 0) {
                                     // 顶部工具栏
                                     HStack {
-                                        HStack(spacing: 8) {
-                                            // Location button
-                                            Button(action: {
-                                                Task {
-                                                    isLoadingWeather = true
-                                                    let startTime = Date()
-                                                    
-                                                    // 请求位置更新
-                                                    locationService.startUpdatingLocation()
-                                                    
-                                                    // 等待位置信息（设置5秒超时）
-                                                    let locationStartTime = Date()
-                                                    while locationService.currentCity == nil && locationService.locationError == nil {
-                                                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
-                                                        if Date().timeIntervalSince(locationStartTime) > 5 {
-                                                            break
-                                                        }
-                                                    }
-                                                    
-                                                    if let currentCity = locationService.currentCity,
-                                                       let matchingLocation = PresetLocation.presets.first(where: { $0.name == currentCity }) {
-                                                        selectedLocation = matchingLocation
-                                                        isUsingCurrentLocation = true
-                                                        await refreshWeather()
-                                                    } else if let error = locationService.locationError {
-                                                        errorMessage = error.localizedDescription
-                                                    }
-                                                    
-                                                    // 确保最少加载时间
-                                                    let timeElapsed = Date().timeIntervalSince(startTime)
-                                                    if timeElapsed < 1.0 {
-                                                        try? await Task.sleep(nanoseconds: UInt64((1.0 - timeElapsed) * 1_000_000_000))
-                                                    }
-                                                    isLoadingWeather = false
-                                                }
-                                            }) {
-                                                if isLoadingWeather {
-                                                    ProgressView()
-                                                        .scaleEffect(0.8)
-                                                        .tint(.white)
-                                                        .frame(width: 32, height: 32)
-                                                        .background(Color.white.opacity(0.2))
-                                                        .clipShape(Circle())
-                                                } else {
-                                                    Image(systemName: "location.fill")
-                                                        .font(.system(size: 18, weight: .medium))
-                                                        .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDay))
-                                                        .frame(width: 36, height: 36)
-                                                        .background(
-                                                            Circle()
-                                                                .fill(Color.white.opacity(0.15))
-                                                                .frame(width: 34, height: 34)
-                                                        )
-                                                }
-                                            }
-                                            .disabled(isLoadingWeather)
-                                            
-                                            // Add button - only show if current city is not in the list
-                                            if !citySearchService.recentSearches.contains(where: { $0.name == selectedLocation.name }) {
-                                                Button(action: {
-                                                    citySearchService.addToRecentSearches(selectedLocation)
-                                                    let generator = UINotificationFeedbackGenerator()
-                                                    generator.notificationOccurred(.success)
-                                                    withAnimation {
-                                                        let banner = UIBanner(
-                                                            title: "添加成功",
-                                                            subtitle: "\(selectedLocation.name)已添加到收藏",
-                                                            type: .success
-                                                        )
-                                                        UIBannerPresenter.shared.show(banner)
-                                                    }
-                                                }) {
-                                                    Image(systemName: "plus")
-                                                        .font(.system(size: 20, weight: .medium))
-                                                        .foregroundColor(.white)
-                                                        .frame(width: 36, height: 36)
-                                                        .background {
-                                                            Circle()
-                                                                .fill(Color.white.opacity(0.15))
-                                                                .frame(width: 34, height: 34)
-                                                        }
-                                                }
-                                            }
-                                        }
+                                        LocationButton(selectedLocation: $selectedLocation)
                                         
                                         Spacer()
                                         
@@ -522,12 +439,11 @@ struct WeatherView: View {
                                             }
                                         }) {
                                             Image(systemName: "line.3.horizontal")
-                                                .font(.title2)
+                                                .font(.system(size: 24))
                                                 .foregroundColor(.white)
                                         }
                                     }
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 20)
+                                    .padding()
                                     
                                     if isRefreshing || isLoadingWeather {
                                         WeatherLoadingView()
