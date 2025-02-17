@@ -468,6 +468,25 @@ struct WeatherView: View {
                                         LocationButton(selectedLocation: $selectedLocation, animationTrigger: $animationTrigger)
                                             .frame(width: 44, height: 44)
                                         
+                                        // 添加收藏按钮
+                                        if !citySearchService.recentSearches.contains(selectedLocation) {
+                                            Button {
+                                                withAnimation {
+                                                    citySearchService.addToRecentSearches(selectedLocation)
+                                                    // 显示成功提示
+                                                    showSuccessToast = true
+                                                    // 3秒后隐藏提示
+                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                                                        withAnimation {
+                                                            showSuccessToast = false
+                                                        }
+                                                    }
+                                                }
+                                            } label: {
+                                                toolbarButton("plus.circle.fill")
+                                            }
+                                        }
+                                        
                                         Spacer()
                                         
                                         Button {
@@ -480,6 +499,21 @@ struct WeatherView: View {
                                     }
                                     .padding(.horizontal, 16)
                                     .padding(.top, 8)
+                                    .overlay(alignment: .top) {
+                                        if showSuccessToast {
+                                            Text("已添加到收藏")
+                                                .font(.system(size: 14))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 16)
+                                                .padding(.vertical, 8)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(.black.opacity(0.6))
+                                                )
+                                                .transition(.move(edge: .top).combined(with: .opacity))
+                                                .offset(y: 50)
+                                        }
+                                    }
                                     
                                     if isRefreshing || isLoadingWeather {
                                         WeatherLoadingView()
