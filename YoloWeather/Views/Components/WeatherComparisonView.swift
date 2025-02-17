@@ -10,7 +10,7 @@ struct WeatherComparisonView: View {
         
         // 获取今天的天气数据
         var todayWeather: WeatherService.DayWeatherInfo?
-        if let currentWeather = weatherService.getCachedWeather(for: selectedLocation.name) {
+        if let currentWeather = weatherService.currentWeather {
             todayWeather = WeatherService.DayWeatherInfo(
                 date: Date(),
                 condition: currentWeather.condition,
@@ -22,9 +22,27 @@ struct WeatherComparisonView: View {
         }
         
         // 获取明天的天气数据
-        let tomorrow = weatherService.dailyForecast.dropFirst().first
+        let tomorrow = weatherService.dailyForecast.first { forecast in
+            let calendar = Calendar.current
+            let tomorrowDate = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date()))!
+            return calendar.isDate(forecast.date, inSameDayAs: tomorrowDate)
+        }
+        
+        print("\n=== 天气趋势数据更新 ===")
+        print("城市：\(selectedLocation.name)")
+        print("昨天：\(yesterdayWeather?.highTemperature ?? 0)° / \(yesterdayWeather?.lowTemperature ?? 0)°")
+        print("今天：\(todayWeather?.highTemperature ?? 0)° / \(todayWeather?.lowTemperature ?? 0)°")
+        print("明天：\(tomorrow?.highTemperature ?? 0)° / \(tomorrow?.lowTemperature ?? 0)°")
         
         return (yesterdayWeather, todayWeather, tomorrow)
+    }
+    
+    private var hasHistoricalData: Bool {
+        return comparisonData.yesterday != nil
+    }
+    
+    private var hasAnyData: Bool {
+        return comparisonData.today != nil || comparisonData.tomorrow != nil
     }
     
     private var weatherCards: [(title: String, weather: WeatherService.DayWeatherInfo?, colors: [Color])] {
@@ -60,16 +78,32 @@ struct WeatherComparisonView: View {
             }
             .padding(.top, 16)
             
-            // 温度趋势图
-            EnhancedTemperatureTrendView(data: comparisonData)
+            if hasAnyData {
+                // 温度趋势图
+                EnhancedTemperatureTrendView(data: comparisonData)
+                    .frame(height: 180)
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white.opacity(0.05))
+                    )
+                    .padding(.horizontal, 12)
+            } else {
+                // 无数据提示
+                VStack {
+                    Text("无历史数据")
+                        .font(.system(size: 16))
+                        .foregroundColor(.white.opacity(0.6))
+                }
                 .frame(height: 180)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
                         .fill(Color.white.opacity(0.05))
                 )
                 .padding(.horizontal, 12)
+            }
             
             // 天气卡片区域
             HStack(spacing: 8) {
@@ -86,6 +120,7 @@ struct WeatherComparisonView: View {
             
             Spacer(minLength: 20)
         }
+        .id(selectedLocation.id) // 添加 id 以在城市切换时强制刷新
     }
 }
 
@@ -107,6 +142,7 @@ private struct EnhancedTemperatureTrendView: View {
     
     private var temperatureRange: (min: Double, max: Double, range: Double) {
         let allTemps = temperatures.flatMap { [$0.high, $0.low] }
+            .filter { $0 != 0 } // 过滤掉默认值 0
         let minTemp = round((allTemps.min() ?? 0) - 2)
         let maxTemp = round((allTemps.max() ?? 0) + 2)
         return (minTemp, maxTemp, max(maxTemp - minTemp, 1.0))
@@ -129,25 +165,39 @@ private struct EnhancedTemperatureTrendView: View {
                     }
                     .frame(height: height)
                     
-                    // 绘制折线
-                    Path { path in
-                        let points = calculatePoints(width: width, height: height)
-                        path.move(to: points[0])
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
+                    // 绘制高温折线
+                    if data.today != nil && data.tomorrow != nil {
+                        Path { path in
+                            let points = calculatePoints(width: width, height: height)
+                            // 如果没有昨天的数据，只绘制今天到明天的线段
+                            if data.yesterday == nil {
+                                path.move(to: points[1]) // 从今天开始
+                                path.addLine(to: points[2]) // 连接到明天
+                            } else {
+                                path.move(to: points[0])
+                                for point in points.dropFirst() {
+                                    path.addLine(to: point)
+                                }
+                            }
                         }
-                    }
-                    .stroke(Color.orange, lineWidth: 2)
-                    
-                    // 绘制低温折线
-                    Path { path in
-                        let points = calculateLowPoints(width: width, height: height)
-                        path.move(to: points[0])
-                        for point in points.dropFirst() {
-                            path.addLine(to: point)
+                        .stroke(Color.orange, lineWidth: 2)
+                        
+                        // 绘制低温折线
+                        Path { path in
+                            let points = calculateLowPoints(width: width, height: height)
+                            // 如果没有昨天的数据，只绘制今天到明天的线段
+                            if data.yesterday == nil {
+                                path.move(to: points[1]) // 从今天开始
+                                path.addLine(to: points[2]) // 连接到明天
+                            } else {
+                                path.move(to: points[0])
+                                for point in points.dropFirst() {
+                                    path.addLine(to: point)
+                                }
+                            }
                         }
+                        .stroke(Color.blue, lineWidth: 2)
                     }
-                    .stroke(Color.blue, lineWidth: 2)
                     
                     // 绘制节点和温度标签
                     ForEach(0..<3) { index in
@@ -155,33 +205,42 @@ private struct EnhancedTemperatureTrendView: View {
                         let spacing = width / 2
                         let x = spacing * CGFloat(index)
                         
-                        // 高温节点
-                        let normalizedHighY = (temp.high - temperatureRange.min) / temperatureRange.range
-                        let highY = height * (1 - normalizedHighY)
-                        
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 8, height: 8)
-                            .position(x: x, y: highY)
-                        
-                        Text("\(Int(temp.high))°")
-                            .foregroundColor(.orange)
-                            .font(.system(size: 14, weight: .medium))
-                            .position(x: x, y: highY - 20)
-                        
-                        // 低温节点
-                        let normalizedLowY = (temp.low - temperatureRange.min) / temperatureRange.range
-                        let lowY = height * (1 - normalizedLowY)
-                        
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 8, height: 8)
-                            .position(x: x, y: lowY)
-                        
-                        Text("\(Int(temp.low))°")
-                            .foregroundColor(.blue)
-                            .font(.system(size: 14, weight: .medium))
-                            .position(x: x, y: lowY + 20)
+                        if index == 0 && data.yesterday == nil {
+                            // 如果是昨天且没有数据，显示"无数据"
+                            Text("暂无数据")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                                .position(x: x, y: height / 2)
+                        } else if (index == 1 && data.today != nil) || (index == 2 && data.tomorrow != nil) {
+                            // 只有在有数据的情况下才显示温度点和标签
+                            // 高温节点
+                            let normalizedHighY = (temp.high - temperatureRange.min) / temperatureRange.range
+                            let highY = height * (1 - normalizedHighY)
+                            
+                            Circle()
+                                .fill(Color.orange)
+                                .frame(width: 8, height: 8)
+                                .position(x: x, y: highY)
+                            
+                            Text("\(Int(temp.high))°")
+                                .foregroundColor(.orange)
+                                .font(.system(size: 14, weight: .medium))
+                                .position(x: x, y: highY - 20)
+                            
+                            // 低温节点
+                            let normalizedLowY = (temp.low - temperatureRange.min) / temperatureRange.range
+                            let lowY = height * (1 - normalizedLowY)
+                            
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 8, height: 8)
+                                .position(x: x, y: lowY)
+                            
+                            Text("\(Int(temp.low))°")
+                                .foregroundColor(.blue)
+                                .font(.system(size: 14, weight: .medium))
+                                .position(x: x, y: lowY + 20)
+                        }
                         
                         // 日期标签
                         Text(timePoints[index])

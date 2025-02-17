@@ -29,21 +29,20 @@ struct LeftSideView: View {
                                 weatherService: weatherService,
                                 selectedLocation: selectedLocation
                             )
-                            .padding(.top, 50) // 添加顶部间距以避免与 SafeArea 重叠
+                            .padding(.top, 50)
+                            .id(selectedLocation.id) // 添加 id 以在城市切换时强制刷新视图
                         } else {
                             ProgressView()
                                 .tint(.white)
                                 .padding()
-                                .padding(.top, 50) // 同样为加载状态添加顶部间距
+                                .padding(.top, 50)
                         }
                     }
                     .frame(width: min(geometry.size.width * 0.85, 340))
                     .background(
                         ZStack {
-                            // 主背景色
                             Color(red: 0.15, green: 0.2, blue: 0.3)
                             
-                            // 顶部渐变效果
                             LinearGradient(
                                 colors: [
                                     .white.opacity(0.1),
@@ -53,7 +52,6 @@ struct LeftSideView: View {
                                 endPoint: .center
                             )
                             
-                            // 侧边光效
                             LinearGradient(
                                 colors: [
                                     .white.opacity(0.05),
@@ -103,26 +101,15 @@ struct LeftSideView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isShowing)
         }
         .edgesIgnoringSafeArea(.all)
-        .onAppear {
+        .onChange(of: selectedLocation) { _, newLocation in
+            // 当选择的城市发生变化时，打印日志以便调试
             if let currentWeather = weatherService.currentWeather {
-                print("\n=== 当前天气趋势 ===")
-                print("实时天气:")
-                print("- 温度: \(Int(round(currentWeather.temperature)))°")
-                print("- 天气: \(currentWeather.condition)")
-                print("- 体感温度: \(Int(round(currentWeather.feelsLike)))°")
-                
-                print("\n未来24小时天气:")
-                for (index, forecast) in weatherService.hourlyForecast.prefix(24).enumerated() {
-                    print("[\(index + 1)小时后] 温度: \(Int(round(forecast.temperature)))° 天气: \(forecast.conditionText)")
-                }
-                
-                print("\n未来7天天气:")
-                for (index, forecast) in weatherService.dailyForecast.prefix(7).enumerated() {
-                    print("第\(index + 1)天:")
-                    print("- 最高温: \(Int(round(forecast.highTemperature)))°")
-                    print("- 最低温: \(Int(round(forecast.lowTemperature)))°")
-                    print("- 天气: \(forecast.condition)")
-                }
+                print("\n=== 左侧栏天气数据更新 ===")
+                print("城市：\(newLocation.name)")
+                print("当前温度：\(Int(round(currentWeather.temperature)))°")
+                print("天气状况：\(currentWeather.condition)")
+                print("最高温度：\(Int(round(currentWeather.highTemperature)))°")
+                print("最低温度：\(Int(round(currentWeather.lowTemperature)))°")
             }
         }
     }

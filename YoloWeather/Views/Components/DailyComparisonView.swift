@@ -4,10 +4,18 @@ import WeatherKit
 struct DailyComparisonView: View {
     let currentWeather: WeatherService.CurrentWeather?
     let dailyForecast: [WeatherService.DayWeatherInfo]
+    let selectedLocation: PresetLocation  // 添加选中的城市
     @Binding var selectedDayOffset: Int // -1 表示前一天，0 表示今天，1 表示明天
     
     private var selectedDay: WeatherService.DayWeatherInfo? {
         guard !dailyForecast.isEmpty else { return nil }
+        
+        // 如果是昨天，从缓存获取历史数据
+        if selectedDayOffset == -1 {
+            return WeatherService.shared.getYesterdayWeather(for: selectedLocation.name)
+        }
+        
+        // 今天和未来的数据
         let today = Calendar.current.startOfDay(for: Date())
         return dailyForecast.first { Calendar.current.startOfDay(for: $0.date) == Calendar.current.date(byAdding: .day, value: selectedDayOffset, to: today) }
     }
@@ -68,6 +76,15 @@ struct DailyComparisonView: View {
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: selectedDayOffset > 0 ? .trailing : .leading)))
+            } else {
+                // 显示无数据提示
+                VStack(spacing: 10) {
+                    Text("无历史数据")
+                        .font(.system(size: 24, weight: .medium))
+                        .foregroundColor(.white.opacity(0.6))
+                }
+                .frame(height: 180)
+                .transition(.opacity)
             }
         }
     }
