@@ -1,3 +1,22 @@
+// MARK: - Time of Day Manager
+class TimeOfDayManager: ObservableObject {
+    @Published var timeOfDay: WeatherTimeOfDay = .day
+    
+    init() {
+        NotificationCenter.default.addObserver(
+            forName: .updateWeatherTimeOfDay,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let timeOfDay = notification.value as? WeatherTimeOfDay {
+                withAnimation {
+                    self?.timeOfDay = timeOfDay
+                }
+            }
+        }
+    }
+}
+
 import SwiftUI
 import CoreLocation
 import Foundation
@@ -179,25 +198,6 @@ private struct WeatherContentView: View {
     }
 }
 
-// 添加 TimeOfDayManager 类
-private class TimeOfDayManager: ObservableObject {
-    @Published var timeOfDay: WeatherTimeOfDay = .day
-    
-    init() {
-        NotificationCenter.default.addObserver(
-            forName: .updateWeatherTimeOfDay,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            if let timeOfDay = notification.value as? WeatherTimeOfDay {
-                withAnimation {
-                    self?.timeOfDay = timeOfDay
-                }
-            }
-        }
-    }
-}
-
 // MARK: - Main Weather View
 struct WeatherView: View {
     @StateObject private var weatherService = WeatherService.shared
@@ -221,10 +221,6 @@ struct WeatherView: View {
                 // 更新相关状态
                 isLoadingWeather = false
                 lastRefreshTime = Date()
-                
-                // 根据城市当地时间更新主题
-                updateTimeOfDay()
-                print("已根据城市 \(selectedLocation.name) 的当地时间更新主题")
                 
                 lastSelectedLocationName = selectedLocation.name
                 
@@ -352,14 +348,17 @@ struct WeatherView: View {
             var calendar = Calendar.current
             calendar.timeZone = weather.timezone
             let hour = calendar.component(.hour, from: Date())
+            let newTimeOfDay: WeatherTimeOfDay = (hour >= 6 && hour < 18) ? .day : .night
             
-            // 根据当地时间判断是否是白天（6:00-18:00为白天）
-            timeOfDayManager.timeOfDay = (hour >= 6 && hour < 18) ? .day : .night
-            
-            print("\n=== 更新时间主题 ===")
-            print("城市时区：\(weather.timezone.identifier)")
-            print("当地时间：\(hour)点")
-            print("使用主题：\(timeOfDay == .day ? "白天" : "夜晚")")
+            // 只在主题实际变化时更新
+            if timeOfDayManager.timeOfDay != newTimeOfDay {
+                timeOfDayManager.timeOfDay = newTimeOfDay
+                
+                print("\n=== 更新时间主题 ===")
+                print("城市时区：\(weather.timezone.identifier)")
+                print("当地时间：\(hour)点")
+                print("使用主题：\(newTimeOfDay == .day ? "白天" : "夜晚")")
+            }
         }
     }
     
@@ -465,7 +464,7 @@ struct WeatherView: View {
                                 VStack(spacing: 0) {
                                     // 顶部工具栏
                                     HStack {
-                                        LocationButton(selectedLocation: $selectedLocation, animationTrigger: $animationTrigger)
+                                        LocationButton(timeOfDayManager: timeOfDayManager, selectedLocation: $selectedLocation, animationTrigger: $animationTrigger)
                                             .frame(width: 44, height: 44)
                                         
                                         // 添加收藏按钮

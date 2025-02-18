@@ -137,43 +137,26 @@ struct LocationPickerView: View {
             guard !isRequestingLocation else { return }
             isRequestingLocation = true
             
-            switch locationService.authorizationStatus {
-            case .notDetermined:
-                locationService.startUpdatingLocation() // 这会自动请求权限
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
+            do {
+                // 尝试请求位置
+                try await locationService.requestLocation()
                 
-            case .denied, .restricted:
-                locationErrorMessage = "请在设置中允许访问位置信息"
-                showLocationError = true
-                isRequestingLocation = false
-                return
-                
-            case .authorizedWhenInUse, .authorizedAlways:
-                locationService.startUpdatingLocation()
-            
-            @unknown default:
-                locationErrorMessage = "位置服务状态未知"
-                showLocationError = true
-                isRequestingLocation = false
-                return
-            }
-            
-            // 等待位置更新（最多5秒）
-            let startTime = Date()
-            while locationService.currentCity == nil && locationService.locationError == nil {
-                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
-                if Date().timeIntervalSince(startTime) > 5 {
-                    break
+                // 获取位置成功后的处理
+                if let location = locationService.currentLocation,
+                   let cityName = locationService.currentCity {
+                    print("位置选择器: 成功获取位置 - \(cityName)")
+                    let newLocation = PresetLocation(
+                        name: cityName,
+                        location: location,
+                        timeZoneIdentifier: TimeZone.current.identifier
+                    )
+                    selectedLocation = newLocation
+                    isUsingCurrentLocation = true
+                    onLocationSelected(location)
                 }
-            }
-            
-            if let currentCity = locationService.currentCity,
-               let matchingLocation = PresetLocation.presets.first(where: { $0.name == currentCity }) {
-                selectedLocation = matchingLocation
-                isUsingCurrentLocation = true
-                onLocationSelected(matchingLocation.location)
-            } else if let error = locationService.locationError {
-                locationErrorMessage = error.localizedDescription
+            } catch {
+                print("位置选择器: 位置请求失败 - \(error.localizedDescription)")
+                locationErrorMessage = "无法获取位置信息，请稍后重试"
                 showLocationError = true
             }
             

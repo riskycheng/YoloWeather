@@ -936,20 +936,44 @@ class WeatherService: ObservableObject {
     func showBatchUpdateSummary() {
         var output = ""
         
-        // 显示当前选中城市的天气
-        if let currentCity = currentCityName,
-           let weather = cityWeatherCache[currentCity] {
-            output += "\n当前城市: \(currentCity)"
-            output += String(format: "\n🌡️ %d° | %@ | %d° - %d°",
-                        Int(round(weather.temperature)),
-                        weather.condition,
-                        Int(round(weather.lowTemperature)),
-                        Int(round(weather.highTemperature)))
+        // 当前城市天气
+        if let currentWeather = currentWeather {
+            output += "\n当前城市: \(currentCityName ?? "未知")"
+            output += String(format: "\n🌡️ %.0f° | %@ | %.0f° - %.0f°",
+                           currentWeather.temperature,
+                           currentWeather.weatherCondition.description,
+                           currentWeather.lowTemperature,
+                           currentWeather.highTemperature)
         }
         
-        // 显示所有收藏城市的天气列表
-        output += "\n\n收藏城市天气:"
-        output += formatCityWeatherList()
+        // 收藏城市天气
+        if !cityWeatherCache.isEmpty {
+            // 找出温度范围
+            let temperatures = cityWeatherCache.values.map { $0.temperature }
+            if let maxTemp = temperatures.max(),
+               let minTemp = temperatures.min() {
+                output += String(format: "\n\n收藏城市天气 (温度范围: %.0f° - %.0f°)", maxTemp, minTemp)
+            }
+            
+            output += "\n\n城市          温度      天气       温度范围"
+            output += "\n----------------------------------------"
+            
+            // 按温度从高到低排序
+            let sortedCities = cityWeatherCache.sorted { $0.value.temperature > $1.value.temperature }
+            
+            for (cityName, weather) in sortedCities {
+                let temp = String(format: "%.0f°", weather.temperature)
+                let condition = weather.weatherCondition.description
+                let range = String(format: "%.0f° - %.0f°", weather.lowTemperature, weather.highTemperature)
+                
+                // 使用UTF-8安全的格式化方式
+                let formattedCity = cityName.padding(toLength: 12, withPad: " ", startingAt: 0)
+                let formattedTemp = temp.padding(toLength: 8, withPad: " ", startingAt: 0)
+                let formattedCondition = condition.padding(toLength: 10, withPad: " ", startingAt: 0)
+                
+                output += "\n\(formattedCity)\(formattedTemp)\(formattedCondition)\(range)"
+            }
+        }
         
         print(output)
     }
@@ -982,7 +1006,7 @@ class WeatherService: ObservableObject {
             if let weather = cityWeatherCache[city] {
                 let cityPadded = city.padding(toLength: 12, withPad: " ", startingAt: 0)
                 let tempStr = String(format: "%2d°", Int(round(weather.temperature))).padding(toLength: 10, withPad: " ", startingAt: 0)
-                let weatherStr = weather.condition.padding(toLength: 10, withPad: " ", startingAt: 0)
+                let weatherStr = weather.weatherCondition.description.padding(toLength: 10, withPad: " ", startingAt: 0)
                 let rangeStr = String(format: "%2d° - %2d°", 
                                     Int(round(weather.lowTemperature)),
                                     Int(round(weather.highTemperature)))

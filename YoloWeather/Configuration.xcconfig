@@ -1,0 +1,5 @@
+// Configuration.xcconfig
+
+// Location Usage Descriptions
+NSLocationWhenInUseUsageDescription = 需要访问您的位置来提供准确的天气信息
+NSLocationAlwaysAndWhenInUseUsageDescription = 需要访问您的位置来提供准确的天气信息

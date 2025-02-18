@@ -28,12 +28,6 @@ struct WeatherComparisonView: View {
             return calendar.isDate(forecast.date, inSameDayAs: tomorrowDate)
         }
         
-        print("\n=== 天气趋势数据更新 ===")
-        print("城市：\(selectedLocation.name)")
-        print("昨天：\(yesterdayWeather?.highTemperature ?? 0)° / \(yesterdayWeather?.lowTemperature ?? 0)°")
-        print("今天：\(todayWeather?.highTemperature ?? 0)° / \(todayWeather?.lowTemperature ?? 0)°")
-        print("明天：\(tomorrow?.highTemperature ?? 0)° / \(tomorrow?.lowTemperature ?? 0)°")
-        
         return (yesterdayWeather, todayWeather, tomorrow)
     }
     
