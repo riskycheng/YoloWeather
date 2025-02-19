@@ -400,6 +400,12 @@ class WeatherService: ObservableObject {
             // 更新最后更新时间
             lastUpdateTime = Date()
             
+            // 发送主题更新通知
+            NotificationCenter.default.post(
+                name: .updateWeatherTimeOfDay,
+                value: isNightTime ? WeatherTimeOfDay.night : WeatherTimeOfDay.day
+            )
+            
             // 保存当前天气数据到历史记录
             if let todayWeather = dailyForecast.first {
                 saveCurrentWeather(cityName: self.currentCityName ?? "", weather: todayWeather)

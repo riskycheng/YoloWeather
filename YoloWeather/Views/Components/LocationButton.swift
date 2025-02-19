@@ -49,14 +49,22 @@ struct LocationButton: View {
                 
                 if let matchedCity = CitySearchService.shared.allCities.first(where: { $0.name.contains(cleanCityName) }) {
                     print("找到匹配的预设城市：\(matchedCity.name)")
-                    selectedLocation = matchedCity
-                    print("已切换到城市：\(matchedCity.name)")
                     
                     // 更新天气信息
                     await weatherService.updateWeather(for: matchedCity.location, cityName: matchedCity.name)
                     
+                    // 更新选中的城市
+                    withAnimation(.easeInOut) {
+                        selectedLocation = matchedCity
+                    }
+                    
+                    print("已切换到城市：\(matchedCity.name)")
+                    
                     // 触发动画更新
                     animationTrigger = UUID()
+                    
+                    // 保存最后选择的城市
+                    UserDefaults.standard.set(matchedCity.name, forKey: "LastSelectedCity")
                 } else {
                     print("在预设城市中未找到匹配，创建新的城市位置：\(cityName)")
                     let newLocation = PresetLocation(
@@ -64,15 +72,26 @@ struct LocationButton: View {
                         location: location,
                         timeZoneIdentifier: TimeZone.current.identifier
                     )
-                    selectedLocation = newLocation
-                    print("已切换到新创建的城市：\(cityName)")
                     
                     // 更新天气信息
                     await weatherService.updateWeather(for: location, cityName: cityName)
                     
+                    // 更新选中的城市
+                    withAnimation(.easeInOut) {
+                        selectedLocation = newLocation
+                    }
+                    
+                    print("已切换到新创建的城市：\(cityName)")
+                    
                     // 触发动画更新
                     animationTrigger = UUID()
+                    
+                    // 保存最后选择的城市
+                    UserDefaults.standard.set(cityName, forKey: "LastSelectedCity")
                 }
+                
+                // 发送通知以更新其他视图
+                NotificationCenter.default.post(name: .weatherDataDidUpdate, object: nil)
             } catch {
                 print("定位过程发生错误：\(error.localizedDescription)")
                 // 确保清理任何未完成的请求

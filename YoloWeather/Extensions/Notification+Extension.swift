@@ -2,6 +2,7 @@ import Foundation
 
 extension Notification.Name {
     static let updateWeatherTimeOfDay = Notification.Name("updateWeatherTimeOfDay")
+    static let weatherDataDidUpdate = Notification.Name("weatherDataDidUpdate")
 }
 
 extension Notification {
