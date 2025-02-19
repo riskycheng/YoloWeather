@@ -118,9 +118,7 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
             locationContinuation = nil
         }
         
-        // 清理位置信息
-        currentLocation = nil
-        currentCity = nil
+        // 清理错误信息
         locationError = nil
     }
     
@@ -165,15 +163,6 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last else { return }
-        
-        // 如果已经在处理中，就不要重复处理
-        guard !isRequestingLocation else {
-            print("正在处理位置更新，跳过新的更新")
-            return
-        }
-        
-        // 标记正在处理
-        isRequestingLocation = true
         
         print("收到位置更新：\(location.coordinate.latitude), \(location.coordinate.longitude)")
         
@@ -226,46 +215,59 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         geocoder?.reverseGeocodeLocation(processedLocation) { [weak self] placemarks, error in
             guard let self = self else { return }
             
-            // 函数结束时重置状态
-            defer { 
-                self.isRequestingLocation = false
-                print("位置请求状态已重置")
-            }
-            
             if let error = error {
                 print("反向地理编码失败：\(error.localizedDescription)")
-                // 如果地理编码失败，尝试使用预设城市信息
-                if let matchedCity = self.findNearestPresetCity(to: processedLocation) {
-                    print("使用预设城市信息：\(matchedCity)")
-                    self.currentCity = matchedCity
-                    
-                    if !self.hasResumedContinuation {
-                        self.hasResumedContinuation = true
-                        self.locationContinuation?.resume(returning: ())
-                        self.locationContinuation = nil
-                    }
-                } else {
-                    // 如果实在找不到，使用默认值
-                    self.currentCity = "上海市"
-                    if !self.hasResumedContinuation {
-                        self.hasResumedContinuation = true
-                        self.locationContinuation?.resume(returning: ())
-                        self.locationContinuation = nil
-                    }
-                }
-                return
-            }
-            
-            if let placemark = placemarks?.first {
-                let city = placemark.locality ?? placemark.administrativeArea ?? "未知城市"
-                print("城市名称：\(city)")
-                
-                self.currentCity = city
+                // 使用坐标作为城市名称
+                let coordinateString = String(format: "%.3f, %.3f", processedLocation.coordinate.latitude, processedLocation.coordinate.longitude)
+                self.currentCity = "位置：\(coordinateString)"
+                self.currentLocation = processedLocation
                 
                 if !self.hasResumedContinuation {
                     self.hasResumedContinuation = true
                     self.locationContinuation?.resume(returning: ())
                     self.locationContinuation = nil
+                    self.isRequestingLocation = false
+                }
+                return
+            }
+            
+            if let placemark = placemarks?.first {
+                // 尝试获取最详细的地址信息
+                var locationName = ""
+                if let subLocality = placemark.subLocality {
+                    locationName += subLocality
+                }
+                if let locality = placemark.locality {
+                    if !locationName.isEmpty {
+                        locationName += ", "
+                    }
+                    locationName += locality
+                }
+                if locationName.isEmpty {
+                    locationName = placemark.name ?? "未知位置"
+                }
+                
+                print("地理位置名称：\(locationName)")
+                self.currentCity = locationName
+                self.currentLocation = processedLocation
+                
+                if !self.hasResumedContinuation {
+                    self.hasResumedContinuation = true
+                    self.locationContinuation?.resume(returning: ())
+                    self.locationContinuation = nil
+                    self.isRequestingLocation = false
+                }
+            } else {
+                // 如果没有找到地标信息，使用坐标
+                let coordinateString = String(format: "%.3f, %.3f", processedLocation.coordinate.latitude, processedLocation.coordinate.longitude)
+                self.currentCity = "位置：\(coordinateString)"
+                self.currentLocation = processedLocation
+                
+                if !self.hasResumedContinuation {
+                    self.hasResumedContinuation = true
+                    self.locationContinuation?.resume(returning: ())
+                    self.locationContinuation = nil
+                    self.isRequestingLocation = false
                 }
             }
         }
@@ -303,6 +305,7 @@ enum LocationError: Error {
     case geocodingFailed
     case timeout
     case requestCancelled
+    case cityNotFound
     case unknown
     
     var localizedDescription: String {
@@ -317,6 +320,8 @@ enum LocationError: Error {
             return "位置请求超时"
         case .requestCancelled:
             return "位置请求被取消"
+        case .cityNotFound:
+            return "无法找到匹配的城市"
         case .unknown:
             return "未知错误"
         }
