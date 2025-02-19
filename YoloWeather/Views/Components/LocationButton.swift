@@ -12,8 +12,18 @@ struct LocationButton: View {
             handleLocationButtonTap()
         }) {
             Image(systemName: "location.circle.fill")
-                .font(.system(size: 24))
-                .foregroundColor(WeatherThemeManager.shared.textColor(for: timeOfDayManager.timeOfDay))
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(WeatherThemeManager.shared.textColor(for: timeOfDayManager.timeOfDay))
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle()
+                        .fill(.black.opacity(0.3))
+                        .overlay {
+                            Circle()
+                                .stroke(WeatherThemeManager.shared.textColor(for: timeOfDayManager.timeOfDay).opacity(0.3), lineWidth: 1)
+                        }
+                }
+                .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
         }
     }
     
