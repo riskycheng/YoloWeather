@@ -24,29 +24,41 @@ struct HourlyTemperatureTrendView: View {
         guard let timezone = forecast.first?.timezone else { return [] }
         var calendar = Calendar.current
         calendar.timeZone = timezone
-        let currentDate = cityCurrentDate
         
-        let filtered = forecast.filter { weather in
-            // 确保日期在当前时间之后
-            if weather.date >= currentDate {
-                // 计算与当前时间的小时差
-                var calendarWithTimezone = calendar
-                calendarWithTimezone.timeZone = timezone
-                let hourDifference = calendarWithTimezone.dateComponents([.hour], from: currentDate, to: weather.date).hour ?? 0
-                // 只返回24小时内的预报
-                return hourDifference >= 0 && hourDifference < 24
+        // 获取当前时间
+        let now = Date()
+        print("\n=== 调试时间信息 ===")
+        print("系统当前时间：\(now)")
+        print("系统时区：\(TimeZone.current.identifier)")
+        print("目标城市时区：\(timezone.identifier)")
+        
+        var components = calendar.dateComponents([.year, .month, .day, .hour], from: now)
+        components.minute = 0
+        components.second = 0
+        let currentHour = calendar.date(from: components) ?? now
+        
+        // 过滤并排序预报
+        let filtered = forecast
+            .filter { weather in
+                print("预报时间：\(weather.date), 是否大于当前时间：\(weather.date >= currentHour)")
+                return weather.date >= currentHour
             }
-            return false
-        }
+            .sorted { $0.date < $1.date }
+            .prefix(24)
         
         print("\n=== 更新小时预报 ===")
-        if let timezone = forecast.first?.timezone {
-            print("城市时区：\(timezone.identifier)")
-            print("当前时间：\(formatDateTime(currentDate))")
-            print("预报数量：\(filtered.count)")
+        print("城市时区：\(timezone.identifier)")
+        print("当前整点时间：\(formatDateTime(currentHour))")
+        print("第一个预报时间：\(filtered.first.map { formatDateTime($0.date) } ?? "无")")
+        print("预报数量：\(filtered.count)")
+        
+        // 打印所有预报时间
+        print("\n预报时间列表：")
+        filtered.forEach { weather in
+            print("\(formatDateTime(weather.date)): \(Int(round(weather.temperature)))°")
         }
         
-        return filtered
+        return Array(filtered)
     }
     
     var body: some View {
@@ -108,34 +120,9 @@ struct HourlyTemperatureTrendView: View {
     
     private func formatDateTime(_ date: Date) -> String {
         guard let timezone = forecast.first?.timezone else { return "" }
-        var calendar = Calendar.current
-        calendar.timeZone = timezone
-        let currentDate = cityCurrentDate
-        
-        // 如果是当前小时
-        if calendar.isDate(date, equalTo: currentDate, toGranularity: .hour) {
-            return "现在"
-        }
-        
-        // 创建时间格式器
         let timeFormatter = DateFormatter()
         timeFormatter.timeZone = timezone
-        
-        // 检查是否是今天
-        if calendar.isDate(date, inSameDayAs: currentDate) {
-            timeFormatter.dateFormat = "HH:mm"
-            return timeFormatter.string(from: date)
-        }
-        
-        // 检查是否是明天
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: currentDate)!
-        if calendar.isDate(date, inSameDayAs: tomorrow) {
-            timeFormatter.dateFormat = "明天\nHH:mm"
-            return timeFormatter.string(from: date)
-        }
-        
-        // 后天及以后
-        timeFormatter.dateFormat = "dd日\nHH:mm"
+        timeFormatter.dateFormat = "HH:00"
         return timeFormatter.string(from: date)
     }
 }

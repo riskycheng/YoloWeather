@@ -327,10 +327,13 @@ class WeatherService: ObservableObject {
             // 获取天气数据
             let weather = try await weatherService.weather(for: weatherLocation)
             
-            // 更新当前天气
+            // 设置日历和当前时间
+            var calendar = Calendar.current
+            calendar.timeZone = timezone
             let now = Date()
-            let currentHour = Calendar.current.component(.hour, from: now)
+            let currentHour = calendar.component(.hour, from: now)
             let isNightTime = currentHour >= 18 || currentHour < 6
+            let currentHourDate = calendar.date(from: calendar.dateComponents([.year, .month, .day, .hour], from: now)) ?? now
             
             // Convert WeatherKit condition to our custom WeatherCondition
             let newCondition = convertWeatherKitCondition(weather.currentWeather.condition)
@@ -362,19 +365,24 @@ class WeatherService: ObservableObject {
             }
             
             // 更新小时预报
-            hourlyForecast = weather.hourlyForecast.forecast.prefix(24).map { hour in
-                let hourComponent = Calendar.current.component(.hour, from: hour.date)
-                let isHourNight = hourComponent >= 18 || hourComponent < 6
-                let condition = convertWeatherKitCondition(hour.condition)
-                
-                return HourlyForecast(
-                    temperature: hour.temperature.value,
-                    condition: condition,
-                    date: hour.date,
-                    symbolName: getWeatherSymbolName(condition: condition, isNight: isHourNight),
-                    conditionText: condition.description
-                )
-            }
+            hourlyForecast = weather.hourlyForecast.forecast
+                .filter { hour in
+                    hour.date >= currentHourDate
+                }
+                .prefix(24)
+                .map { hour in
+                    let hourComponent = calendar.component(.hour, from: hour.date)
+                    let isHourNight = hourComponent >= 18 || hourComponent < 6
+                    let condition = convertWeatherKitCondition(hour.condition)
+                    
+                    return HourlyForecast(
+                        temperature: hour.temperature.value,
+                        condition: condition,
+                        date: hour.date,
+                        symbolName: getWeatherSymbolName(condition: condition, isNight: isHourNight),
+                        conditionText: condition.description
+                    )
+                }
             
             // 更新每日预报
             dailyForecast = weather.dailyForecast.forecast.prefix(10).map { day in
