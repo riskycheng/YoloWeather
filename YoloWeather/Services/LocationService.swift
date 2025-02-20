@@ -79,7 +79,7 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
             
             // 设置超时
             timeoutTask = Task {
-                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10秒超时
+                try? await Task.sleep(nanoseconds: 20_000_000_000) // 增加到20秒超时
                 if !hasResumedContinuation {
                     print("位置更新请求超时")
                     cleanupCurrentRequest()
@@ -162,7 +162,8 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last else { return }
+        guard let location = locations.last,
+              location.horizontalAccuracy <= 100 else { return } // 只接受精度在100米以内的位置
         
         print("收到位置更新：\(location.coordinate.latitude), \(location.coordinate.longitude)")
         
@@ -212,14 +213,42 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
             timestamp: location.timestamp
         )
         
-        geocoder?.reverseGeocodeLocation(processedLocation) { [weak self] placemarks, error in
+        // 首先检查是否在预设城市附近
+        if let nearestCity = findNearestPresetCity(to: processedLocation) {
+            let distance = processedLocation.distance(from: CLLocation(
+                latitude: cityCoordinates[nearestCity]?.latitude ?? 0,
+                longitude: cityCoordinates[nearestCity]?.longitude ?? 0
+            ))
+            
+            // 如果在50公里范围内，直接使用预设城市
+            if distance < 50000 {
+                self.currentCity = nearestCity
+                self.currentLocation = processedLocation
+                
+                if !self.hasResumedContinuation {
+                    self.hasResumedContinuation = true
+                    self.locationContinuation?.resume(returning: ())
+                    self.locationContinuation = nil
+                    self.isRequestingLocation = false
+                }
+                return
+            }
+        }
+        
+        // 如果不在预设城市附近，进行反向地理编码
+        geocoder?.reverseGeocodeLocation(processedLocation, preferredLocale: Locale(identifier: "zh_CN")) { [weak self] placemarks, error in
             guard let self = self else { return }
             
             if let error = error {
                 print("反向地理编码失败：\(error.localizedDescription)")
-                // 使用坐标作为城市名称
-                let coordinateString = String(format: "%.3f, %.3f", processedLocation.coordinate.latitude, processedLocation.coordinate.longitude)
-                self.currentCity = "位置：\(coordinateString)"
+                // 尝试使用最近的预设城市
+                if let nearestCity = self.findNearestPresetCity(to: processedLocation) {
+                    self.currentCity = nearestCity
+                } else {
+                    // 如果实在找不到，使用坐标
+                    let coordinateString = String(format: "%.3f, %.3f", processedLocation.coordinate.latitude, processedLocation.coordinate.longitude)
+                    self.currentCity = "位置：\(coordinateString)"
+                }
                 self.currentLocation = processedLocation
                 
                 if !self.hasResumedContinuation {
@@ -232,17 +261,37 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
             
             if let placemark = placemarks?.first {
-                // 尝试获取最详细的地址信息
+                // 优先使用行政区
                 var locationName = ""
-                if let subLocality = placemark.subLocality {
-                    locationName += subLocality
-                }
-                if let locality = placemark.locality {
-                    if !locationName.isEmpty {
-                        locationName += ", "
+                if let administrativeArea = placemark.administrativeArea {
+                    locationName = administrativeArea
+                    // 如果是直辖市，直接使用
+                    if administrativeArea.hasSuffix("市") {
+                        self.currentCity = administrativeArea
+                        self.currentLocation = processedLocation
+                        
+                        if !self.hasResumedContinuation {
+                            self.hasResumedContinuation = true
+                            self.locationContinuation?.resume(returning: ())
+                            self.locationContinuation = nil
+                            self.isRequestingLocation = false
+                        }
+                        return
                     }
-                    locationName += locality
                 }
+                
+                // 然后使用城市名
+                if let locality = placemark.locality {
+                    locationName = locality
+                } else if let subAdministrativeArea = placemark.subAdministrativeArea {
+                    locationName = subAdministrativeArea
+                }
+                
+                // 确保地名以"市"结尾
+                if !locationName.isEmpty && !locationName.hasSuffix("市") {
+                    locationName += "市"
+                }
+                
                 if locationName.isEmpty {
                     locationName = placemark.name ?? "未知位置"
                 }
@@ -258,9 +307,13 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
                     self.isRequestingLocation = false
                 }
             } else {
-                // 如果没有找到地标信息，使用坐标
-                let coordinateString = String(format: "%.3f, %.3f", processedLocation.coordinate.latitude, processedLocation.coordinate.longitude)
-                self.currentCity = "位置：\(coordinateString)"
+                // 如果没有找到地标信息，尝试使用最近的预设城市
+                if let nearestCity = self.findNearestPresetCity(to: processedLocation) {
+                    self.currentCity = nearestCity
+                } else {
+                    let coordinateString = String(format: "%.3f, %.3f", processedLocation.coordinate.latitude, processedLocation.coordinate.longitude)
+                    self.currentCity = "位置：\(coordinateString)"
+                }
                 self.currentLocation = processedLocation
                 
                 if !self.hasResumedContinuation {
@@ -272,6 +325,15 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
             }
         }
     }
+    
+    // 预设城市坐标
+    private let cityCoordinates: [String: CLLocationCoordinate2D] = [
+        "上海市": CLLocationCoordinate2D(latitude: 31.2304, longitude: 121.4737),
+        "北京市": CLLocationCoordinate2D(latitude: 39.9042, longitude: 116.4074),
+        "广州市": CLLocationCoordinate2D(latitude: 23.1291, longitude: 113.2644),
+        "深圳市": CLLocationCoordinate2D(latitude: 22.5431, longitude: 114.0579),
+        "西安市": CLLocationCoordinate2D(latitude: 34.3416, longitude: 108.9398)
+    ]
     
     // 查找最近的预设城市
     private func findNearestPresetCity(to location: CLLocation) -> String? {
