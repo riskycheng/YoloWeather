@@ -247,6 +247,7 @@ struct WeatherView: View {
     @State private var sideMenuGestureEnabled = true
     @State private var errorMessage: String?
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isLeftSideActive = false
     
     private var timeOfDay: WeatherTimeOfDay {
         timeOfDayManager.timeOfDay
@@ -726,6 +727,9 @@ struct WeatherView: View {
                     // 添加左侧栏视图
                     LeftSideView(isShowing: $showingLeftSide, selectedLocation: $selectedLocation)
                         .zIndex(2)
+                        .onChange(of: showingLeftSide) { newValue in
+                            isLeftSideActive = newValue
+                        }
 
                     // 添加边缘滑动手势识别
                     GeometryReader { geo in
@@ -737,9 +741,10 @@ struct WeatherView: View {
                                 .gesture(
                                     DragGesture()
                                         .onChanged { value in
-                                            if value.translation.width > 0 && !showingSideMenu {
+                                            if value.translation.width > 0 && !showingSideMenu && !showingDailyForecast {
                                                 withAnimation {
                                                     showingLeftSide = true
+                                                    isLeftSideActive = true
                                                 }
                                             }
                                         }
@@ -754,7 +759,7 @@ struct WeatherView: View {
                                 .gesture(
                                     DragGesture()
                                         .onChanged { value in
-                                            if value.translation.width < 0 && !showingLeftSide {
+                                            if value.translation.width < 0 && !showingLeftSide && !isLeftSideActive {
                                                 withAnimation {
                                                     showingSideMenu = true
                                                 }
@@ -763,15 +768,15 @@ struct WeatherView: View {
                                 )
                         }
                     }
-                    .allowsHitTesting(!isHourlyViewDragging)
+                    .allowsHitTesting(!isHourlyViewDragging && !isLeftSideActive)
                 }
             }
         }
         .gesture(
             DragGesture(minimumDistance: 20)
                 .onChanged { value in
-                    if sideMenuGestureEnabled && !showingSideMenu && !showingDailyForecast && value.translation.width < 0 && 
-                       abs(value.translation.width) > abs(value.translation.height) {
+                    if sideMenuGestureEnabled && !showingSideMenu && !showingDailyForecast && !isLeftSideActive && 
+                       value.translation.width < 0 && abs(value.translation.width) > abs(value.translation.height) {
                         withAnimation(.easeInOut) {
                             showingSideMenu = true
                         }
