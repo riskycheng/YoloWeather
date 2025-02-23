@@ -273,48 +273,75 @@ private struct WeatherDayCard: View {
     let weather: WeatherService.DayWeatherInfo?
     let gradientColors: [Color]
     
+    // 统一图标大小
+    private let iconSize: CGFloat = 32
+    
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(alignment: .center, spacing: 16) {
             Text(title)
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(.white)
+                .padding(.top, 16)
             
+            // 图标容器，确保所有图标大小一致
             if let weather = weather {
-                VStack(spacing: 12) {
-                    // 天气图标
-                    Image(weather.symbolName)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 44, height: 44)
-                        .shadow(color: .white.opacity(0.2), radius: 5, x: 0, y: 0)
-                    
-                    // 温度信息
-                    VStack(spacing: 8) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.up")
-                                .font(.system(size: 12))
-                            Text("\(Int(round(weather.highTemperature)))°")
-                                .font(.system(size: 18, weight: .medium))
-                        }
-                        .foregroundColor(.orange)
-                        
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.down")
-                                .font(.system(size: 12))
-                            Text("\(Int(round(weather.lowTemperature)))°")
-                                .font(.system(size: 18, weight: .medium))
-                        }
-                        .foregroundColor(.blue)
-                    }
-                }
+                Image(weather.symbolName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: iconSize, height: iconSize)
+                    .shadow(color: .white.opacity(0.2), radius: 5, x: 0, y: 0)
             } else {
-                Text("暂无数据")
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.6))
+                Image(systemName: "questionmark.circle.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: iconSize, height: iconSize)
+                    .opacity(0.5)
+                    .foregroundColor(.white)
             }
+            
+            // 温度信息
+            VStack(spacing: 8) {
+                if let weather = weather {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 12))
+                        Text("\(Int(round(weather.highTemperature)))°")
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(minWidth: 25, alignment: .leading)
+                    }
+                    .foregroundColor(.orange)
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 12))
+                        Text("\(Int(round(weather.lowTemperature)))°")
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(minWidth: 25, alignment: .leading)
+                    }
+                    .foregroundColor(.blue)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 12))
+                        Text("--")
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(minWidth: 25, alignment: .leading)
+                    }
+                    .foregroundColor(.orange.opacity(0.5))
+                    
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 12))
+                        Text("--")
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(minWidth: 25, alignment: .leading)
+                    }
+                    .foregroundColor(.blue.opacity(0.5))
+                }
+            }
+            .padding(.bottom, 16)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
         .background(
             ZStack {
                 // 主背景
