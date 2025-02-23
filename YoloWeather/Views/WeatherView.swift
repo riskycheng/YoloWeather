@@ -645,7 +645,7 @@ struct WeatherView: View {
                         GeometryReader { geo in
                             VStack(spacing: 0) {
                                 // 标题
-                                Text("7天预报")
+                                Text("10天预报")
                                     .font(.system(size: 16, weight: .medium))
                                     .foregroundColor(.white)
                                     .padding(.vertical, 16)
