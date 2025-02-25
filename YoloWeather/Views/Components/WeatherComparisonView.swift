@@ -77,7 +77,7 @@ struct WeatherComparisonView: View {
                 EnhancedTemperatureTrendView(data: comparisonData)
                     .frame(height: 180)
                     .padding(.horizontal)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
                             .fill(Color.white.opacity(0.05))
@@ -86,7 +86,7 @@ struct WeatherComparisonView: View {
             } else {
                 // 无数据提示
                 VStack {
-                    Text("无历史数据")
+                    Text("暂无数据")
                         .font(.system(size: 16))
                         .foregroundColor(.white.opacity(0.6))
                 }
@@ -101,7 +101,7 @@ struct WeatherComparisonView: View {
             
             // 天气卡片区域
             HStack(spacing: 8) {
-                ForEach(weatherCards, id: \.title) { item in
+                ForEach(weatherCards, id: \ .title) { item in
                     WeatherDayCard(
                         title: item.title,
                         weather: item.weather,
@@ -147,9 +147,11 @@ private struct EnhancedTemperatureTrendView: View {
             GeometryReader { geometry in
                 let width = geometry.size.width
                 let height = geometry.size.height * 0.85
+                let horizontalPadding: CGFloat = 20 // 添加水平边距
+                let effectiveWidth = width - (horizontalPadding * 2) // 计算实际可用宽度
                 
                 ZStack {
-                    // 添加水平参考线
+                    // 添加水平参考线，但只在温度区域显示
                     VStack(spacing: height / 4) {
                         ForEach(0..<5) { _ in
                             Rectangle()
@@ -157,37 +159,29 @@ private struct EnhancedTemperatureTrendView: View {
                                 .frame(height: 1)
                         }
                     }
-                    .frame(height: height)
+                    .frame(height: height * 0.8) // 减小高度，使分隔线不延伸到底部日期轴
+                    .padding(.horizontal, horizontalPadding)
+                    .offset(y: -height * 0.1) // 向上偏移以避免触及底部日期轴
                     
                     // 绘制高温折线
                     if data.today != nil && data.tomorrow != nil {
                         Path { path in
-                            let points = calculatePoints(width: width, height: height)
-                            // 如果没有昨天的数据，只绘制今天到明天的线段
-                            if data.yesterday == nil {
-                                path.move(to: points[1]) // 从今天开始
-                                path.addLine(to: points[2]) // 连接到明天
-                            } else {
-                                path.move(to: points[0])
-                                for point in points.dropFirst() {
-                                    path.addLine(to: point)
-                                }
+                            let points = calculatePoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
+                            // 修改判断逻辑，确保昨天的数据始终显示
+                            path.move(to: points[0])
+                            for point in points.dropFirst() {
+                                path.addLine(to: point)
                             }
                         }
                         .stroke(Color.orange, lineWidth: 2)
                         
                         // 绘制低温折线
                         Path { path in
-                            let points = calculateLowPoints(width: width, height: height)
-                            // 如果没有昨天的数据，只绘制今天到明天的线段
-                            if data.yesterday == nil {
-                                path.move(to: points[1]) // 从今天开始
-                                path.addLine(to: points[2]) // 连接到明天
-                            } else {
-                                path.move(to: points[0])
-                                for point in points.dropFirst() {
-                                    path.addLine(to: point)
-                                }
+                            let points = calculateLowPoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
+                            // 修改判断逻辑，确保昨天的数据始终显示
+                            path.move(to: points[0])
+                            for point in points.dropFirst() {
+                                path.addLine(to: point)
                             }
                         }
                         .stroke(Color.blue, lineWidth: 2)
@@ -196,17 +190,11 @@ private struct EnhancedTemperatureTrendView: View {
                     // 绘制节点和温度标签
                     ForEach(0..<3) { index in
                         let temp = temperatures[index]
-                        let spacing = width / 2
-                        let x = spacing * CGFloat(index)
+                        let spacing = effectiveWidth / 2
+                        let x = spacing * CGFloat(index) + horizontalPadding
                         
-                        if index == 0 && data.yesterday == nil {
-                            // 如果是昨天且没有数据，显示"无数据"
-                            Text("暂无数据")
-                                .font(.system(size: 14))
-                                .foregroundColor(.white.opacity(0.6))
-                                .position(x: x, y: height / 2)
-                        } else if (index == 1 && data.today != nil) || (index == 2 && data.tomorrow != nil) {
-                            // 只有在有数据的情况下才显示温度点和标签
+                        // 修改判断逻辑，确保昨天的温度显示
+                        if temp.high != 0 || temp.low != 0 {
                             // 高温节点
                             let normalizedHighY = (temp.high - temperatureRange.min) / temperatureRange.range
                             let highY = height * (1 - normalizedHighY)
@@ -234,6 +222,12 @@ private struct EnhancedTemperatureTrendView: View {
                                 .foregroundColor(.blue)
                                 .font(.system(size: 14, weight: .medium))
                                 .position(x: x, y: lowY + 20)
+                        } else {
+                            // 如果没有数据，显示"暂无数据"
+                            Text("暂无数据")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white.opacity(0.6))
+                                .position(x: x, y: height / 2)
                         }
                         
                         // 日期标签
@@ -247,20 +241,20 @@ private struct EnhancedTemperatureTrendView: View {
         }
     }
     
-    private func calculatePoints(width: CGFloat, height: CGFloat) -> [CGPoint] {
+    private func calculatePoints(width: CGFloat, height: CGFloat, horizontalPadding: CGFloat) -> [CGPoint] {
         let spacing = width / 2
         return temperatures.enumerated().map { index, temp in
-            let x = spacing * CGFloat(index)
+            let x = spacing * CGFloat(index) + horizontalPadding
             let normalizedY = (temp.high - temperatureRange.min) / temperatureRange.range
             let y = height * (1 - normalizedY)
             return CGPoint(x: x, y: y)
         }
     }
     
-    private func calculateLowPoints(width: CGFloat, height: CGFloat) -> [CGPoint] {
+    private func calculateLowPoints(width: CGFloat, height: CGFloat, horizontalPadding: CGFloat) -> [CGPoint] {
         let spacing = width / 2
         return temperatures.enumerated().map { index, temp in
-            let x = spacing * CGFloat(index)
+            let x = spacing * CGFloat(index) + horizontalPadding
             let normalizedY = (temp.low - temperatureRange.min) / temperatureRange.range
             let y = height * (1 - normalizedY)
             return CGPoint(x: x, y: y)
@@ -300,7 +294,7 @@ private struct WeatherDayCard: View {
             }
             
             // 温度信息
-            VStack(spacing: 8) {
+            HStack(spacing: 8) {
                 if let weather = weather {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.up")
