@@ -15,6 +15,9 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var lastLocation: CLLocation?
     private var lastGeocodingErrorLocation: CLLocationCoordinate2D?
     
+    // 添加通知名称，用于通知位置更新
+    static let locationUpdatedNotification = Notification.Name("LocationUpdatedNotification")
+    
     override private init() {
         authorizationStatus = locationManager.authorizationStatus
         
@@ -147,52 +150,79 @@ class LocationService: NSObject, ObservableObject, CLLocationManagerDelegate {
         }
     }
     
-    internal func startUpdatingLocation() {
-        print("开始更新位置...")
+    // 开始更新位置
+    func startUpdatingLocation() {
+        print("LocationService: 开始更新位置")
         locationManager.startUpdatingLocation()
     }
     
-    internal func stopUpdatingLocation() {
-        print("停止更新位置...")
+    // 停止更新位置
+    func stopUpdatingLocation() {
+        print("LocationService: 停止更新位置")
         locationManager.stopUpdatingLocation()
     }
     
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        checkLocationAuthorization()
-    }
-    
+    // 实现CLLocationManagerDelegate方法
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let location = locations.last,
-              location.horizontalAccuracy <= 100 else { return } // 只接受精度在100米以内的位置
+        guard let location = locations.last else { return }
         
-        print("收到位置更新：\(location.coordinate.latitude), \(location.coordinate.longitude)")
-        
-        // 更新位置信息
-        self.lastLocation = location
-        self.currentLocation = location
-        
-        // 立即停止位置更新，避免重复接收
-        stopUpdatingLocation()
-        
-        // 开始反向地理编码
-        reverseGeocode(location: location)
+        // 只有当位置显著变化时才更新
+        if currentLocation == nil || 
+           currentLocation!.distance(from: location) > 100 || 
+           currentLocation!.timestamp.timeIntervalSinceNow < -300 { // 5分钟更新一次
+            
+            print("LocationService: 位置已更新 - \(location.coordinate.latitude), \(location.coordinate.longitude)")
+            currentLocation = location
+            
+            // 发送位置更新通知
+            NotificationCenter.default.post(name: Self.locationUpdatedNotification, object: nil)
+            
+            // 尝试获取城市名称
+            reverseGeocodeLocation(location)
+        }
     }
     
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        print("位置更新失败：\(error.localizedDescription)")
-        locationError = error
-        
-        // 停止更新
-        stopUpdatingLocation()
-        
-        // 如果有等待的 continuation，用错误恢复它
-        if !hasResumedContinuation {
-            hasResumedContinuation = true
-            locationContinuation?.resume(throwing: error)
-            locationContinuation = nil
+    // 反向地理编码获取城市名称
+    private func reverseGeocodeLocation(_ location: CLLocation) {
+        let geocoder = CLGeocoder()
+        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+            guard let self = self else { return }
+            
+            if let error = error {
+                print("LocationService: 反向地理编码失败 - \(error.localizedDescription)")
+                return
+            }
+            
+            if let placemark = placemarks?.first,
+               let city = placemark.locality ?? placemark.administrativeArea {
+                print("LocationService: 获取到城市名称 - \(city)")
+                self.currentCity = city
+            }
         }
+    }
+    
+    // 处理位置权限变化
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        authorizationStatus = manager.authorizationStatus
         
-        isRequestingLocation = false
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            print("LocationService: 位置权限已授权，开始更新位置")
+            locationManager.startUpdatingLocation()
+        case .denied, .restricted:
+            print("LocationService: 位置权限被拒绝或受限")
+            locationError = LocationError.permissionDenied
+        case .notDetermined:
+            print("LocationService: 位置权限未确定")
+        @unknown default:
+            break
+        }
+    }
+    
+    // 处理位置错误
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("LocationService: 获取位置失败 - \(error.localizedDescription)")
+        locationError = error
     }
     
     private func reverseGeocode(location: CLLocation) {

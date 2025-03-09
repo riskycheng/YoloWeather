@@ -21,13 +21,6 @@ class WeatherService: ObservableObject {
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var currentCityName: String?
     
-    private var location: CLLocation
-    private var cityWeatherCache: [String: CurrentWeather] = [:]
-    private var isBatchUpdating: Bool = false
-    private var totalCities: Int = 0
-    private var currentCityIndex: Int = 0
-    private var batchUpdateStartTime: Date?
-    
     // 添加历史天气数据存储
     private let userDefaults = UserDefaults.standard
     private let historicalWeatherKey = "historical_weather"
@@ -1056,4 +1049,17 @@ class WeatherService: ObservableObject {
         
         print("已清除 \(cityName) 的历史天气数据")
     }
+    
+    // 添加方法允许外部设置 currentCityName
+    func setCurrentCityName(_ cityName: String) {
+        print("手动设置当前城市名称：\(cityName)")
+        self.currentCityName = cityName
+    }
+    
+    private var location: CLLocation
+    private var cityWeatherCache: [String: CurrentWeather] = [:]
+    private var isBatchUpdating: Bool = false
+    private var totalCities: Int = 0
+    private var currentCityIndex: Int = 0
+    private var batchUpdateStartTime: Date?
 }

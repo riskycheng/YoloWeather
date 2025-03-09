@@ -178,6 +178,12 @@ private struct WeatherContentView: View {
     let locationName: String
     let animationTrigger: UUID
     @ObservedObject private var weatherService = WeatherService.shared
+    @ObservedObject private var locationService = LocationService.shared
+    
+    private var coordinateText: String {
+        guard let location = locationService.currentLocation else { return "" }
+        return String(format: "%.4f, %.4f", location.coordinate.latitude, location.coordinate.longitude)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -188,9 +194,16 @@ private struct WeatherContentView: View {
             )
             .scaleEffect(1.2)
             
-            Text(locationName)
-                .font(.system(size: 46, weight: .medium))
-                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(locationName)
+                    .font(.system(size: 46, weight: .medium))
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+                
+                Text(coordinateText)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.7))
+                    .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
+            }
         }
         .foregroundColor(.white)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -212,20 +225,27 @@ struct WeatherView: View {
                 // 清除当前天气数据
                 weatherService.clearCurrentWeather()
                 
+                // 先设置 weatherService.currentCityName，确保与 selectedLocation.name 一致
+                weatherService.setCurrentCityName(selectedLocation.name)
+                
                 // 使用新选择的城市更新天气
                 await weatherService.updateWeather(
                     for: selectedLocation.location,
                     cityName: selectedLocation.name
                 )
                 
+                // 再次确保 weatherService.currentCityName 与 selectedLocation.name 一致
+                if weatherService.currentCityName != selectedLocation.name {
+                    print("警告：weatherService.currentCityName (\(weatherService.currentCityName ?? "nil")) 与 selectedLocation.name (\(selectedLocation.name)) 不一致，强制更新")
+                    weatherService.setCurrentCityName(selectedLocation.name)
+                }
+                
                 // 更新相关状态
                 isLoadingWeather = false
                 lastRefreshTime = Date()
                 
-                lastSelectedLocationName = selectedLocation.name
-                
-                // 保存选择的城市
-                UserDefaults.standard.set(selectedLocation.name, forKey: "LastSelectedCity")
+                // 触发 UI 刷新
+                animationTrigger = UUID()
             }
         }
     }
@@ -264,56 +284,139 @@ struct WeatherView: View {
         isLoadingWeather = true
         defer { isLoadingWeather = false }
         
+        print("开始加载初始天气数据...")
+        
+        // 清除 weatherService 的当前城市名称
+        weatherService.clearCurrentWeather()
+        weatherService.setCurrentCityName("")
+        
         // 1. 首先尝试获取当前位置
         locationService.startUpdatingLocation()
         
-        // 等待获取位置（最多10秒，增加超时时间以确保有足够的时间获取位置）
+        // 等待获取位置（最多15秒，增加超时时间以确保有足够的时间获取位置）
         let startTime = Date()
         while locationService.currentLocation == nil {
-            if Date().timeIntervalSince(startTime) > 10 {
+            if Date().timeIntervalSince(startTime) > 15 {
+                print("等待位置超时，使用备选方案")
                 break
             }
             try? await Task.sleep(nanoseconds: 500_000_000) // 等待0.5秒
         }
         
         if let currentLocation = locationService.currentLocation {
+            print("成功获取当前位置：\(currentLocation.coordinate.latitude), \(currentLocation.coordinate.longitude)")
+            
             // 使用地理编码器获取城市名称
             let geocoder = CLGeocoder()
             do {
                 let placemarks = try await geocoder.reverseGeocodeLocation(currentLocation)
-                if let city = placemarks.first?.locality ?? placemarks.first?.administrativeArea {
+                if let placemark = placemarks.first,
+                   let city = placemark.locality ?? placemark.administrativeArea {
+                    print("地理编码成功，当前城市：\(city)")
+                    
                     // 查找匹配的预设城市
-                    if let matchedCity = PresetLocation.presets.first(where: { $0.name.contains(city) }) {
-                        selectedLocation = matchedCity
-                        isUsingCurrentLocation = true
+                    if let matchedCity = PresetLocation.presets.first(where: { $0.name == city || 
+                                                                             ($0.name.contains(city) && city.count > 1) || 
+                                                                             (city.contains($0.name) && $0.name.count > 1) }) {
+                        print("找到匹配的预设城市：\(matchedCity.name)")
+                        await switchToCity(matchedCity)
                         return
                     }
                     
                     // 如果没有匹配的预设城市，创建一个新的
+                    print("未找到匹配的预设城市，创建新的位置：\(city)")
                     let newLocation = PresetLocation(
                         name: city,
                         location: currentLocation
                     )
-                    selectedLocation = newLocation
-                    isUsingCurrentLocation = true
+                    await switchToCity(newLocation)
                     return
                 }
             } catch {
                 print("地理编码失败: \(error.localizedDescription)")
             }
+        } else {
+            print("未能获取当前位置")
         }
         
-        // 2. 如果无法获取当前位置，尝试加载上次选择的城市
-        if let lastCity = lastSelectedLocationName,
-           let location = PresetLocation.presets.first(where: { $0.name == lastCity }) {
-            selectedLocation = location
-            isUsingCurrentLocation = false
-            return
+        // 2. 如果无法获取当前位置，直接使用默认城市（上海）
+        print("使用默认城市：上海")
+        await switchToCity(PresetLocation.presets[0])
+    }
+    
+    // 切换到指定城市并更新所有相关视图
+    private func switchToCity(_ city: PresetLocation) async {
+        print("\n=== 开始切换到城市：\(city.name) ===")
+        print("当前选中城市：\(selectedLocation.name)")
+        
+        // 更新选中的城市
+        selectedLocation = city
+        isUsingCurrentLocation = true
+        
+        // 不再保存上次选择的城市
+        // lastSelectedLocationName = city.name
+        
+        // 更新位置服务中的城市信息
+        locationService.currentCity = city.name
+        locationService.currentLocation = city.location
+        
+        // 清除当前天气数据
+        weatherService.clearCurrentWeather()
+        
+        // 先设置 weatherService.currentCityName，确保与 selectedLocation.name 一致
+        weatherService.setCurrentCityName(city.name)
+        
+        // 获取新的天气数据
+        await weatherService.updateWeather(
+            for: city.location,
+            cityName: city.name
+        )
+        
+        // 再次确保 weatherService.currentCityName 与 selectedLocation.name 一致
+        if weatherService.currentCityName != city.name {
+            print("警告：weatherService.currentCityName (\(weatherService.currentCityName ?? "nil")) 与 selectedLocation.name (\(city.name)) 不一致，强制更新")
+            weatherService.setCurrentCityName(city.name)
+            
+            // 重新获取天气数据
+            await weatherService.updateWeather(
+                for: city.location,
+                cityName: city.name
+            )
         }
         
-        // 3. 如果都失败了，使用默认城市（上海）
-        selectedLocation = PresetLocation.presets[0]
-        isUsingCurrentLocation = false
+        // 触发动画更新
+        animationTrigger = UUID()
+        
+        // 更新时间相关设置
+        updateTimeOfDay()
+        
+        // 确保在主线程更新 UI
+        await MainActor.run {
+            // 再次确认选中的城市已更新
+            if selectedLocation.name != city.name {
+                print("警告：选中城市未正确更新，强制更新为：\(city.name)")
+                selectedLocation = city
+            }
+            
+            // 再次确认 weatherService.currentCityName 已更新
+            if weatherService.currentCityName != city.name {
+                print("警告：weatherService.currentCityName 未正确更新，强制更新为：\(city.name)")
+                weatherService.setCurrentCityName(city.name)
+            }
+        }
+        
+        // 打印日志
+        if let currentWeather = weatherService.currentWeather {
+            print("\n=== 已切换到城市: \(city.name) ===")
+            print("当前温度: \(Int(round(currentWeather.temperature)))°")
+            print("天气状况: \(currentWeather.condition)")
+            print("最高温度: \(Int(round(currentWeather.highTemperature)))°")
+            print("最低温度: \(Int(round(currentWeather.lowTemperature)))°")
+            print("UI 显示城市: \(selectedLocation.name)")
+            print("WeatherService 城市名称: \(weatherService.currentCityName ?? "nil")")
+        } else {
+            print("\n=== 警告：切换到城市 \(city.name) 后未能获取天气数据 ===")
+        }
     }
     
     private func refreshWeather() async {
@@ -321,9 +424,6 @@ struct WeatherView: View {
         isRefreshing = true
         
         do {
-            // 保存最后选择的城市
-            UserDefaults.standard.set(selectedLocation.name, forKey: "LastSelectedCity")
-            
             // 获取城市的坐标
             let location = CLLocation(
                 latitude: selectedLocation.latitude,
@@ -531,7 +631,7 @@ struct WeatherView: View {
                                             WeatherContentView(
                                                 weather: weather,
                                                 timeOfDay: timeOfDay,
-                                                locationName: weatherService.currentCityName ?? selectedLocation.name,
+                                                locationName: selectedLocation.name,
                                                 animationTrigger: animationTrigger
                                             )
                                             .opacity(showingDailyForecast ? 0 : 1) // 添加透明度动画
@@ -790,16 +890,65 @@ struct WeatherView: View {
         .task {
             // 应用启动时，始终尝试获取当前位置
             locationService.startUpdatingLocation()
+            
+            // 清除上次选择的城市记录，确保总是使用当前位置
+            lastSelectedLocationName = nil
+            UserDefaults.standard.removeObject(forKey: "LastSelectedCity")
+            
+            // 加载初始天气数据
             await loadInitialWeather()
+            
+            // 强制刷新 UI
+            forceRefreshUI()
         }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 Task {
                     // 应用进入前台时，始终尝试获取当前位置
                     locationService.startUpdatingLocation()
+                    
+                    // 清除上次选择的城市记录，确保总是使用当前位置
+                    lastSelectedLocationName = nil
+                    UserDefaults.standard.removeObject(forKey: "LastSelectedCity")
+                    
+                    // 清除 weatherService 的当前城市名称
+                    weatherService.clearCurrentWeather()
+                    weatherService.setCurrentCityName("")
+                    
+                    // 重新加载天气数据
                     await loadInitialWeather()
                 }
             }
+        }
+        .onAppear {
+            // 在视图出现时设置通知观察者
+            // 先移除之前可能存在的观察者，避免重复添加
+            NotificationCenter.default.removeObserver(
+                self,
+                name: LocationService.locationUpdatedNotification,
+                object: nil
+            )
+            
+            print("添加位置更新通知观察者")
+            NotificationCenter.default.addObserver(
+                forName: LocationService.locationUpdatedNotification,
+                object: nil,
+                queue: .main
+            ) { notification in
+                // 当位置更新时，尝试切换到当前城市
+                print("收到位置更新通知，准备处理...")
+                Task {
+                    await self.handleLocationUpdate()
+                }
+            }
+        }
+        .onDisappear {
+            // 在视图消失时移除通知观察者
+            NotificationCenter.default.removeObserver(
+                self,
+                name: LocationService.locationUpdatedNotification,
+                object: nil
+            )
         }
     }
     
@@ -849,44 +998,63 @@ struct WeatherView: View {
             // 1. 更新 UI 状态
             isUsingCurrentLocation = false
             selectedLocation = location
-            lastSelectedLocationName = location.name
+            
+            // 不再保存上次选择的城市
+            // lastSelectedLocationName = location.name
+            
             locationService.currentCity = location.name
             locationService.currentLocation = location.location
             
             // 2. 清除旧数据
             weatherService.clearCurrentWeather()
             
-            // 3. 获取新数据
+            // 3. 先设置 weatherService.currentCityName，确保与 selectedLocation.name 一致
+            weatherService.setCurrentCityName(location.name)
+            
+            // 4. 获取新数据
             await weatherService.updateWeather(
                 for: location.location,
                 cityName: location.name
             )
             
-            // 4. 更新时间相关设置
+            // 5. 再次确保 weatherService.currentCityName 与 selectedLocation.name 一致
+            if weatherService.currentCityName != location.name {
+                print("警告：weatherService.currentCityName (\(weatherService.currentCityName ?? "nil")) 与 selectedLocation.name (\(location.name)) 不一致，强制更新")
+                weatherService.setCurrentCityName(location.name)
+                
+                // 重新获取天气数据
+                await weatherService.updateWeather(
+                    for: location.location,
+                    cityName: location.name
+                )
+            }
+            
+            // 6. 更新时间相关设置
             updateTimeOfDay()
             lastRefreshTime = Date()
             
-            // 5. 确保最小加载时间
+            // 7. 确保最小加载时间
             await ensureMinimumLoadingTime(startTime: startTime)
             
-            // 6. 触发动画更新
+            // 8. 触发动画更新
             animationTrigger = UUID()
             
-            // 7. 完成加载
+            // 9. 完成加载
             isLoadingWeather = false
             
-            // 8. 关闭侧边栏
+            // 10. 关闭侧边栏
             withAnimation {
                 showingSideMenu = false
             }
             
-            // 9. 打印日志以便调试
+            // 11. 打印日志以便调试
             if let currentWeather = weatherService.currentWeather {
                 print("\n=== 已切换到城市: \(location.name) ===")
                 print("当前温度: \(Int(round(currentWeather.temperature)))°")
                 print("天气状况: \(currentWeather.condition)")
                 print("最高温度: \(Int(round(currentWeather.highTemperature)))°")
                 print("最低温度: \(Int(round(currentWeather.lowTemperature)))°")
+                print("WeatherService 城市名称: \(weatherService.currentCityName ?? "nil")")
             } else {
                 print("\n=== 警告：切换到城市 \(location.name) 后未能获取天气数据 ===")
             }
@@ -898,6 +1066,126 @@ struct WeatherView: View {
     init() {
         dayFormatter.dateFormat = "EEE"
         dayFormatter.locale = Locale(identifier: "zh_CN")
+    }
+    
+    // 处理位置更新
+    private func handleLocationUpdate() async {
+        print("\n=== 收到位置更新通知，尝试切换到当前城市 ===")
+        print("当前选中城市：\(selectedLocation.name)")
+        print("WeatherService 城市名称：\(weatherService.currentCityName ?? "nil")")
+        
+        // 如果当前正在加载天气，则跳过
+        guard !isLoadingWeather else {
+            print("正在加载天气，跳过位置更新处理")
+            return
+        }
+        
+        // 如果没有位置信息，则跳过
+        guard let currentLocation = locationService.currentLocation else {
+            print("没有位置信息，跳过位置更新处理")
+            return
+        }
+        
+        print("当前位置坐标：\(currentLocation.coordinate.latitude), \(currentLocation.coordinate.longitude)")
+        
+        // 使用地理编码器获取城市名称
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(currentLocation)
+            if let placemark = placemarks.first,
+               let city = placemark.locality ?? placemark.administrativeArea {
+                print("地理编码成功，当前城市：\(city)")
+                
+                // 如果当前已经是这个城市，则确保 weatherService.currentCityName 与 selectedLocation.name 一致
+                if selectedLocation.name == city || 
+                   (selectedLocation.name.contains(city) && city.count > 1) || 
+                   (city.contains(selectedLocation.name) && selectedLocation.name.count > 1) {
+                    print("当前已经是城市：\(city)，跳过切换")
+                    
+                    // 确保 weatherService.currentCityName 与 selectedLocation.name 一致
+                    if weatherService.currentCityName != selectedLocation.name {
+                        print("警告：weatherService.currentCityName (\(weatherService.currentCityName ?? "nil")) 与 selectedLocation.name (\(selectedLocation.name)) 不一致，强制更新")
+                        
+                        // 清除当前天气数据并重新设置城市名称
+                        weatherService.clearCurrentWeather()
+                        weatherService.setCurrentCityName(selectedLocation.name)
+                        
+                        // 重新获取天气数据
+                        await weatherService.updateWeather(
+                            for: currentLocation,
+                            cityName: selectedLocation.name
+                        )
+                        
+                        print("手动设置当前城市名称：\(selectedLocation.name)")
+                        
+                        // 强制刷新 UI
+                        await MainActor.run {
+                            animationTrigger = UUID()
+                        }
+                    }
+                    
+                    return
+                }
+                
+                print("检测到城市变化：从 \(selectedLocation.name) 切换到 \(city)")
+                
+                // 查找匹配的预设城市
+                if let matchedCity = PresetLocation.presets.first(where: { $0.name == city || 
+                                                                          ($0.name.contains(city) && city.count > 1) || 
+                                                                          (city.contains($0.name) && $0.name.count > 1) }) {
+                    print("找到匹配的预设城市：\(matchedCity.name)，切换中...")
+                    
+                    // 清除当前天气数据
+                    weatherService.clearCurrentWeather()
+                    weatherService.setCurrentCityName("")
+                    
+                    await switchToCity(matchedCity)
+                    
+                    // 检查切换后的状态
+                    print("切换后的选中城市：\(selectedLocation.name)")
+                    print("切换后的 WeatherService 城市名称：\(weatherService.currentCityName ?? "nil")")
+                    
+                    // 强制刷新 UI
+                    await MainActor.run {
+                        animationTrigger = UUID()
+                    }
+                    
+                    return
+                }
+                
+                // 如果没有匹配的预设城市，创建一个新的
+                print("未找到匹配的预设城市，创建新的位置：\(city)")
+                
+                // 清除当前天气数据
+                weatherService.clearCurrentWeather()
+                weatherService.setCurrentCityName("")
+                
+                let newLocation = PresetLocation(
+                    name: city,
+                    location: currentLocation
+                )
+                await switchToCity(newLocation)
+                
+                // 检查切换后的状态
+                print("切换后的选中城市：\(selectedLocation.name)")
+                print("切换后的 WeatherService 城市名称：\(weatherService.currentCityName ?? "nil")")
+                
+                // 强制刷新 UI
+                await MainActor.run {
+                    animationTrigger = UUID()
+                }
+            } else {
+                print("地理编码未能获取城市名称")
+            }
+        } catch {
+            print("地理编码失败: \(error.localizedDescription)")
+        }
+    }
+    
+    // 强制刷新 UI
+    private func forceRefreshUI() {
+        print("强制刷新 UI")
+        animationTrigger = UUID()
     }
 }
 

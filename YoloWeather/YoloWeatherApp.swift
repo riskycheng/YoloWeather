@@ -22,6 +22,10 @@ struct YoloWeatherApp: App {
             UserDefaults.standard.set(true, forKey: "has_cleaned_historical_data_v1")
             print("已清除所有历史天气数据")
         }
+        
+        // 启动时立即初始化位置服务，开始获取位置
+        LocationService.shared.startUpdatingLocation()
+        print("应用启动：已开始请求位置权限并获取当前位置")
     }
     
     var body: some Scene {
