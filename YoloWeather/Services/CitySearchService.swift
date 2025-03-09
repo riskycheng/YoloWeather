@@ -126,23 +126,17 @@ class CitySearchService: ObservableObject {
             let response = try await search.start()
             
             let onlineResults = response.mapItems.compactMap { item -> PresetLocation? in
-                // 获取最精确的地名
                 let placemark = item.placemark
                 
-                // 优先使用最具体的地名
+                // 获取最精确的地名
                 let name: String? = {
-                    // 1. 如果有具体的地点名称，优先使用
-                    if let specificName = placemark.name {
-                        return specificName
+                    if let locality = placemark.locality {
+                        return locality
                     }
-                    
-                    // 2. 其次使用区县级名称
                     if let subLocality = placemark.subLocality {
                         return subLocality
                     }
-                    
-                    // 3. 最后使用城市名称
-                    return placemark.locality
+                    return placemark.name
                 }()
                 
                 guard let locationName = name,
@@ -150,43 +144,40 @@ class CitySearchService: ObservableObject {
                     return nil
                 }
                 
-                // 对于中国城市，直接使用地名
-                if placemark.countryCode == "CN" {
-                    // 如果地名不包含"市"、"区"、"县"等后缀，添加适当的后缀
-                    let suffixes = ["市", "区", "县", "自治州", "自治区"]
-                    if !suffixes.contains(where: { locationName.hasSuffix($0) }) {
-                        if locationName.count >= 2 {
-                            return PresetLocation(name: locationName + "市", location: location)
-                        }
-                    }
-                    return PresetLocation(name: locationName, location: location)
+                // 统一处理城市名称格式
+                let formattedName = formatCityName(locationName, countryCode: placemark.countryCode, country: placemark.country)
+                
+                // 检查是否已经存在相同名称的城市
+                if results.contains(where: { $0.name == formattedName }) {
+                    return nil
                 }
                 
-                // 对于国外城市，添加国家名称
-                if let country = placemark.country {
-                    return PresetLocation(name: "\(locationName), \(country)", location: location)
-                }
-                
-                return PresetLocation(name: locationName, location: location)
+                return PresetLocation(name: formattedName, location: location)
             }
             
             results.formUnion(onlineResults)
         } catch {
-            // 保留错误日志，因为这对于诊断问题很重要
             print("在线城市搜索出错: \(error.localizedDescription)")
         }
         
         // 排序并限制结果数量
         let finalResults = Array(results)
             .sorted { lhs, rhs in
-                // 1. 优先显示以搜索词开头的结果
+                // 1. 优先显示中国城市
+                let lhsIsChinese = lhs.name.contains("市") || lhs.name.contains("区")
+                let rhsIsChinese = rhs.name.contains("市") || rhs.name.contains("区")
+                if lhsIsChinese != rhsIsChinese {
+                    return lhsIsChinese
+                }
+                
+                // 2. 优先显示以搜索词开头的结果
                 let lhsStartsWith = lhs.name.lowercased().hasPrefix(cleanQuery)
                 let rhsStartsWith = rhs.name.lowercased().hasPrefix(cleanQuery)
                 if lhsStartsWith != rhsStartsWith {
                     return lhsStartsWith
                 }
                 
-                // 2. 其次按名称长度排序
+                // 3. 按名称长度排序
                 return lhs.name.count < rhs.name.count
             }
             .prefix(20)
@@ -313,6 +304,38 @@ class CitySearchService: ObservableObject {
            let decoded = try? JSONDecoder().decode([PresetLocation].self, from: data) {
             recentSearches = decoded
         }
+    }
+    
+    // 添加新的辅助方法来格式化城市名称
+    private func formatCityName(_ name: String, countryCode: String?, country: String?) -> String {
+        // 移除多余的空格和特殊字符
+        var formattedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "  ", with: " ")
+        
+        // 对中国城市的处理
+        if countryCode == "CN" {
+            // 如果已经包含"市"、"区"、"县"等后缀，直接返回
+            let suffixes = ["市", "区", "县", "自治州", "自治区"]
+            if suffixes.contains(where: { formattedName.hasSuffix($0) }) {
+                return formattedName
+            }
+            
+            // 对于中国城市，如果没有后缀，添加"市"
+            if formattedName.count >= 2 {
+                return formattedName + "市"
+            }
+            return formattedName
+        }
+        
+        // 对国外城市的处理
+        if let country = country, country != "中国" {
+            // 如果城市名称中已经包含国家名，则不重复添加
+            if !formattedName.contains(country) {
+                return "\(formattedName), \(country)"
+            }
+        }
+        
+        return formattedName
     }
     
     // 预设城市列表

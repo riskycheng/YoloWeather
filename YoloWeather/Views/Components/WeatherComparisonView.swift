@@ -36,6 +36,7 @@ struct WeatherComparisonView: View {
     }
     
     private var hasAnyData: Bool {
+        // 只要今天或明天有数据，就认为有数据可显示
         return comparisonData.today != nil || comparisonData.tomorrow != nil
     }
     
@@ -135,7 +136,17 @@ private struct EnhancedTemperatureTrendView: View {
     }
     
     private var temperatureRange: (min: Double, max: Double, range: Double) {
-        let allTemps = temperatures.flatMap { [$0.high, $0.low] }
+        // 根据是否有昨天的数据，选择要计算的温度数据
+        let tempsToConsider: [(high: Double, low: Double)]
+        if data.yesterday != nil {
+            // 如果有昨天的数据，考虑所有三天
+            tempsToConsider = temperatures
+        } else {
+            // 如果没有昨天的数据，只考虑今天和明天
+            tempsToConsider = [temperatures[1], temperatures[2]]
+        }
+        
+        let allTemps = tempsToConsider.flatMap { [$0.high, $0.low] }
             .filter { $0 != 0 } // 过滤掉默认值 0
         let minTemp = round((allTemps.min() ?? 0) - 2)
         let maxTemp = round((allTemps.max() ?? 0) + 2)
@@ -165,26 +176,47 @@ private struct EnhancedTemperatureTrendView: View {
                     
                     // 绘制高温折线
                     if data.today != nil && data.tomorrow != nil {
-                        Path { path in
-                            let points = calculatePoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
-                            // 修改判断逻辑，确保昨天的数据始终显示
-                            path.move(to: points[0])
-                            for point in points.dropFirst() {
-                                path.addLine(to: point)
+                        // 高温折线
+                        if data.yesterday != nil {
+                            // 如果有昨天的数据，绘制完整的三日折线
+                            Path { path in
+                                let points = calculatePoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
+                                path.move(to: points[0])
+                                for point in points.dropFirst() {
+                                    path.addLine(to: point)
+                                }
                             }
+                            .stroke(Color.orange, lineWidth: 2)
+                        } else {
+                            // 如果没有昨天的数据，只绘制今天到明天的折线
+                            Path { path in
+                                let points = calculatePoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
+                                path.move(to: points[1]) // 从今天开始
+                                path.addLine(to: points[2]) // 到明天
+                            }
+                            .stroke(Color.orange, lineWidth: 2)
                         }
-                        .stroke(Color.orange, lineWidth: 2)
                         
-                        // 绘制低温折线
-                        Path { path in
-                            let points = calculateLowPoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
-                            // 修改判断逻辑，确保昨天的数据始终显示
-                            path.move(to: points[0])
-                            for point in points.dropFirst() {
-                                path.addLine(to: point)
+                        // 低温折线
+                        if data.yesterday != nil {
+                            // 如果有昨天的数据，绘制完整的三日折线
+                            Path { path in
+                                let points = calculateLowPoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
+                                path.move(to: points[0])
+                                for point in points.dropFirst() {
+                                    path.addLine(to: point)
+                                }
                             }
+                            .stroke(Color.blue, lineWidth: 2)
+                        } else {
+                            // 如果没有昨天的数据，只绘制今天到明天的折线
+                            Path { path in
+                                let points = calculateLowPoints(width: effectiveWidth, height: height, horizontalPadding: horizontalPadding)
+                                path.move(to: points[1]) // 从今天开始
+                                path.addLine(to: points[2]) // 到明天
+                            }
+                            .stroke(Color.blue, lineWidth: 2)
                         }
-                        .stroke(Color.blue, lineWidth: 2)
                     }
                     
                     // 绘制节点和温度标签
@@ -193,37 +225,45 @@ private struct EnhancedTemperatureTrendView: View {
                         let spacing = effectiveWidth / 2
                         let x = spacing * CGFloat(index) + horizontalPadding
                         
-                        // 修改判断逻辑，确保昨天的温度显示
-                        if temp.high != 0 || temp.low != 0 {
-                            // 高温节点
-                            let normalizedHighY = (temp.high - temperatureRange.min) / temperatureRange.range
-                            let highY = height * (1 - normalizedHighY)
-                            
-                            Circle()
-                                .fill(Color.orange)
-                                .frame(width: 8, height: 8)
-                                .position(x: x, y: highY)
-                            
-                            Text("\(Int(temp.high))°")
-                                .foregroundColor(.orange)
-                                .font(.system(size: 14, weight: .medium))
-                                .position(x: x, y: highY - 20)
-                            
-                            // 低温节点
-                            let normalizedLowY = (temp.low - temperatureRange.min) / temperatureRange.range
-                            let lowY = height * (1 - normalizedLowY)
-                            
-                            Circle()
-                                .fill(Color.blue)
-                                .frame(width: 8, height: 8)
-                                .position(x: x, y: lowY)
-                            
-                            Text("\(Int(temp.low))°")
-                                .foregroundColor(.blue)
-                                .font(.system(size: 14, weight: .medium))
-                                .position(x: x, y: lowY + 20)
-                        } else {
-                            // 如果没有数据，显示"暂无数据"
+                        // 只有在有数据时才显示节点和温度标签
+                        if (index == 0 && data.yesterday != nil) || index > 0 {
+                            if temp.high != 0 || temp.low != 0 {
+                                // 高温节点
+                                let normalizedHighY = (temp.high - temperatureRange.min) / temperatureRange.range
+                                let highY = height * (1 - normalizedHighY)
+                                
+                                Circle()
+                                    .fill(Color.orange)
+                                    .frame(width: 8, height: 8)
+                                    .position(x: x, y: highY)
+                                
+                                Text("\(Int(temp.high))°")
+                                    .foregroundColor(.orange)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .position(x: x, y: highY - 20)
+                                
+                                // 低温节点
+                                let normalizedLowY = (temp.low - temperatureRange.min) / temperatureRange.range
+                                let lowY = height * (1 - normalizedLowY)
+                                
+                                Circle()
+                                    .fill(Color.blue)
+                                    .frame(width: 8, height: 8)
+                                    .position(x: x, y: lowY)
+                                
+                                Text("\(Int(temp.low))°")
+                                    .foregroundColor(.blue)
+                                    .font(.system(size: 14, weight: .medium))
+                                    .position(x: x, y: lowY + 20)
+                            } else {
+                                // 如果没有数据，显示"暂无数据"
+                                Text("暂无数据")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.white.opacity(0.6))
+                                    .position(x: x, y: height / 2)
+                            }
+                        } else if index == 0 {
+                            // 昨天没有数据时显示"暂无数据"
                             Text("暂无数据")
                                 .font(.system(size: 14))
                                 .foregroundColor(.white.opacity(0.6))

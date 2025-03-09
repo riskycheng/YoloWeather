@@ -295,22 +295,16 @@ class WeatherService: ObservableObject {
     func updateWeather(for location: CLLocation, cityName: String? = nil, isBatchUpdate: Bool = false, totalCities: Int = 0) async {
         // 如果提供了城市名称，直接使用它
         let weatherLocation: CLLocation
+        let actualCityName: String
         if let cityName = cityName {
+            actualCityName = cityName
             self.currentCityName = cityName
             // 使用提供的位置，而不是从cityCoordinates获取
             weatherLocation = location
         } else {
+            // 否则使用当前位置
             weatherLocation = location
-            // 如果没有提供城市名称，尝试通过坐标反向查找
-            let geocoder = CLGeocoder()
-            do {
-                let placemarks = try await geocoder.reverseGeocodeLocation(location)
-                if let city = placemarks.first?.locality {
-                    self.currentCityName = city
-                }
-            } catch {
-                print("无法获取城市名称: \(error.localizedDescription)")
-            }
+            actualCityName = self.currentCityName ?? "未知位置"
         }
         
         isLoading = true
@@ -408,7 +402,7 @@ class WeatherService: ObservableObject {
             
             // 保存当前天气数据到历史记录
             if let todayWeather = dailyForecast.first {
-                saveCurrentWeather(cityName: self.currentCityName ?? "", weather: todayWeather)
+                saveCurrentWeather(cityName: actualCityName, weather: todayWeather)
             }
             
             // 保存小时天气数据
@@ -420,7 +414,7 @@ class WeatherService: ObservableObject {
                     symbolName: forecast.symbolName
                 )
             }
-            saveHourlyWeather(cityName: self.currentCityName ?? "", hourlyData: hourlyData)
+            saveHourlyWeather(cityName: actualCityName, hourlyData: hourlyData)
             
             errorMessage = nil
             
