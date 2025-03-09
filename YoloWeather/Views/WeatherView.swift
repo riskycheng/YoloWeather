@@ -267,10 +267,10 @@ struct WeatherView: View {
         // 1. 首先尝试获取当前位置
         locationService.startUpdatingLocation()
         
-        // 等待获取位置（最多5秒）
+        // 等待获取位置（最多10秒，增加超时时间以确保有足够的时间获取位置）
         let startTime = Date()
         while locationService.currentLocation == nil {
-            if Date().timeIntervalSince(startTime) > 5 {
+            if Date().timeIntervalSince(startTime) > 10 {
                 break
             }
             try? await Task.sleep(nanoseconds: 500_000_000) // 等待0.5秒
@@ -285,6 +285,7 @@ struct WeatherView: View {
                     // 查找匹配的预设城市
                     if let matchedCity = PresetLocation.presets.first(where: { $0.name.contains(city) }) {
                         selectedLocation = matchedCity
+                        isUsingCurrentLocation = true
                         return
                     }
                     
@@ -294,6 +295,7 @@ struct WeatherView: View {
                         location: currentLocation
                     )
                     selectedLocation = newLocation
+                    isUsingCurrentLocation = true
                     return
                 }
             } catch {
@@ -305,11 +307,13 @@ struct WeatherView: View {
         if let lastCity = lastSelectedLocationName,
            let location = PresetLocation.presets.first(where: { $0.name == lastCity }) {
             selectedLocation = location
+            isUsingCurrentLocation = false
             return
         }
         
         // 3. 如果都失败了，使用默认城市（上海）
         selectedLocation = PresetLocation.presets[0]
+        isUsingCurrentLocation = false
     }
     
     private func refreshWeather() async {
@@ -784,11 +788,15 @@ struct WeatherView: View {
                 }
         )
         .task {
+            // 应用启动时，始终尝试获取当前位置
+            locationService.startUpdatingLocation()
             await loadInitialWeather()
         }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 Task {
+                    // 应用进入前台时，始终尝试获取当前位置
+                    locationService.startUpdatingLocation()
                     await loadInitialWeather()
                 }
             }

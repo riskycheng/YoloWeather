@@ -99,6 +99,26 @@ struct LeftSideView: View {
                 }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isShowing)
+            .onChange(of: selectedLocation) { _, newLocation in
+                // 当选择的城市发生变化时，确保加载该城市的天气数据
+                Task {
+                    await loadWeatherForSelectedLocation()
+                }
+            }
+            .onChange(of: isShowing) { _, newValue in
+                // 当左侧栏显示时，确保加载选中城市的天气数据
+                if newValue {
+                    Task {
+                        await loadWeatherForSelectedLocation()
+                    }
+                }
+            }
+            .task {
+                // 初始加载时，确保加载选中城市的天气数据
+                if isShowing {
+                    await loadWeatherForSelectedLocation()
+                }
+            }
         }
         .edgesIgnoringSafeArea(.all)
         .onChange(of: selectedLocation) { _, newLocation in
@@ -111,6 +131,17 @@ struct LeftSideView: View {
                 print("最高温度：\(Int(round(currentWeather.highTemperature)))°")
                 print("最低温度：\(Int(round(currentWeather.lowTemperature)))°")
             }
+        }
+    }
+    
+    // 加载选中城市的天气数据
+    private func loadWeatherForSelectedLocation() async {
+        // 如果当前天气数据不是选中城市的，或者没有天气数据，则加载选中城市的天气数据
+        if weatherService.currentCityName != selectedLocation.name || weatherService.currentWeather == nil {
+            await weatherService.updateWeather(
+                for: selectedLocation.location,
+                cityName: selectedLocation.name
+            )
         }
     }
 }

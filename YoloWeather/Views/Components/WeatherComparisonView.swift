@@ -10,7 +10,9 @@ struct WeatherComparisonView: View {
         
         // 获取今天的天气数据
         var todayWeather: WeatherService.DayWeatherInfo?
-        if let currentWeather = weatherService.currentWeather {
+        
+        // 确保使用的是选中城市的天气数据
+        if weatherService.currentCityName == selectedLocation.name, let currentWeather = weatherService.currentWeather {
             todayWeather = WeatherService.DayWeatherInfo(
                 date: Date(),
                 condition: currentWeather.condition,
@@ -19,6 +21,12 @@ struct WeatherComparisonView: View {
                 highTemperature: currentWeather.highTemperature,
                 precipitationProbability: 0.0
             )
+        } else {
+            // 如果当前天气数据不是选中城市的，尝试从每日预报中获取今天的数据
+            todayWeather = weatherService.dailyForecast.first { forecast in
+                let calendar = Calendar.current
+                return calendar.isDate(forecast.date, inSameDayAs: Date())
+            }
         }
         
         // 获取明天的天气数据
