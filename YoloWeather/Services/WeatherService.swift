@@ -281,6 +281,9 @@ class WeatherService: ObservableObject {
         self.currentCityIndex = 0
         self.batchUpdateStartTime = Date()
         
+        // 清除所有历史天气数据，避免数据混淆
+        clearAllHistoricalWeatherData()
+        
         for city in cities {
             if let location = cityCoordinates[city] {
                 await updateWeather(for: location, cityName: city, isBatchUpdate: true, totalCities: cities.count)
@@ -1028,5 +1031,29 @@ class WeatherService: ObservableObject {
         }
         
         return output
+    }
+    
+    // 清除所有历史天气数据
+    func clearAllHistoricalWeatherData() {
+        UserDefaults.standard.removeObject(forKey: historicalWeatherKey)
+        UserDefaults.standard.removeObject(forKey: hourlyWeatherKey)
+        print("已清除所有历史天气数据")
+    }
+    
+    // 清除指定城市的历史天气数据
+    func clearHistoricalWeatherData(for cityName: String) {
+        // 清除每日历史数据
+        if var historicalData = UserDefaults.standard.dictionary(forKey: historicalWeatherKey) as? [String: [[String: Any]]] {
+            historicalData.removeValue(forKey: cityName)
+            UserDefaults.standard.set(historicalData, forKey: historicalWeatherKey)
+        }
+        
+        // 清除小时历史数据
+        if var hourlyData = UserDefaults.standard.dictionary(forKey: hourlyWeatherKey) as? [String: [[String: Any]]] {
+            hourlyData.removeValue(forKey: cityName)
+            UserDefaults.standard.set(hourlyData, forKey: hourlyWeatherKey)
+        }
+        
+        print("已清除 \(cityName) 的历史天气数据")
     }
 }

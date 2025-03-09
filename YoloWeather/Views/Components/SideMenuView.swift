@@ -375,6 +375,7 @@ private struct TopBarView: View {
 private struct MainContentView: View {
     @Binding var isEditMode: Bool
     @StateObject var citySearchService: CitySearchService
+    @Binding var selectedLocation: PresetLocation
     let searchText: String
     let searchResults: [PresetLocation]
     let isSearching: Bool
@@ -757,6 +758,7 @@ struct SideMenuView: View {
                         MainContentView(
                             isEditMode: $isEditMode,
                             citySearchService: citySearchService,
+                            selectedLocation: $selectedLocation,
                             searchText: searchText,
                             searchResults: searchResults,
                             isSearching: isSearching,
