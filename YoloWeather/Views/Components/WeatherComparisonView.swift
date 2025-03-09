@@ -113,6 +113,12 @@ struct WeatherComparisonView: View {
             }
             .padding(.horizontal, 12)
             
+            // 将天气提示信息移动到这里
+            if hasAnyData {
+                WeatherAlertView(data: comparisonData)
+                    .padding(.horizontal, 12)
+            }
+            
             Spacer(minLength: 20)
         }
         .id(selectedLocation.id) // 添加 id 以在城市切换时强制刷新
@@ -399,5 +405,140 @@ private struct WeatherDayCard: View {
             }
         )
         .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
+    }
+}
+
+// 天气提示信息组件
+private struct WeatherAlertView: View {
+    let data: (yesterday: WeatherService.DayWeatherInfo?, today: WeatherService.DayWeatherInfo?, tomorrow: WeatherService.DayWeatherInfo?)
+    
+    // 温度变化提示
+    private var temperatureAlerts: [String] {
+        var alerts: [String] = []
+        
+        // 今天与昨天的温度对比
+        if let yesterday = data.yesterday, let today = data.today {
+            let highDiff = today.highTemperature - yesterday.highTemperature
+            let lowDiff = today.lowTemperature - yesterday.lowTemperature
+            
+            // 高温变化提示
+            if abs(highDiff) >= 5 {
+                if highDiff > 0 {
+                    alerts.append("今天最高温比昨天升高\(Int(round(abs(highDiff))))°C")
+                } else {
+                    alerts.append("今天最高温比昨天降低\(Int(round(abs(highDiff))))°C")
+                }
+            }
+            
+            // 低温变化提示
+            if abs(lowDiff) >= 5 {
+                if lowDiff > 0 {
+                    alerts.append("今天最低温比昨天升高\(Int(round(abs(lowDiff))))°C")
+                } else {
+                    alerts.append("今天最低温比昨天降低\(Int(round(abs(lowDiff))))°C")
+                }
+            }
+        }
+        
+        // 明天与今天的温度对比
+        if let today = data.today, let tomorrow = data.tomorrow {
+            let highDiff = tomorrow.highTemperature - today.highTemperature
+            let lowDiff = tomorrow.lowTemperature - today.lowTemperature
+            
+            // 高温变化提示
+            if abs(highDiff) >= 5 {
+                if highDiff > 0 {
+                    alerts.append("明天最高温将比今天升高\(Int(round(abs(highDiff))))°C")
+                } else {
+                    alerts.append("明天最高温将比今天降低\(Int(round(abs(highDiff))))°C")
+                }
+            }
+            
+            // 低温变化提示
+            if abs(lowDiff) >= 5 {
+                if lowDiff > 0 {
+                    alerts.append("明天最低温将比今天升高\(Int(round(abs(lowDiff))))°C")
+                } else {
+                    alerts.append("明天最低温将比今天降低\(Int(round(abs(lowDiff))))°C")
+                }
+            }
+        }
+        
+        return alerts
+    }
+    
+    // 天气异常提示
+    private var weatherAlerts: [String] {
+        var alerts: [String] = []
+        
+        // 检查明天是否有降雨
+        if let tomorrow = data.tomorrow {
+            // 检查降水概率
+            let precipitationProbability = tomorrow.precipitationProbability
+            if precipitationProbability >= 0.3 {
+                let percentage = Int(round(precipitationProbability * 100))
+                alerts.append("明天有\(percentage)%的降水概率")
+            }
+            
+            // 检查天气状况
+            let condition = tomorrow.condition.lowercased()
+            if condition.contains("雨") {
+                alerts.append("明天将会下雨，请记得带伞")
+            } else if condition.contains("雪") {
+                alerts.append("明天将会下雪，注意保暖")
+            } else if condition.contains("雾") || condition.contains("霾") {
+                alerts.append("明天将会有\(tomorrow.condition)，注意出行安全")
+            } else if condition.contains("风") || condition.contains("暴") {
+                alerts.append("明天将会有\(tomorrow.condition)，注意防范")
+            } else if condition.contains("雷") || condition.contains("电") {
+                alerts.append("明天将会有\(tomorrow.condition)，注意安全")
+            }
+        }
+        
+        return alerts
+    }
+    
+    // 合并所有提示
+    private var allAlerts: [String] {
+        let tempAlerts = temperatureAlerts
+        let weatherAlerts = self.weatherAlerts
+        
+        return tempAlerts + weatherAlerts
+    }
+    
+    var body: some View {
+        if !allAlerts.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("天气提示")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.bottom, 4)
+                
+                ForEach(allAlerts, id: \.self) { alert in
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.yellow)
+                            .font(.system(size: 16))
+                        
+                        Text(alert)
+                            .font(.system(size: 15))
+                            .foregroundColor(.white.opacity(0.9))
+                            .fixedSize(horizontal: false, vertical: true)
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.white.opacity(0.05))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+            )
+        }
     }
 }
